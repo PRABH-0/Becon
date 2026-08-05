@@ -249,7 +249,7 @@ export default function Home() {
         )}
       </main>
 
-      {/* 4. DEEP DETAILS MODAL / DRAWER (DISPLAYS ENRICHED NARRATIVE, CODE & MEDIA WITHOUT 4-POINT BULLET REPETITION) */}
+      {/* 4. DEEP DETAILS MODAL / DRAWER (DISPLAYS ENRICHED 4-PART ACTION CARD, NARRATIVE, CODE & MEDIA) */}
       {selectedCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 sm:p-6 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl border-2 border-slate-900 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-10 relative text-slate-800">
@@ -273,12 +273,64 @@ export default function Home() {
               {selectedCard.title}
             </h2>
 
-            {/* NARRATIVE DESCRIPTION (DEEP DIVE TEXT WITHOUT THE 4-POINT ACTION CARD REPETITION) */}
-            <div className="space-y-6 text-slate-700 leading-relaxed font-normal text-sm sm:text-base">
-              <div className="p-4 rounded-xl bg-slate-50 border-l-4 border-indigo-600 font-medium text-slate-900 text-base sm:text-lg shadow-2xs">
-                {selectedCard.card_content.why_it_matters}
+            {/* 4-PART ACTION PROTOCOL BOX (EXCLUSIVE TO DETAILED BOX) */}
+            <div className="mb-8 p-6 rounded-2xl bg-slate-50 border-2 border-slate-900 space-y-5 shadow-sm">
+              <div className="flex items-center justify-between border-b-2 border-slate-900 pb-3 font-mono">
+                <span className="text-xs font-black uppercase tracking-widest text-slate-950 flex items-center gap-2">
+                  <span>📋 4-PART ACTION CARD PROTOCOL</span>
+                </span>
+                <span className={`text-xs px-3 py-1 rounded-full border uppercase tracking-widest ${getActionBadgeColor(selectedCard.card_content.what_to_do_next.action_type)}`}>
+                  {selectedCard.card_content.what_to_do_next.action_type}
+                </span>
               </div>
-              
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. WHAT HAPPENED */}
+                <div className="p-4 rounded-xl bg-white border border-slate-300 shadow-2xs">
+                  <div className="text-slate-950 font-extrabold text-xs uppercase tracking-wider font-mono mb-2 flex items-center gap-1.5">
+                    <span>📌</span> WHAT HAPPENED
+                  </div>
+                  <ul className="space-y-1.5 text-slate-700 text-xs sm:text-sm list-disc list-inside leading-relaxed font-medium">
+                    {selectedCard.card_content.what_happened.map((bullet, idx) => (
+                      <li key={idx} className="text-slate-700 font-medium">{bullet}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* 2. WHY IT MATTERS */}
+                <div className="p-4 rounded-xl bg-white border border-slate-300 shadow-2xs">
+                  <div className="text-indigo-950 font-extrabold text-xs uppercase tracking-wider font-mono mb-2 flex items-center gap-1.5">
+                    <span>💡</span> WHY IT MATTERS
+                  </div>
+                  <p className="text-slate-700 text-xs sm:text-sm leading-relaxed font-medium">
+                    {selectedCard.card_content.why_it_matters}
+                  </p>
+                </div>
+
+                {/* 3. HOW IT AFFECTS YOU */}
+                <div className="p-4 rounded-xl bg-emerald-50/80 border border-emerald-300/80 shadow-2xs">
+                  <div className="text-emerald-950 font-extrabold text-xs uppercase tracking-wider font-mono mb-1.5 flex items-center gap-1.5">
+                    <span>👤</span> IMPACT ON YOUR ROLE ({selectedCard.target_role.toUpperCase()})
+                  </div>
+                  <p className="text-emerald-950 text-xs sm:text-sm leading-relaxed font-medium">
+                    {selectedCard.card_content.how_it_affects_you}
+                  </p>
+                </div>
+
+                {/* 4. WHAT TO DO NEXT */}
+                <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-300/80 shadow-2xs">
+                  <div className="text-amber-950 font-extrabold text-xs uppercase tracking-wider font-mono mb-1.5 flex items-center gap-1.5">
+                    <span>🎯</span> ACTION PROTOCOL
+                  </div>
+                  <p className="text-amber-950 text-xs sm:text-sm leading-relaxed font-bold">
+                    {selectedCard.card_content.what_to_do_next.guidance}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* NARRATIVE DESCRIPTION */}
+            <div className="space-y-6 text-slate-700 leading-relaxed font-normal text-sm sm:text-base">
               <div className="space-y-4 text-slate-800 leading-relaxed">
                 <p>
                   {selectedCard.deep_detail?.full_description ??
@@ -354,6 +406,10 @@ function renderLeadCard(
   getBadgeColor: (type: string) => string,
   onOpenDetail: (card: BriefingCard) => void
 ) {
+  const summaryText =
+    card.deep_detail?.full_description ||
+    `${card.card_content.what_happened.join(" ")} ${card.card_content.why_it_matters}`;
+
   return (
     <article key={card.id} className="rounded-xl bg-white border-2 border-slate-900 p-6 sm:p-8 shadow-md flex flex-col justify-between">
       <div>
@@ -384,57 +440,26 @@ function renderLeadCard(
           </div>
         </div>
 
-        <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black text-slate-950 font-serif tracking-tight leading-tight mb-6">
+        <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black text-slate-950 font-serif tracking-tight leading-tight mb-4">
           {card.title}
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-          <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/90">
-            <div className="text-slate-950 font-extrabold text-xs uppercase tracking-wider font-mono mb-2.5">
-              📌 WHAT HAPPENED
-            </div>
-            <ul className="space-y-2 text-slate-700 text-xs sm:text-sm list-disc list-inside leading-relaxed">
-              {card.card_content.what_happened.map((bullet, idx) => (
-                <li key={idx} className="text-slate-600">
-                  <span className="text-slate-800 font-medium">{bullet}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        {/* NEWS DESCRIPTION ONLY (NO 4-POINT PROTOCOL BOXES ON MAIN FEED CARD) */}
+        <p className="text-slate-700 text-sm sm:text-base leading-relaxed mb-6 font-normal">
+          {summaryText}
+        </p>
 
-          <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/90">
-              <div className="text-indigo-950 font-extrabold text-xs uppercase tracking-wider font-mono mb-2">
-                💡 WHY IT MATTERS
-              </div>
-              <p className="text-slate-700 text-xs sm:text-sm leading-relaxed font-medium">
-                {card.card_content.why_it_matters}
-              </p>
-            </div>
-            
-            <div className="p-4 rounded-lg bg-emerald-50/80 border border-emerald-200/80">
-              <div className="text-emerald-950 font-extrabold text-xs uppercase tracking-wider font-mono mb-1.5">
-                👤 IMPACT ON YOUR ROLE ({card.target_role.toUpperCase()})
-              </div>
-              <p className="text-emerald-950 text-xs sm:text-sm leading-relaxed font-medium">
-                {card.card_content.how_it_affects_you}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4.5 rounded-lg bg-amber-50/90 border border-amber-300/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex-1">
-            <div className="text-amber-950 font-extrabold text-xs uppercase tracking-wider font-mono mb-1 flex items-center gap-1.5">
-              🎯 ACTION PROTOCOL
-            </div>
-            <p className="text-slate-900 text-xs sm:text-sm font-semibold leading-relaxed">
-              {card.card_content.what_to_do_next.guidance}
-            </p>
-          </div>
-          <span className={`text-[11px] px-3 py-1 rounded-full border uppercase tracking-widest shrink-0 font-mono ${getBadgeColor(card.card_content.what_to_do_next.action_type)}`}>
-            {card.card_content.what_to_do_next.action_type}
+        <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+          <span className="text-slate-700 font-medium">
+            Target Role: <strong className="text-slate-950">{card.target_role}</strong>
           </span>
+          <button
+            onClick={() => onOpenDetail(card)}
+            className="text-indigo-700 hover:text-indigo-900 font-bold flex items-center gap-1 cursor-pointer"
+          >
+            <span>View 4-Part Action Protocol</span>
+            <span>→</span>
+          </button>
         </div>
       </div>
     </article>
@@ -447,6 +472,9 @@ function renderMajorCard(
   getBadgeColor: (type: string) => string,
   onOpenDetail: (card: BriefingCard) => void
 ) {
+  const summaryText =
+    card.card_content.why_it_matters || card.card_content.what_happened.join(" ");
+
   return (
     <article key={card.id} className="rounded-xl bg-white border border-slate-200 p-5 shadow-xs hover:border-slate-400 transition-all flex flex-col justify-between">
       <div>
@@ -481,27 +509,22 @@ function renderMajorCard(
           {card.title}
         </h3>
 
-        <div className="space-y-2.5 mb-4">
-          <div className="p-3 rounded bg-slate-50 border border-slate-200/80 text-xs">
-            <span className="font-extrabold text-slate-900 uppercase font-mono block mb-1">📌 What Happened</span>
-            <p className="text-slate-700 leading-normal font-medium">{card.card_content.what_happened[0]}</p>
-          </div>
-          
-          <div className="p-3 rounded bg-slate-50 border border-slate-200/80 text-xs">
-            <span className="font-extrabold text-indigo-900 uppercase font-mono block mb-1">💡 Why It Matters</span>
-            <p className="text-slate-700 leading-normal font-medium">{card.card_content.why_it_matters}</p>
-          </div>
-        </div>
+        {/* NEWS DESCRIPTION ONLY */}
+        <p className="text-slate-600 text-xs sm:text-sm leading-relaxed mb-4 font-normal line-clamp-4">
+          {summaryText}
+        </p>
       </div>
 
-      <div className="p-3 rounded bg-amber-50/80 border border-amber-200/80 flex items-center justify-between gap-3 text-xs mt-auto">
-        <div>
-          <span className="font-extrabold text-amber-950 uppercase font-mono text-[10px] block">🎯 Next Step</span>
-          <p className="text-slate-800 text-xs font-semibold line-clamp-2">{card.card_content.what_to_do_next.guidance}</p>
-        </div>
-        <span className={`text-[10px] px-2 py-0.5 rounded border uppercase shrink-0 font-mono ${getBadgeColor(card.card_content.what_to_do_next.action_type)}`}>
-          {card.card_content.what_to_do_next.action_type}
+      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 text-xs mt-auto">
+        <span className="text-slate-500 font-mono text-[11px]">
+          Stack: <strong className="text-slate-800">{card.target_stack[0]}</strong>
         </span>
+        <button
+          onClick={() => onOpenDetail(card)}
+          className="text-[10px] px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100 border border-indigo-200 uppercase tracking-wider font-mono cursor-pointer"
+        >
+          Read Full Report ↗
+        </button>
       </div>
     </article>
   );
@@ -548,9 +571,13 @@ function renderBriefCard(
         </p>
       </div>
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold text-slate-700 truncate">
-          👉 {card.card_content.what_to_do_next.guidance}
-        </span>
+        <button
+          onClick={() => onOpenDetail(card)}
+          className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 cursor-pointer"
+        >
+          <span>Inspect Protocol</span>
+          <span>→</span>
+        </button>
         <span className={`text-[9px] px-2 py-0.5 rounded border uppercase shrink-0 font-mono ${getBadgeColor(card.card_content.what_to_do_next.action_type)}`}>
           {card.card_content.what_to_do_next.action_type}
         </span>
@@ -596,9 +623,13 @@ function renderSpotlightCard(
         </p>
       </div>
       <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
-        <span className="text-slate-300 font-medium truncate text-[11px]">
-          Action: {card.card_content.what_to_do_next.guidance}
-        </span>
+        <button
+          onClick={() => onOpenDetail(card)}
+          className="text-amber-300 hover:text-amber-200 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+        >
+          <span>Open Detailed Action Card</span>
+          <span>→</span>
+        </button>
         <span className={`text-[9px] px-2 py-0.5 rounded border uppercase shrink-0 font-mono ${getBadgeColor(card.card_content.what_to_do_next.action_type)}`}>
           {card.card_content.what_to_do_next.action_type}
         </span>

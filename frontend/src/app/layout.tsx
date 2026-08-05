@@ -19,7 +19,11 @@ export const metadata: Metadata = {
   description: "Curated engineering architecture & career signals, structured with tactical next steps for all tech stacks.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
