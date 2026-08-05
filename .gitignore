@@ -1,0 +1,29 @@
+# Python / Virtual Environment
+backend/venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment Secrets
+.env
+*.env
+.env.*
+!.env.example
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.cache/
+
+# OS / Editor temporary files
+.VSCode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
