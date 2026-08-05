@@ -31,6 +31,9 @@ class BriefingCardContent(BaseModel):
 # 3. Main Briefing Card DTO (Wrapper)
 class BriefingCard(BaseModel):
     id: str | None = None
+    rank: int | None = Field(
+        default=None, description="Priority ranking from 1 (most critical) to 10"
+    )
     title: str = Field(..., description="Clean, readable headline")
     source_url: str = Field(..., description="Link to original news/blog article")
     target_role: str = Field(default="Developer")

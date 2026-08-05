@@ -32,6 +32,7 @@ def get_briefings(stack: str = Query(default="Frontend", description="Filter by 
     return [
         BriefingCard(
             id="card-1",
+            rank=1,
             title=f"{stack} Ecosystem Updates & Performance Practices",
             source_url="https://dev.to",
             target_role="Developer",
