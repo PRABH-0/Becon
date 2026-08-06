@@ -8,7 +8,9 @@
 ## 🎯 Learning Goal
 The developer (**Prabhjot**) is a **.NET / C# and Angular** engineer learning **Python, FastAPI, and Google Gemini AI Integration** for the first time by **manually writing the backend code step-by-step**.
 
-> ⚠️ **Rule for AI Assistants**: DO NOT automatically generate or modify project code files without explicit permission. Guide Prabhjot in the chat step-by-step so he types and tests the code himself.
+> ⚠️ **Rule for AI Assistants (PYTHON & BACKEND ONLY)**:
+> - **Backend / Python Code**: DO NOT automatically generate or modify backend Python/API files without explicit permission. Guide Prabhjot in the chat step-by-step so he manually types and tests the Python code himself.
+> - **Frontend / UI Code**: The manual hands-on requirement applies *only* to Python/FastAPI. You are explicitly permitted to implement, edit, and optimize frontend (Next.js/React/Tailwind) code directly!
 
 ---
 

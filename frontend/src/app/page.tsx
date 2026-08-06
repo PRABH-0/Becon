@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 interface ActionGuidance {
   action_type: "learn" | "apply" | "avoid" | "prepare";
@@ -40,15 +41,41 @@ export default function Home() {
   const [briefings, setBriefings] = useState<BriefingCard[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedCard, setSelectedCard] = useState<BriefingCard | null>(null);
+  const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
+  const [userName, setUserName] = useState<string>("Prabhjot Singh");
+  const [userRole, setUserRole] = useState<string>("Senior .NET & Angular Engineer");
 
   useEffect(() => {
+    // Check if user has personalized their identity in local storage
+    const savedProfile = localStorage.getItem("becon_user_profile");
+    if (savedProfile) {
+      try {
+        const parsed = JSON.parse(savedProfile);
+        if (parsed.name) setUserName(parsed.name);
+        if (parsed.role) setUserRole(parsed.role);
+      } catch (e) {
+        console.error("Could not parse user profile", e);
+      }
+    }
+    
     fetchAllBriefings();
   }, []);
 
-  const fetchAllBriefings = async () => {
+  const fetchAllBriefings = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/briefings");
+      // Pull personalization parameters from saved profile if available
+      let queryParams = forceRefresh ? "?refresh=true" : "?stack=All";
+      const savedProfile = localStorage.getItem("becon_user_profile");
+      if (savedProfile) {
+        const parsed = JSON.parse(savedProfile);
+        const roleParam = parsed.role ? `role=${encodeURIComponent(parsed.role)}` : "";
+        const interestsParam = parsed.interests && parsed.interests.length ? `&interests=${encodeURIComponent(parsed.interests.join(","))}` : "";
+        const promptParam = parsed.customPrompt ? `&custom_prompt=${encodeURIComponent(parsed.customPrompt)}` : "";
+        queryParams = `?${roleParam}${interestsParam}${promptParam}${forceRefresh ? "&refresh=true" : ""}`;
+      }
+
+      const res = await fetch(`http://127.0.0.1:8000/api/briefings${queryParams}`);
       if (res.ok) {
         const data: BriefingCard[] = await res.json();
         if (data.length >= 15) {
@@ -101,24 +128,91 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-slate-800 font-sans selection:bg-slate-900 selection:text-white pb-16">
-      {/* 1. TOP HEADER BAR (BECON LOGO ON LEFT) */}
+      {/* 1. TOP HEADER BAR (BECON LOGO ON LEFT & PROFILE DROPDOWN ON RIGHT) */}
       <header className="bg-slate-950 text-slate-200 py-3 px-4 sm:px-6 border-b border-slate-800 shadow-sm sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h1 className="font-serif text-2xl sm:text-3xl font-black tracking-widest text-white uppercase drop-shadow-xs">
-              B E C O N
-            </h1>
+            <Link href="/" className="hover:opacity-85 transition-opacity">
+              <h1 className="font-serif text-2xl sm:text-3xl font-black tracking-widest text-white uppercase drop-shadow-xs">
+                B E C O N
+              </h1>
+            </Link>
             <span className="text-slate-400 font-bold text-xs border-l border-slate-700 pl-3 tracking-widest uppercase font-mono hidden sm:inline">
               THE DAILY DEVELOPER GAZETTE
             </span>
           </div>
-          <div className="flex items-center gap-4 text-xs font-mono">
-            <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px] sm:text-xs">
+
+          <div className="flex items-center gap-4 text-xs font-mono relative">
+            <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px] sm:text-xs hidden lg:inline">
               {todayDate}
             </span>
-            <span className="text-slate-400 font-semibold hidden md:inline border-l border-slate-700 pl-4 uppercase tracking-wider text-[11px]">
+            <span className="text-slate-400 font-semibold hidden xl:inline border-l border-slate-700 pl-4 uppercase tracking-wider text-[11px] mr-2">
               EDITION: DEVELOPER INTELLIGENCE
             </span>
+
+            {/* PROFILE AVATAR ICON BUTTON */}
+            <button
+              type="button"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center gap-2.5 bg-slate-900 hover:bg-slate-800 border-2 border-slate-700 hover:border-amber-400 text-white px-3.5 py-1.5 rounded-full transition-all shadow-sm cursor-pointer"
+            >
+              <div className="w-6 h-6 rounded-full bg-rose-600 text-white font-serif font-black text-xs flex items-center justify-center shadow-inner">
+                {userName ? userName[0].toUpperCase() : "P"}
+              </div>
+              <span className="font-bold text-slate-200 hidden sm:inline max-w-[130px] truncate">
+                {userName}
+              </span>
+              <span className="text-amber-400 text-[10px] ml-0.5">▼</span>
+            </button>
+
+            {/* PROFILE DROPDOWN MENU */}
+            {showProfileMenu && (
+              <div className="absolute right-0 top-12 w-72 bg-slate-900 border-2 border-slate-700 rounded-2xl shadow-2xl p-4 z-50 text-white font-mono space-y-3.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="pb-3 border-b border-slate-800">
+                  <div className="font-black text-white text-sm truncate flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>{userName}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate mt-1 font-sans font-medium">
+                    {userRole}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Link
+                    href="/profile"
+                    onClick={() => setShowProfileMenu(false)}
+                    className="flex items-center justify-between w-full p-3 rounded-xl bg-slate-800 hover:bg-rose-600 hover:text-white text-amber-300 transition-colors text-xs font-black tracking-wider cursor-pointer border border-slate-700 hover:border-rose-500 shadow-2xs"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm">👤</span>
+                      <span>Profile & AI Tuning</span>
+                    </span>
+                    <span>→</span>
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      fetchAllBriefings(true);
+                    }}
+                    className="flex items-center justify-between w-full p-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-[11px] font-bold cursor-pointer border border-transparent hover:border-slate-700"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>🔄</span>
+                      <span>Force AI News Refresh</span>
+                    </span>
+                    <span>⚡</span>
+                  </button>
+                </div>
+
+                <div className="pt-2.5 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>MODEL: GEMINI 1.5 FLASH</span>
+                  <span className="text-emerald-400 font-bold">ONLINE</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -175,8 +269,8 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-4 lg:divide-x lg:divide-slate-300 gap-y-10 lg:gap-x-0">
             
             {/* COLUMN 1: QUICK WIRE SIGNALS (25% SCREEN WIDTH - REGULAR TACTICAL NEWS) */}
-            <section className="lg:col-span-1 lg:pr-5 flex flex-col justify-start lg:h-[calc(100vh-135px)] lg:overflow-y-auto pb-12">
-              <div className="border-b-2 border-slate-900 pb-2 mb-4 flex items-center justify-between font-mono sticky top-0 bg-[#FAF8F5]/95 backdrop-blur-md z-10 pt-1">
+            <section className="lg:col-span-1 lg:pr-5 flex flex-col justify-start pb-12">
+              <div className="border-b-2 border-slate-900 pb-2 mb-4 flex items-center justify-between font-mono sticky top-14 bg-[#FAF8F5]/95 backdrop-blur-md z-10 pt-1">
                 <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 flex items-center gap-1.5">
                   📡 THE QUICK WIRE
                 </span>
@@ -190,11 +284,11 @@ export default function Home() {
             </section>
 
             {/* COLUMNS 2 & 3: CENTER DECK (50% SCREEN WIDTH - HIGH PRIORITY ARCHITECTURAL NEWS) */}
-            <section className="lg:col-span-2 lg:px-6 flex flex-col justify-start space-y-8 lg:h-[calc(100vh-135px)] lg:overflow-y-auto pb-12">
+            <section className="lg:col-span-2 lg:px-6 flex flex-col justify-start space-y-8 pb-12">
               {/* LEAD STORY (HIGHEST PRIORITY) */}
               {leadStory && (
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3 border-b-2 border-slate-900 pb-2 font-mono sticky top-0 bg-[#FAF8F5]/95 backdrop-blur-md z-10 pt-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3 border-b-2 border-slate-900 pb-2 font-mono sticky top-14 bg-[#FAF8F5]/95 backdrop-blur-md z-10 pt-1">
                     <span className="px-2.5 py-0.5 rounded-sm text-xs font-black tracking-wider uppercase bg-rose-600 text-white shadow-xs">
                       🔥 LEAD ARCHITECTURAL STORY
                     </span>
@@ -227,8 +321,8 @@ export default function Home() {
             </section>
 
             {/* COLUMN 4: DEEP TECH WATCH & SPOTLIGHTS (25% SCREEN WIDTH - MEDIUM PRIORITY) */}
-            <section className="lg:col-span-1 lg:pl-5 flex flex-col justify-start lg:h-[calc(100vh-135px)] lg:overflow-y-auto pb-12">
-              <div className="border-b-2 border-slate-900 pb-2 mb-4 flex items-center justify-between font-mono sticky top-0 bg-[#FAF8F5]/95 backdrop-blur-md z-10 pt-1">
+            <section className="lg:col-span-1 lg:pl-5 flex flex-col justify-start pb-12">
+              <div className="border-b-2 border-slate-900 pb-2 mb-4 flex items-center justify-between font-mono sticky top-14 bg-[#FAF8F5]/95 backdrop-blur-md z-10 pt-1">
                 <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 flex items-center gap-1">
                   🛠️ SYSTEM WATCH
                 </span>

@@ -38,4 +38,7 @@ class BriefingCard(BaseModel):
     source_url: str = Field(..., description="Link to original news/blog article")
     target_role: str = Field(default="Developer")
     target_stack: List[str] = Field(default_factory=list)
+    priority: str | None = Field(
+        default="brief", description="UI layout category: lead, major, brief, watch, spotlight"
+    )
     card_content: BriefingCardContent
