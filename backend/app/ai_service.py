@@ -3,7 +3,7 @@ import json
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from app.schemas import BriefingCardContent, ActionGuidance
+from app.schemas import BriefingCardContent, ActionGuidance, ChatResponse, ChatMessage
 
 # 1. Load variables from .env file into OS environment variables
 load_dotenv()
@@ -13,7 +13,7 @@ if not api_key:
     raise ValueError("GEMINI_API_KEY is missing from .env file!")
 
 client = genai.Client(api_key=api_key)
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-3.1-flash-lite"
 
 
 def generate_action_card(
@@ -89,39 +89,39 @@ def generate_action_card(
         )
 
 
-def ai_match_topics(query: str, available_topics: list[str], max_results: int = 3) -> list[str]:
+def ai_match_topics(query: str, available_topics: list[str] = None, max_results: int = 3) -> list[str]:
     """
-    Uses Gemini to semantically match a user's search query against the available topic list.
-    Returns up to `max_results` related topic strings from the list.
+    Intelligent developer search autocomplete engine.
+    Completes user input with up to `max_results` relevant tech keywords/topics
+    matching what the user typed (e.g. 'rus' -> Rust Programming Language, Rust Web Development, Rust Systems).
     """
-    topics_numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(available_topics))
-    prompt = f"""You are a smart topic matching assistant for a developer news platform.
+    clean_q = query.strip()
+    if not clean_q:
+        return []
 
-A user typed "{query}" in a search box. Your job is to find which of the following numbered topics are semantically related to their search.
+    # 1. First check if any available_topics directly match the prefix or substring
+    local_hits = []
+    if available_topics:
+        q_lower = clean_q.lower()
+        for t in available_topics:
+            if q_lower in t.lower():
+                local_hits.append(t)
+                if len(local_hits) >= max_results:
+                    return local_hits
 
-Here are ALL available topics:
-{topics_numbered}
+    # 2. Call Gemini to dynamically complete and expand user input into concrete tech keywords
+    prompt = f"""You are an intelligent developer search autocomplete assistant for a technical news platform.
+The user is typing in a tech stack interest search bar and typed: "{clean_q}".
+Generate up to {max_results} relevant, highly-specific developer topics or tech keywords that complete or expand upon what the user typed.
 
-Think broadly about what the user might mean:
-- "aws" or "cloud" → Cloud Infrastructure & Azure
-- "docker" or "containers" → Kubernetes & DevOps Pipelines  
-- "security" or "auth" → Zero-Trust Cloud Security
-- "ai" or "ml" or "llm" → Google Gemini & Generative AI
-- "database" or "sql" or "mongo" → SQL & Vector Databases
-- "react" or "nextjs" → React & Next.js Systems
-- "angular" or "frontend" → Angular & Web Frameworks
-- "csharp" or "dotnet" or ".net" → .NET Core & Minimal APIs, C# Architecture & Microservices
-- "python" or "fastapi" → Python & FastAPI Setup
-- "monitoring" or "tracing" → eBPF & System Observability
-- "microfrontend" or "webpack" → Micro-Frontends & Module Federation
+Examples:
+- If user typed "rus" -> ["Rust Programming Language", "Rust Web Development (Axum/Actix)", "Rust Systems Programming"]
+- If user typed "dock" -> ["Docker & Containerization", "Docker Compose & Multi-Container", "Docker Security & Optimization"]
+- If user typed "angu" -> ["Angular Framework & Components", "Angular CLI & Tooling", "Angular Signals & State Management"]
+- If user typed "pyt" -> ["Python & FastAPI Setup", "PyTorch & Deep Learning", "Python AsyncIO & Concurrency"]
+- If user typed "kube" -> ["Kubernetes & Container Orchestration", "Kubernetes Helm & GitOps", "Kubernetes Networking & Ingress"]
 
-Return the NUMBERS (indices) of up to {max_results} matching topics as a JSON array of integers.
-If nothing matches, return an empty array [].
-
-Example: if the query is "aws", return [8] because topic 8 is "Cloud Infrastructure & Azure".
-Example: if the query is "docker", return [7] because topic 7 is "Kubernetes & DevOps Pipelines".
-
-IMPORTANT: Return ONLY a JSON array of integers, nothing else."""
+Return ONLY a valid JSON array of up to {max_results} strings. Each string must be a concise, title-cased technology topic name (max 45 characters). Do not return markdown, just raw JSON array."""
 
     try:
         response = client.models.generate_content(
@@ -129,11 +129,11 @@ IMPORTANT: Return ONLY a JSON array of integers, nothing else."""
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                temperature=0.1,
+                temperature=0.2,
             ),
         )
         raw = response.text.strip()
-        print(f"[AI Topic Match] query='{query}', raw_response='{raw}'")
+        print(f"[AI Topic Complete] query='{clean_q}', raw_response='{raw}'")
         
         if raw.startswith("```json"):
             raw = raw[7:]
@@ -142,16 +142,66 @@ IMPORTANT: Return ONLY a JSON array of integers, nothing else."""
         if raw.endswith("```"):
             raw = raw[:-3]
         
-        indices = json.loads(raw.strip())
-        # Convert 1-based indices to actual topic strings
-        results = []
-        for idx in indices:
-            if isinstance(idx, int) and 1 <= idx <= len(available_topics):
-                results.append(available_topics[idx - 1])
-        
-        print(f"[AI Topic Match] query='{query}', matched_topics={results}")
-        return results[:max_results]
+        parsed = json.loads(raw.strip())
+        if isinstance(parsed, list):
+            results = [str(item).strip() for item in parsed if isinstance(item, (str, int, float)) and str(item).strip()]
+            if results:
+                return results[:max_results]
+        return local_hits
     except Exception as e:
-        print(f"[AI Topic Match Error] query='{query}': {e}")
-        return []
+        print(f"[AI Topic Complete Error] query='{clean_q}': {e}")
+        return local_hits
 
+
+def ai_onboarding_chat(history: list[ChatMessage], available_topics: list[str]) -> ChatResponse:
+    topics_list = ", ".join(available_topics)
+    
+    prompt = f"""You are the Becon AI onboarding assistant. Your job is to warmly chat with a new developer and extract 4 pieces of information to build their profile.
+    
+    Information needed:
+    1. Their Name
+    2. Their Job Role (e.g. Frontend Developer, Backend Engineer, Data Scientist)
+    3. Their Experience Level (e.g. Junior (1-2y), Mid (3-4y), Senior (5+), Lead/Architect)
+    4. Up to 5 tech interests from this exact list: [{topics_list}]. If they say something else, map it to the closest match on this list.
+
+    RULES:
+    - You must output JSON according to the schema.
+    - Start the conversation warmly by asking for their name.
+    - Ask ONE question at a time! Don't overwhelm them.
+    - If the user asks you a technical, programming, or unrelated question, ANSWER IT brilliantly using your knowledge, but then gently guide the conversation back to the onboarding question.
+    - Do NOT set `onboarding_complete` to true or populate `extracted_data` until you have gathered all 4 pieces of information.
+    - Once you have all 4, set `onboarding_complete` to true, output the `extracted_data` with the exact fields, and thank them in `reply_text`. Make sure `interests` is a comma-separated string of the exact matched topic names.
+
+    Chat History:
+"""
+    for msg in history:
+        prompt += f"{msg.role}: {msg.content}\n"
+        
+    try:
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ChatResponse,
+                temperature=0.7,
+            ),
+        )
+        
+        raw_json = response.text.strip()
+        if raw_json.startswith("```json"):
+            raw_json = raw_json[7:]
+        if raw_json.startswith("```"):
+            raw_json = raw_json[3:]
+        if raw_json.endswith("```"):
+            raw_json = raw_json[:-3]
+            
+        return ChatResponse.model_validate_json(raw_json.strip())
+    except Exception as e:
+        print(f"[AI Onboarding Error] {e}")
+        from app.schemas import ExtractedProfile
+        return ChatResponse(
+            reply_text="I'm having trouble thinking right now. Let's try again in a moment.",
+            onboarding_complete=False,
+            extracted_data=None
+        )

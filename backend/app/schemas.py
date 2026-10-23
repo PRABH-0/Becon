@@ -41,4 +41,52 @@ class BriefingCard(BaseModel):
     priority: str | None = Field(
         default="brief", description="UI layout category: lead, major, brief, watch, spotlight"
     )
+    image_url: str | None = Field(
+        default=None, description="Direct hero/cover image extracted from original blog post"
+    )
     card_content: BriefingCardContent
+
+class UserProfileBase(BaseModel):
+    name: str = "Prabhjot Singh"
+    role: str = "Senior Full Stack .NET & Angular Engineer"
+    email: str = "prabhjot@example.com"
+    experience: str = "Senior (5+ Years)"
+    interests: str = ".NET Core, Angular"
+    customPrompt: str = ""
+    aiTone: str = "Architectural Analysis (Deep Tech)"
+
+class UserProfileCreate(UserProfileBase):
+    pass
+
+class UserProfileResponse(UserProfileBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+class UserRegister(BaseModel):
+    name: str | None = None
+    email: str
+    password: str
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+class ExtractedProfile(BaseModel):
+    name: str | None = None
+    role: str | None = None
+    experience: str | None = None
+    interests: str | None = None
+
+class ChatResponse(BaseModel):
+    reply_text: str
+    onboarding_complete: bool
+    extracted_data: ExtractedProfile | None = None
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
