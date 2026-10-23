@@ -810,13 +810,13 @@ export default function Home() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search topic (e.g. Rust, K8s, PostgreSQL)..."
-                      className="w-full pl-8 pr-24 py-1.5 text-xs font-mono bg-white border border-slate-300 focus:border-slate-900 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all shadow-2xs"
+                      className="w-full pl-8 pr-20 py-1.5 text-xs font-mono bg-white border border-slate-300 focus:border-slate-900 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all shadow-2xs"
                     />
                     {searchQuery && (
                       <button
                         type="button"
                         onClick={handleClearSearch}
-                        className="absolute right-20 text-slate-400 hover:text-slate-700 p-0.5 text-xs font-bold cursor-pointer top-1/2 -translate-y-1/2"
+                        className="absolute right-[66px] text-slate-400 hover:text-slate-700 p-0.5 text-xs font-bold cursor-pointer top-1/2 -translate-y-1/2"
                         title="Clear"
                       >
                         <X className="w-3 h-3" />
@@ -825,10 +825,10 @@ export default function Home() {
                     <button
                       type="submit"
                       disabled={isSearchingTopic || !searchQuery.trim()}
-                      className="absolute right-1 px-3 py-1 rounded bg-slate-950 hover:bg-slate-800 text-amber-300 text-[11px] font-black uppercase font-mono tracking-wider transition-all disabled:bg-slate-800 disabled:text-amber-300/80 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 shadow-2xs border border-slate-700"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 h-[22px] px-2 rounded bg-slate-950 hover:bg-slate-800 text-amber-300 text-[10px] font-black uppercase font-mono tracking-wider transition-all disabled:bg-slate-800 disabled:text-amber-300/80 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1 shadow-2xs border border-slate-700"
                     >
                       {isSearchingTopic ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
                       ) : (
                         <span>Search</span>
                       )}
