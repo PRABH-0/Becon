@@ -44,6 +44,9 @@ class BriefingCard(BaseModel):
     image_url: str | None = Field(
         default=None, description="Direct hero/cover image extracted from original blog post"
     )
+    published_at: str | None = Field(
+        default=None, description="Original publication date or human-readable timestamp"
+    )
     card_content: BriefingCardContent
 
 class UserProfileBase(BaseModel):

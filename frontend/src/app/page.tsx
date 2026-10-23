@@ -1,6 +1,6 @@
 "use client";
 
-import { User, RefreshCcw, Zap, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ArrowRight, ExternalLink, Maximize2, X, Search, Loader2, Sparkles } from "lucide-react";
+import { User, RefreshCcw, Zap, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ArrowRight, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -35,6 +35,7 @@ interface BriefingCard {
   title: string;
   source_url: string;
   image_url?: string;
+  published_at?: string;
   target_role: string;
   target_stack: string[];
   priority?: "lead" | "major" | "brief" | "watch" | "spotlight";
@@ -1033,6 +1034,10 @@ export default function Home() {
                 </span>
               ))}
               <span className="text-xs font-mono text-slate-500 font-bold tracking-wider">• DEEP ARCHITECTURAL INVESTIGATION</span>
+              <span className="text-xs font-mono text-slate-600 font-bold tracking-wider flex items-center gap-1.5 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md">
+                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                <span>PUBLISHED: {selectedCard.published_at || "Oct 23, 2026"}</span>
+              </span>
             </div>
 
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black font-serif text-slate-950 tracking-tight leading-tight mb-6">
@@ -1193,6 +1198,10 @@ function renderLeadSidebarCard(
                 #{tag}
               </span>
             ))}
+            <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-50 border border-slate-200/90 px-2 py-0.5 rounded flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-slate-400" />
+              <span>{card.published_at || "Oct 23, 2026"}</span>
+            </span>
           </div>
           <span
             className={`text-[10px] px-2 py-0.5 rounded border uppercase font-mono font-bold tracking-wider ${getBadgeColor(
@@ -1305,6 +1314,10 @@ function renderRectangleCard(
               )}`}
             >
               {card.card_content.what_to_do_next.action_type}
+            </span>
+            <span className="text-[10px] font-mono font-semibold text-slate-500 bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-slate-400" />
+              <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
           </div>
 
@@ -1428,6 +1441,10 @@ function renderSquareCard(
           <div className="flex items-center gap-1.5 truncate">
             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200/80 uppercase tracking-wider font-mono truncate">
               #{card.target_stack[0]}
+            </span>
+            <span className="text-[9px] font-mono text-slate-500 flex items-center gap-1 shrink-0">
+              <Calendar className="w-2.5 h-2.5 text-slate-400" />
+              <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
           </div>
 
@@ -1568,7 +1585,10 @@ function renderBriefCard(
       </div>
 
       <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono text-slate-500 mt-3">
-        <span className="truncate">Role: {card.target_role}</span>
+        <span className="truncate flex items-center gap-1">
+          <Calendar className="w-2.5 h-2.5 text-slate-400" />
+          <span>{card.published_at || "Oct 23, 2026"}</span>
+        </span>
         <span
           className={`px-1.5 py-0.5 rounded text-[9px] border uppercase font-bold ${getBadgeColor(
             card.card_content.what_to_do_next.action_type

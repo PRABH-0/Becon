@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 import re
 import html
 from typing import List, Dict, Tuple
@@ -170,12 +171,32 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
                 image_url = l.get("href")
                 break
 
+    published_at = None
+    if entry.get("published_parsed"):
+        try:
+            published_at = time.strftime("%b %d, %Y", entry["published_parsed"])
+        except Exception:
+            pass
+    elif entry.get("updated_parsed"):
+        try:
+            published_at = time.strftime("%b %d, %Y", entry["updated_parsed"])
+        except Exception:
+            pass
+    elif entry.get("published"):
+        published_at = str(entry.get("published"))[:16].strip()
+    elif entry.get("pubDate"):
+        published_at = str(entry.get("pubDate"))[:16].strip()
+
+    if not published_at:
+        published_at = datetime.now().strftime("%b %d, %Y")
+
     return {
         "title": title,
         "link": link,
         "summary": summary,
         "tag": tag_name,
-        "image_url": image_url
+        "image_url": image_url,
+        "published_at": published_at
     }
 
 def fetch_topic_feed_items(topic: str, limit: int = 8) -> Tuple[str, List[Dict[str, str]]]:
@@ -274,6 +295,7 @@ def worker_generate_card(index: int, item: Dict[str, str], role: str, interests:
         title=item["title"],
         source_url=item["link"],
         image_url=item.get("image_url"),
+        published_at=item.get("published_at") or datetime.now().strftime("%b %d, %Y"),
         target_role=role,
         target_stack=[item["tag"], "AI Customized"],
         priority=priority,
