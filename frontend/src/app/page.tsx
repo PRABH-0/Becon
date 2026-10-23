@@ -810,13 +810,13 @@ export default function Home() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search subject (e.g. Kubernetes, Rust, PostgreSQL)..."
-                      className="w-full pl-8 pr-20 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all shadow-2xs"
+                      className="w-full pl-8 pr-24 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all shadow-2xs"
                     />
                     {searchQuery && (
                       <button
                         type="button"
                         onClick={handleClearSearch}
-                        className="absolute right-14 text-slate-400 hover:text-slate-700 p-0.5 text-xs font-bold cursor-pointer"
+                        className="absolute right-20 text-slate-400 hover:text-slate-700 p-0.5 text-xs font-bold cursor-pointer"
                         title="Clear"
                       >
                         <X className="w-3 h-3" />
@@ -825,12 +825,12 @@ export default function Home() {
                     <button
                       type="submit"
                       disabled={isSearchingTopic || !searchQuery.trim()}
-                      className="absolute right-1 px-2.5 py-1 rounded bg-slate-950 hover:bg-slate-800 text-amber-300 text-[10px] font-black uppercase font-mono tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 shadow-2xs"
+                      className="absolute right-1 px-3 py-1 rounded bg-slate-950 hover:bg-slate-800 text-amber-300 text-[11px] font-black uppercase font-mono tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 shadow-2xs"
                     >
                       {isSearchingTopic ? (
-                        <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
                       ) : (
-                        <span>AI Find</span>
+                        <span>Search</span>
                       )}
                     </button>
                   </div>
@@ -888,56 +888,68 @@ export default function Home() {
               {/* FULL-WIDTH DYNAMIC BENTO GRID (GAPLESS GUARANTEE, SPANS ENTIRE WIDTH) */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {isSearchingTopic ? (
-                  <>
-                    <div className="col-span-1 md:col-span-2 xl:col-span-3 p-4 rounded-xl bg-slate-900 text-amber-300 font-mono text-xs border border-slate-800 flex items-center justify-center gap-3 shadow-sm">
-                      <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                      <span>Ingesting real-time feeds & running Gemini 1.5 synthesis for "{activeSearchTopic}"...</span>
+                  <div className="col-span-1 md:col-span-2 xl:col-span-3 min-h-[300px] rounded-2xl bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-2 border-amber-400/80 flex flex-col items-center justify-center p-8 sm:p-12 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)] space-y-3">
+                    {/* Custom News-Loader GIF rendered in crisp white with subtle amber glow */}
+                    <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/News-Loader.gif"
+                        alt="Loading..."
+                        className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
+                        style={{ filter: "brightness(0) invert(1)" }}
+                      />
                     </div>
-                    <div className="col-span-1 md:col-span-2 xl:col-span-2 rounded-xl bg-white border border-slate-300 p-6 shadow-xs animate-pulse flex flex-col justify-between min-h-[260px]">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="h-5 w-24 bg-slate-200 rounded"></div>
-                          <div className="h-5 w-16 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="h-6 w-3/4 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-full bg-slate-100 rounded"></div>
-                        <div className="h-4 w-5/6 bg-slate-100 rounded"></div>
-                      </div>
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div className="h-4 w-32 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-20 bg-slate-200 rounded"></div>
-                      </div>
-                    </div>
-                    <div className="col-span-1 rounded-xl bg-white border border-slate-300 p-6 shadow-xs animate-pulse flex flex-col justify-between min-h-[260px]">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="h-5 w-20 bg-slate-200 rounded"></div>
-                          <div className="h-5 w-14 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="h-5 w-4/5 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-full bg-slate-100 rounded"></div>
-                      </div>
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div className="h-4 w-24 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-16 bg-slate-200 rounded"></div>
-                      </div>
-                    </div>
-                  </>
-                ) : displayedBentoStories.length > 0 ? (
-                  (() => {
-                    const bentoSpans = computeBentoSpans(displayedBentoStories.length);
-                    const imageVisibility = computeImageVisibility(displayedBentoStories, bentoSpans);
-                    return displayedBentoStories.map((card, idx) => {
-                      const span = bentoSpans[idx] ?? 1;
-                      const showImageOnCard = imageVisibility[idx];
 
-                      if (span === 1) {
-                        return renderSquareCard(card, getActionBadgeColor, setSelectedCard, showImageOnCard);
-                      }
-                      const isFullWidth = span === 3;
-                      return renderRectangleCard(card, getActionBadgeColor, setSelectedCard, showImageOnCard, isFullWidth);
-                    });
-                  })()
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                      <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
+                        DISPATCHING AI NEWS FOR: {activeSearchTopic ? activeSearchTopic.toUpperCase() : searchQuery.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
+                      Querying live multi-domain feeds & running Gemini 1.5 synthesis…
+                    </p>
+                  </div>
+                ) : displayedBentoStories.length > 0 ? (
+                  <>
+                    {(() => {
+                      const bentoSpans = computeBentoSpans(displayedBentoStories.length);
+                      const imageVisibility = computeImageVisibility(displayedBentoStories, bentoSpans);
+                      return displayedBentoStories.map((card, idx) => {
+                        const span = bentoSpans[idx] ?? 1;
+                        const showImageOnCard = imageVisibility[idx];
+
+                        if (span === 1) {
+                          return renderSquareCard(card, getActionBadgeColor, setSelectedCard, showImageOnCard);
+                        }
+                        const isFullWidth = span === 3;
+                        return renderRectangleCard(card, getActionBadgeColor, setSelectedCard, showImageOnCard, isFullWidth);
+                      });
+                    })()}
+                    {loadingRemaining && (
+                      <div className="col-span-1 md:col-span-2 xl:col-span-3 min-h-[220px] rounded-2xl bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-2 border-amber-400/80 flex flex-col items-center justify-center p-6 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)] space-y-2.5">
+                        <div className="relative w-12 h-12 flex items-center justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src="/News-Loader.gif"
+                            alt="Loading..."
+                            className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
+                            style={{ filter: "brightness(0) invert(1)" }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                          <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
+                            DISPATCHING REMAINING GAZETTE EDITIONS
+                          </span>
+                        </div>
+                        <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
+                          Synthesizing additional architectural signals, deep takes & action cards…
+                        </p>
+                      </div>
+                    )}
+                  </>
                 ) : searchedStories !== null ? (
                   <div className="col-span-1 md:col-span-2 xl:col-span-3 p-8 rounded-xl bg-white border border-slate-300 text-center font-mono space-y-3 shadow-xs">
                     <p className="text-slate-900 font-bold text-sm">
@@ -955,68 +967,29 @@ export default function Home() {
                     </button>
                   </div>
                 ) : loadingRemaining ? (
-                  /* SLEEK LAZY-LOADING SKELETON BROADSHEET CARDS */
-                  <>
-                    <div className="col-span-1 md:col-span-2 xl:col-span-2 rounded-xl bg-white border border-slate-300 p-6 shadow-xs animate-pulse flex flex-col justify-between min-h-[260px]">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="h-5 w-24 bg-slate-200 rounded"></div>
-                          <div className="h-5 w-16 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="h-6 w-3/4 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-full bg-slate-100 rounded"></div>
-                        <div className="h-4 w-5/6 bg-slate-100 rounded"></div>
-                      </div>
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div className="h-4 w-32 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-20 bg-slate-200 rounded"></div>
-                      </div>
+                  <div className="col-span-1 md:col-span-2 xl:col-span-3 min-h-[300px] rounded-2xl bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-2 border-amber-400/80 flex flex-col items-center justify-center p-8 sm:p-12 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)] space-y-3">
+                    {/* Custom News-Loader GIF rendered in crisp white with subtle amber glow */}
+                    <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/News-Loader.gif"
+                        alt="Loading..."
+                        className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
+                        style={{ filter: "brightness(0) invert(1)" }}
+                      />
                     </div>
-                    <div className="col-span-1 rounded-xl bg-white border border-slate-300 p-6 shadow-xs animate-pulse flex flex-col justify-between min-h-[260px]">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="h-5 w-20 bg-slate-200 rounded"></div>
-                          <div className="h-5 w-14 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="h-5 w-4/5 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-full bg-slate-100 rounded"></div>
-                        <div className="h-4 w-2/3 bg-slate-100 rounded"></div>
-                      </div>
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div className="h-4 w-24 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-16 bg-slate-200 rounded"></div>
-                      </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                      <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
+                        DISPATCHING REMAINING GAZETTE EDITIONS
+                      </span>
                     </div>
-                    <div className="col-span-1 rounded-xl bg-white border border-slate-300 p-6 shadow-xs animate-pulse flex flex-col justify-between min-h-[260px]">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="h-5 w-24 bg-slate-200 rounded"></div>
-                          <div className="h-5 w-16 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="h-5 w-3/4 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-full bg-slate-100 rounded"></div>
-                      </div>
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div className="h-4 w-28 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-16 bg-slate-200 rounded"></div>
-                      </div>
-                    </div>
-                    <div className="col-span-1 md:col-span-2 xl:col-span-2 rounded-xl bg-white border border-slate-300 p-6 shadow-xs animate-pulse flex flex-col justify-between min-h-[260px]">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="h-5 w-28 bg-slate-200 rounded"></div>
-                          <div className="h-5 w-16 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="h-6 w-2/3 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-full bg-slate-100 rounded"></div>
-                        <div className="h-4 w-4/5 bg-slate-100 rounded"></div>
-                      </div>
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div className="h-4 w-36 bg-slate-200 rounded"></div>
-                        <div className="h-4 w-24 bg-slate-200 rounded"></div>
-                      </div>
-                    </div>
-                  </>
+
+                    <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
+                      Synthesizing additional architectural signals, deep takes & action cards…
+                    </p>
+                  </div>
                 ) : null}
               </div>
             </section>
