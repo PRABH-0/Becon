@@ -391,10 +391,6 @@ export default function ProfilePage() {
               Tailor how Becon&apos;s AI engine reads breaking industry updates, aligns with your profession & interests, and constructs your personalized action briefings.
             </p>
           </div>
-          <div className="flex items-center gap-2 font-mono text-xs font-black bg-amber-100 text-amber-950 border-2 border-amber-300 px-3.5 py-1.5 rounded-lg shadow-2xs">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mr-1"></span>
-            <span>AI ENGINE: ACTIVE & ONLINE</span>
-          </div>
         </div>
 
         <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-12 gap-8">

@@ -94,10 +94,21 @@ Personalization starts with the user's role and stack and improves from their ow
 - Save cards for later.
 - Over time, ranking adapts to what the user actually finds valuable.
 
-Becon does not need access to a user's social accounts. It learns from their feedback in the product, which keeps it private and distraction-free.
+By default, Becon does not require social accounts and prioritizes privacy. However, users can optionally connect or monitor creator accounts to receive topic-matched social updates directly in their briefings.
 
 
-8. ALERTS FOR IMPORTANT UPDATES
+8. CREATOR & SOCIAL INTELLIGENCE (X / TWITTER, YOUTUBE, INSTAGRAM)
+
+Breaking shifts and critical announcements often break on social platforms hours before official press releases. Becon allows users to attach social accounts or follow specific industry creators and company handles (e.g., Elon Musk on X, official engineering channels on YouTube, or tech leaders on Instagram).
+
+How it works:
+1. Account / Handle Attachment: The user links their social profile or inputs handles they follow (e.g., `@elonmusk` on X/Twitter, `@SpaceX` on YouTube).
+2. Topic-Gated Filtering: The ingestion engine monitors recent posts and strictly filters them against the user's active focus topics (e.g., `SpaceX`, `AI`, `Cloud Infrastructure`). General lifestyle posts, memes, and irrelevant noise are discarded.
+3. AI Action Card Generation: When a key figure posts an update relevant to a tracked topic (e.g., a tweet about Starship orbital tests), Google Gemini instantly transforms the raw post into an actionable 4-part Gazette card stamped with `/ TWITTER`, `/ YOUTUBE`, or `/ INSTAGRAM`.
+4. Direct Source Verification: Every social card provides a direct link back to the verified original post or video for full provenance.
+
+
+9. ALERTS FOR IMPORTANT UPDATES
 
 Some updates should not wait for the morning briefing. Becon can flag high-severity items for immediate delivery, for example:
 
@@ -112,7 +123,7 @@ A severity score decides what qualifies. To avoid noise, alerts have a daily cap
 - WhatsApp as a future option through the official business platform, where message templates and per-message costs apply.
 
 
-9. DESIGN PRINCIPLES
+10. DESIGN PRINCIPLES
 
 1. Action over information. A card without a next step is unfinished.
 2. Signal over volume. Fewer items, higher relevance.
@@ -122,18 +133,18 @@ A severity score decides what qualifies. To avoid noise, alerts have a daily cap
 6. Calm interface. A newspaper-style layout with no engagement tricks.
 
 
-10. TECHNOLOGY
+11. TECHNOLOGY
 
 Frontend: Next.js (React, TypeScript, App Router), Tailwind CSS, responsive card layouts, stack filter pills, and a newspaper-style editorial interface.
 
 Backend: FastAPI (Python), Pydantic v2 schemas (BriefingCard, BriefingCardContent, ActionGuidance), Uvicorn, and CORS-secured communication with the client.
 
-AI and data pipeline: Google Gemini for structured summarization with schema-enforced JSON output, feedparser for RSS and Atom ingestion, httpx for async fetching, and embedding-based deduplication.
+AI and data pipeline: Google Gemini for structured summarization with schema-enforced JSON output, feedparser for RSS and Atom ingestion, YouTube Data API / RSS syndication, X/Twitter developer & syndication APIs, httpx for async fetching, and embedding-based deduplication.
 
 Planned infrastructure: PostgreSQL for users, sources, events and cards, a scheduler for recurring ingestion, caching to control AI costs, containerized deployment, and automated tests with CI.
 
 
-11. WHY IT MATTERS
+12. WHY IT MATTERS
 
 - It is a universal, daily problem. Every developer deals with change overload.
 - It is hard to copy casually. Role- and stack-specific impact analysis is more valuable than a generic summary.
@@ -141,15 +152,17 @@ Planned infrastructure: PostgreSQL for users, sources, events and cards, a sched
 - It shows real engineering. Async data ingestion, semantic deduplication, LLM orchestration with strict schemas, and a production-style full-stack architecture.
 
 
-12. ROADMAP
+13. ROADMAP
 
 [x] Environment setup and FastAPI foundation
 [x] Pydantic schema design
 [x] FastAPI endpoints and Next.js integration
 [x] Database (Supabase PostgreSQL integration)
+[x] Continuous search pagination and Bento Grid layout
+[x] Dark and Light mode theme systems
+[ ] Social & Creator Feed Integration (X/Twitter, YouTube, Instagram topic-filtered updates)
 [ ] RSS ingestion engine
 [ ] Gemini summarization engine
-[ ] Ingestion pipeline connected to the API
 [ ] Feedback-based ranking
 [ ] Email digest and Telegram alerts
 [ ] Live deployment and user feedback
