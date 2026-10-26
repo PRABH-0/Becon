@@ -14,6 +14,22 @@ from app.feed_service import get_live_briefings, search_topic_briefings
 from app.ai_service import ai_match_topics
 
 AVAILABLE_TOPICS = [
+    "Tax Regulations & GST Compliance",
+    "Retail & Shop Inventory Management",
+    "Small Business Growth & Finance",
+    "E-Commerce & Digital Sales",
+    "Corporate Accounting & Audit Standards",
+    "Artificial Intelligence & Productivity Tools",
+    "Customer Retention & Retail POS",
+    "Financial Forecasting & Cash Flow",
+    "Digital Marketing & Social Selling",
+    "Software Engineering & Web Apps",
+    "Python, Data & Analytics",
+    "Cloud Tools & Cyber Security",
+    "Supply Chain & Vendor Management",
+    "Banking, Payments & Fintech",
+    "Business Law & Regulatory Filings",
+    "Modern Cloud & Systems Architecture",
     ".NET Core & Minimal APIs",
     "C# Architecture & Microservices",
     "Angular & Web Frameworks",
@@ -33,8 +49,8 @@ AVAILABLE_TOPICS = [
 ]
 
 app = FastAPI(
-    title="Becon AI Career Briefing API",
-    description="Personalized AI-Powered career briefings for developers",
+    title="Becon AI Intelligence Briefing API",
+    description="Personalized AI-Powered daily intelligence briefings for users across all professions",
     version="1.2.0"
 )
 
@@ -50,24 +66,25 @@ app.add_middleware(
 def read_root():
     return {
         "status": "online",
-        "app": "Becon AI Career News Briefing",
-        "engine": "Google Gemini 1.5 Flash (Personalized & Structured)"
+        "app": "Becon AI Intelligence Briefing",
+        "engine": "Becon AI Intelligence (Personalized & Structured)"
     }
 
 @app.get("/api/briefings")
 def get_briefings(
-    stack: str = Query(default="All", description="Filter by tech stack"),
-    role: str = Query(default="Senior Software Engineer", description="Target role of reading engineer"),
-    interests: str = Query(default="", description="Comma-separated list of tech stack focus areas"),
-    custom_prompt: str = Query(default="", description="Custom developer instruction for Gemini AI"),
+    stack: str = Query(default="All", description="Filter by topic or category"),
+    role: str = Query(default="Professional", description="Target role or profession of reading user"),
+    interests: str = Query(default="", description="Comma-separated list of focus areas and interests"),
+    custom_prompt: str = Query(default="", description="Custom user instruction for Gemini AI"),
     refresh: bool = Query(default=False, description="Force re-fetch from live web and regenerate AI summaries"),
     page: int = Query(default=1, ge=1, description="Page number for pagination"),
     limit: int = Query(default=16, ge=1, le=50, description="Items per page"),
-    scope: str = Query(default="all", description="Scope of briefings: 'top' (top 5 for fast initial render), 'remaining' (lazy-loaded remaining cards), or 'all'")
+    scope: str = Query(default="all", description="Scope of briefings: 'top' (top 5 for fast initial render), 'remaining' (lazy-loaded remaining cards), or 'all'"),
+    offset: int = Query(default=None, description="Direct offset for infinite scroll pagination")
 ):
     """
-    Returns real-time developer news cards tailored to the user's specific engineering identity and stack.
-    Supports progressive loading (scope='top' then scope='remaining').
+    Returns real-time intelligence cards tailored to the user's specific profession, interests, and preferences.
+    Supports progressive loading (scope='top' then scope='remaining') and direct offset infinite scroll.
     """
     return get_live_briefings(
         force_refresh=refresh,
@@ -76,17 +93,18 @@ def get_briefings(
         custom_prompt=custom_prompt,
         page=page,
         limit=limit,
-        scope=scope
+        scope=scope,
+        offset=offset
     )
 
 @app.get("/api/search-topic")
 def get_search_topic_briefings(
     query: str = Query(..., min_length=1, description="Topic or favorite subject to search"),
-    role: str = Query(default="Senior Software Engineer", description="Target role of reading engineer"),
+    role: str = Query(default="Professional", description="Target role of reading user"),
     limit: int = Query(default=6, ge=1, le=12, description="Number of cards to synthesize")
 ):
     """
-    Synthesizes real-time developer news cards tailored to any specific favorite subject or topic using Gemini AI.
+    Synthesizes real-time intelligence cards tailored to any specific favorite subject or topic using Gemini AI.
     """
     return search_topic_briefings(topic=query, user_role=role, limit=limit)
 
@@ -152,7 +170,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     hashed_password = get_password_hash(user_data.password)
     
     new_user = UserProfile(
-        name=user_data.name if user_data.name else "Developer",
+        name=user_data.name if user_data.name else "User",
         email=user_data.email,
         password_hash=hashed_password,
         role="",

@@ -63,8 +63,8 @@ export default function OnboardingPage() {
           setOnboardingComplete(true);
           setTimeout(() => {
             showLoader(
-              "Finalizing Your AI Focus Stack...",
-              "Configuring your morning developer gazette & action cards..."
+              "Finalizing Your AI Topic Stack...",
+              "Configuring your morning intelligence gazette & action cards..."
             );
             router.push("/profile");
           }, 3000);
@@ -168,7 +168,7 @@ export default function OnboardingPage() {
             </button>
           </form>
           <div className="text-center mt-3 text-[10px] font-mono text-slate-400 font-bold tracking-widest uppercase">
-            Powered by Google Gemini 1.5 Flash
+            Powered by Becon AI Intelligence
           </div>
         </div>
       </main>

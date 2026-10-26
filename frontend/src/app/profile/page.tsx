@@ -1,75 +1,78 @@
 "use client";
 
-import { User, RefreshCcw, Zap, Target, Search, MessageSquare, Shield, Save, Sparkles, ArrowLeft, ArrowRight } from "lucide-react";
+import { User, RefreshCcw, Zap, Target, Search, MessageSquare, Shield, Save, Sparkles, ArrowLeft, ArrowRight, AlertCircle } from "lucide-react";
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
 
+const SUGGESTED_ROLES = [
+  "Accountant / Finance",
+  "Shop Owner / Retail",
+  "Software Engineer",
+  "Business & Sales Manager",
+  "E-Commerce Seller",
+  "Operations & Supply Chain",
+  "Healthcare Professional",
+  "Legal & Corporate Advisor"
+];
+
 const POPULAR_TOPICS = [
-  ".NET Core & Minimal APIs",
-  "C# Architecture & Microservices",
-  "Angular & Web Frameworks",
-  "React & Next.js Systems",
-  "Python & FastAPI Setup",
-  "Rust Programming Language",
-  "Go & High-Performance Services",
-  "Docker & Containerization",
-  "Google Gemini & Generative AI",
-  "Kubernetes & DevOps Pipelines",
-  "Cloud Infrastructure & Azure",
-  "TypeScript & Modern Tooling",
-  "SQL & Vector Databases",
-  "Micro-Frontends & Module Federation",
-  "Zero-Trust Cloud Security",
-  "eBPF & System Observability"
+  "Tax Regulations & GST Compliance",
+  "Retail & Shop Inventory Management",
+  "Small Business Growth & Finance",
+  "E-Commerce & Digital Sales",
+  "Corporate Accounting & Audit Standards",
+  "Artificial Intelligence & Productivity Tools",
+  "Customer Retention & Retail POS",
+  "Financial Forecasting & Cash Flow",
+  "Digital Marketing & Social Selling",
+  "Software Engineering & Web Apps",
+  "Python, Data & Analytics",
+  "Cloud Tools & Cyber Security",
+  "Supply Chain & Vendor Management",
+  "Banking, Payments & Fintech",
+  "Business Law & Regulatory Filings",
+  "Modern Cloud & Systems Architecture"
 ];
 
 const EXTENDED_TECH_CATALOG = [
   ...POPULAR_TOPICS,
-  "Rust Web Development (Axum/Actix)",
-  "Rustlings & Systems Practice",
-  "Rust Memory Safety & Concurrency",
-  "Rust Systems & WebAssembly",
-  "Docker Compose & Multi-Container",
-  "Docker Security & Image Optimization",
-  "Kubernetes Helm & GitOps",
-  "Kubernetes Ingress & Networking",
-  "PyTorch & Deep Learning",
-  "Python AsyncIO & Concurrency",
-  "Angular Signals & State Management",
-  "Next.js App Router & Server Actions",
-  "Vue.js & Nuxt 3 Ecosystem",
-  "AWS Cloud & Serverless Lambda",
-  "PostgreSQL Performance & Indexing",
-  "Redis & In-Memory Caching",
-  "Kafka & Event-Driven Architecture",
-  "GraphQL & Modern Apollo APIs",
-  "Linux Kernel & System Internals",
-  "WebAssembly & WASI Runtimes",
-  "Terraform & Infrastructure as Code",
-  "Swift & iOS Architecture",
-  "Kotlin & Android Multiplatform"
+  "Income Tax Returns & Auditing",
+  "Bookkeeping & Tally / QuickBooks",
+  "Payroll Management & Compliance",
+  "Retail Pricing Strategy & Merchandising",
+  "Shop Floor Management & Customer Experience",
+  "Wholesale Purchasing & Distributor Networks",
+  "Financial Risk Management & Reporting",
+  "Startup Fundraising & Pitch Decks",
+  "Import & Export Customs Documentation",
+  "SEO & Local Google Maps Marketing",
+  "React & Next.js Systems",
+  "Rust & Systems Programming",
+  "Docker & Kubernetes DevOps",
+  ".NET Core & Enterprise APIs",
+  "FastAPI & Python Microservices",
+  "PostgreSQL & Database Optimization"
 ];
 
 export default function ProfilePage() {
-  const [name, setName] = useState("Prabhjot Singh");
-  const [role, setRole] = useState("Senior Full Stack .NET & Angular Engineer");
-  const [email, setEmail] = useState("prabhjot@example.com");
-  const [experience, setExperience] = useState("Senior (5+ Years)");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [email, setEmail] = useState("");
+  const [experience, setExperience] = useState("Mid-Level / Established (3-5 Years)");
   const [interests, setInterests] = useState<string[]>([
-    ".NET Core & Minimal APIs",
-    "C# Architecture & Microservices",
-    "Angular & Web Frameworks",
-    "Python & FastAPI Setup",
-    "Google Gemini & Generative AI"
+    "Small Business Growth & Finance",
+    "Artificial Intelligence & Productivity Tools"
   ]);
   const [customPrompt, setCustomPrompt] = useState(
-    "When summarizing news, compare new concepts (like FastAPI, Next.js, or Python) directly against .NET Core and Angular patterns so I can learn faster. Focus on enterprise clean architecture, performance optimization, and real-world production gotchas."
+    "Highlight practical takeaways, commercial and financial impacts, and actionable steps tailored to my daily work."
   );
-  const [aiTone, setAiTone] = useState("Architectural Analysis (Deep Tech)");
+  const [aiTone, setAiTone] = useState("Practical & Actionable");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSetupMode, setIsSetupMode] = useState(false);
+  const [validationError, setValidationError] = useState("");
   const router = useRouter();
   const { showLoader, hideLoader } = useLoader();
 
@@ -180,25 +183,40 @@ export default function ProfilePage() {
 
 
   useEffect(() => {
-    // Load saved profile from SQL Server via backend API
+    // Check if user is in setup mode from URL
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("setup") === "true") {
+        setIsSetupMode(true);
+      }
+    }
+
+    // Load saved profile from backend API
     const fetchProfile = async () => {
       const token = localStorage.getItem("becon_token");
       if (!token) {
         router.push("/login");
         return;
       }
-      showLoader("Loading Developer Profile...", "Retrieving your saved architecture interests from database...");
+      showLoader("Loading User Profile...", "Retrieving your profile & topic interests from database...");
       try {
         const res = await fetch("http://127.0.0.1:8000/api/profile", {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
           const parsed = await res.json();
-          if (parsed.name) setName(parsed.name);
+          if (parsed.name && parsed.name !== "Developer" && parsed.name !== "User") {
+            setName(parsed.name);
+          } else if (parsed.email) {
+            const prefix = parsed.email.split("@")[0];
+            setName(prefix.charAt(0).toUpperCase() + prefix.slice(1));
+          }
           if (parsed.role) setRole(parsed.role);
           if (parsed.email) setEmail(parsed.email);
           if (parsed.experience) setExperience(parsed.experience);
-          if (parsed.interests) setInterests(parsed.interests.split(",").map((i: string) => i.trim()).filter(Boolean));
+          if (parsed.interests && parsed.interests.trim().length > 0) {
+            setInterests(parsed.interests.split(",").map((i: string) => i.trim()).filter(Boolean));
+          }
           if (parsed.customPrompt) setCustomPrompt(parsed.customPrompt);
           if (parsed.aiTone) setAiTone(parsed.aiTone);
         }
@@ -209,9 +227,10 @@ export default function ProfilePage() {
       }
     };
     fetchProfile();
-  }, []);
+  }, [router]);
 
   const toggleInterest = (topic: string) => {
+    setValidationError("");
     if (interests.includes(topic)) {
       setInterests(interests.filter((t) => t !== topic));
     } else {
@@ -221,9 +240,19 @@ export default function ProfilePage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError("");
+
+    if (interests.length === 0) {
+      setValidationError("Please select at least 1 interested field so our AI can curate your Gazette feed.");
+      return;
+    }
+
+    const finalRole = role.trim() || "Professional / User";
+    const finalName = name.trim() || "User";
+
     const profileData = {
-      name,
-      role,
+      name: finalName,
+      role: finalRole,
       email,
       experience,
       interests: interests.join(", "),
@@ -232,9 +261,12 @@ export default function ProfilePage() {
     };
     
     const token = localStorage.getItem("becon_token");
+    if (finalName && finalName !== "User") {
+      localStorage.setItem("becon_user_name", finalName);
+    }
     showLoader(
-      "Synchronizing AI Preferences...",
-      "Updating your tech stack focus & re-tuning Gemini briefing prompts..."
+      "Personalizing Your Daily Gazette...",
+      `Configuring AI news pipeline for ${finalRole} & ${interests.length} focus topics...`
     );
     try {
       await fetch("http://127.0.0.1:8000/api/profile", {
@@ -247,26 +279,28 @@ export default function ProfilePage() {
       });
       // Pre-warm and regenerate personalized briefing cards with the new focus areas
       const params = new URLSearchParams({
-        role: role,
+        role: finalRole,
         interests: interests.join(", "),
         custom_prompt: customPrompt,
         refresh: "true"
       });
-      await fetch(`http://127.0.0.1:8000/api/briefings?${params.toString()}`, {
+      fetch(`http://127.0.0.1:8000/api/briefings?${params.toString()}`, {
         method: "GET"
-      });
-    } catch (err) {
-      console.error("Failed to save profile to backend", err);
-    } finally {
+      }).catch(() => {});
+
+      // Launch home page so AI delivers the customized content!
       setTimeout(() => {
         hideLoader();
-        setSaveSuccess(true);
-      }, 600);
+        router.push("/");
+      }, 700);
+    } catch (err) {
+      console.error("Failed to save profile to backend", err);
+      hideLoader();
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 4000);
     }
-
-    setTimeout(() => {
-      setSaveSuccess(false);
-    }, 4000);
   };
 
   return (
@@ -281,7 +315,7 @@ export default function ProfilePage() {
               </h1>
             </Link>
             <span className="text-slate-400 font-bold text-xs border-l border-slate-700 pl-3 tracking-widest uppercase font-mono hidden sm:inline">
-              AI PERSONALIZATION & DEVELOPER PROFILE
+              AI PERSONALIZATION & USER PROFILE
             </span>
           </div>
           <div className="flex items-center gap-4 font-mono">
@@ -295,6 +329,7 @@ export default function ProfilePage() {
               type="button"
               onClick={() => {
                 localStorage.removeItem("becon_token");
+                localStorage.removeItem("becon_user_name");
                 router.push("/login");
               }}
               className="bg-rose-900/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 border border-transparent hover:border-rose-900/50 font-bold px-4 py-1.5 rounded-lg text-xs tracking-wider transition-all cursor-pointer shadow-xs"
@@ -309,34 +344,64 @@ export default function ProfilePage() {
       {saveSuccess && (
         <div className="bg-emerald-600 text-white font-mono text-xs sm:text-sm font-bold py-3 px-6 text-center shadow-lg transition-all animate-in fade-in slide-in-from-top duration-300 flex items-center justify-center gap-2">
           <span className="text-base"><Sparkles className="w-5 h-5" /></span>
-          <span>SUCCESS! Your Developer Identity & AI Model Personalization Preferences Have Been Synced!</span>
+          <span>SUCCESS! Your User Profile & AI Personalization Preferences Have Been Synced!</span>
         </div>
       )}
 
       {/* 3. PROFILE & AI TUNING FORM CONTAINER */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 mt-10">
+        {/* NEW ACCOUNT SETUP ONBOARDING BANNER */}
+        {isSetupMode && (
+          <div className="mb-8 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-slate-900 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-slate-950 text-amber-300 font-mono font-black text-lg flex items-center justify-center shrink-0 shadow-sm border border-slate-800">
+                ★
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded bg-amber-400 text-slate-950">
+                    STEP 2 OF 2 • SETUP
+                  </span>
+                  <span className="text-xs font-mono font-bold text-slate-500">
+                    NEW ACCOUNT CREATED
+                  </span>
+                </div>
+                <h3 className="font-serif font-black text-lg sm:text-xl text-slate-950 mt-1">
+                  Select Your Role, Profession & Interested Topics
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-700 font-medium mt-0.5 max-w-2xl">
+                  Pick the topics, industries, and focus areas you care about (e.g. Accounting, Retail, Business, Tech). When you hit Save, Becon AI will personalize your morning intelligence gazette and launch your feed!
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-mono font-black uppercase px-3 py-1.5 rounded-lg bg-slate-900 text-amber-300 shrink-0 shadow-2xs">
+              AI READY
+            </span>
+          </div>
+        )}
+
         <div className="border-b-2 border-slate-900 pb-4 mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-3xl sm:text-4xl font-black font-serif text-slate-950 tracking-tight leading-none mb-1">
-              Developer Identity & AI Model Calibration
+              User Profile & AI Personalization
             </h2>
             <p className="text-slate-600 font-normal text-sm sm:text-base">
-              Tailor how Becon&apos;s Google Gemini engine reads breaking developer news, matches your technology stack, and constructs your 4-part action protocol.
+              Tailor how Becon&apos;s AI engine reads breaking industry updates, aligns with your profession & interests, and constructs your personalized action briefings.
             </p>
           </div>
           <div className="flex items-center gap-2 font-mono text-xs font-black bg-amber-100 text-amber-950 border-2 border-amber-300 px-3.5 py-1.5 rounded-lg shadow-2xs">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mr-1"></span>
-            <span>AI ENGINE: GEMINI 1.5 ACTIVE</span>
+            <span>AI ENGINE: ACTIVE & ONLINE</span>
           </div>
         </div>
 
         <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* LEFT COLUMN: BASIC DEVELOPER DETAILS (5 COLUMNS) */}
+          {/* LEFT COLUMN: BASIC USER & PROFESSIONAL DETAILS (5 COLUMNS) */}
           <section className="lg:col-span-5 space-y-6 bg-white border-2 border-slate-900 p-6 sm:p-8 rounded-2xl shadow-md h-fit">
             <div className="border-b border-slate-200 pb-3 font-mono flex items-center justify-between">
               <span className="text-xs font-black uppercase tracking-widest text-slate-950 flex items-center gap-2">
-                <span><User className="w-4 h-4" /></span> BASIC DEVELOPER DETAILS
+                <span><User className="w-4 h-4" /></span> USER & PROFESSIONAL DETAILS
               </span>
               <span className="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded uppercase">
                 IDENTITY
@@ -360,18 +425,34 @@ export default function ProfilePage() {
 
               <div>
                 <label className="block text-xs font-bold font-mono text-slate-700 uppercase tracking-wider mb-1.5">
-                  Primary Role / Engineering Title
+                  Primary Profession / Role
                 </label>
                 <input
                   type="text"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg px-3.5 py-2 text-slate-950 font-semibold text-sm transition-colors outline-none"
-                  placeholder="e.g. Senior Full Stack .NET Engineer"
+                  placeholder="e.g. Accountant, Shop Owner, Software Engineer, Manager"
                   required
                 />
-                <p className="text-[11px] font-mono text-slate-500 mt-1">
-                  * Used directly by Gemini for the &quot;Impact on Your Role&quot; section.
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {SUGGESTED_ROLES.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRole(r)}
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
+                        role === r
+                          ? "bg-slate-900 text-amber-300 border-slate-900 shadow-2xs"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] font-mono text-slate-500 mt-1.5">
+                  * Used directly by the AI engine for the &quot;Impact on Your Role&quot; section.
                 </p>
               </div>
 
@@ -397,10 +478,10 @@ export default function ProfilePage() {
                   onChange={(e) => setExperience(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg px-3.5 py-2 text-slate-950 font-semibold text-sm transition-colors outline-none cursor-pointer"
                 >
-                  <option value="Junior (1-2 Years)">Junior Engineer (1-2 Years)</option>
-                  <option value="Mid-Level (3-4 Years)">Mid-Level Engineer (3-4 Years)</option>
-                  <option value="Senior (5+ Years)">Senior Engineer (5+ Years)</option>
-                  <option value="Lead / Architect">Principal / Tech Lead / Architect</option>
+                  <option value="Entry / Beginner (0-2 Years)">Entry / Beginner (0-2 Years)</option>
+                  <option value="Mid-Level / Established (3-5 Years)">Mid-Level / Established (3-5 Years)</option>
+                  <option value="Senior / Experienced (5+ Years)">Senior / Experienced (5+ Years)</option>
+                  <option value="Lead / Business Owner / Director">Lead / Business Owner / Director</option>
                 </select>
               </div>
             </div>
@@ -410,33 +491,40 @@ export default function ProfilePage() {
                 <span><Shield className="w-4 h-4" /></span> PRIVACY GUARANTEE
               </div>
               <p className="text-slate-600 text-[11px] leading-relaxed font-sans font-medium">
-                Your profile settings are kept locally in your browser storage and transmitted directly to your private Google Gemini AI Studio endpoint. Zero third-party telemetry.
+                Your profile settings are kept locally in your browser storage and transmitted directly to your private AI processing endpoint. Zero third-party telemetry.
               </p>
             </div>
           </section>
 
-          {/* RIGHT COLUMN: AI INTEL & STACK PREFERENCES (7 COLUMNS) */}
+          {/* RIGHT COLUMN: AI INTEL & TOPIC PREFERENCES (7 COLUMNS) */}
           <section className="lg:col-span-7 space-y-8 bg-white border-2 border-slate-900 p-6 sm:p-8 rounded-2xl shadow-md flex flex-col justify-between">
             <div className="space-y-6">
               <div className="border-b border-slate-200 pb-3 font-mono flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-black uppercase tracking-widest text-slate-950 flex items-center gap-2">
-                  <span><Target className="w-4 h-4" /></span> WHERE I AM INTERESTED MOST (SELECT TOPICS)
+                  <span><Target className="w-4 h-4" /></span> WHAT ARE YOU INTERESTED IN MOST? (SELECT TOPICS)
                 </span>
                 <span className="text-[10px] bg-indigo-100 text-indigo-950 border border-indigo-200 font-bold px-2 py-0.5 rounded uppercase">
-                  AI FOCUS STACK
+                  AI TOPICS & FOCUS
                 </span>
               </div>
 
+              {validationError && (
+                <div className="p-3.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-800 text-xs font-mono font-bold flex items-center gap-2 shadow-2xs">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{validationError}</span>
+                </div>
+              )}
+
               <p className="text-xs sm:text-sm text-slate-600 font-medium">
-                Search or click topics below to highlight where Becon&apos;s live ingestion engine should prioritize signals and technical updates:
+                Search or click topics below to highlight what Becon&apos;s live AI engine should prioritize for your daily intelligence feed:
               </p>
 
-              {/* ACTIVE FOCUS STACK / CURRENTLY SELECTED TOPICS */}
+              {/* ACTIVE FOCUS TOPICS / CURRENTLY SELECTED TOPICS */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    Active Focus Stack ({interests.length} Selected)
+                    Active Focus Topics ({interests.length} Selected)
                   </span>
                   {interests.length > 0 && (
                     <button
@@ -472,7 +560,7 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-center text-xs text-slate-500 font-mono">
-                    No topics selected yet. Type in the search box below or pick from starter stacks.
+                    No topics selected yet. Type in the search box below or pick from starter topics.
                   </div>
                 )}
               </div>
@@ -521,7 +609,7 @@ export default function ProfilePage() {
                     }}
                     onFocus={() => topicSearch.trim() && setShowSuggestions(true)}
                     className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-xl pl-10 pr-10 py-2.5 text-slate-950 font-semibold text-sm transition-all outline-none placeholder:text-slate-400 placeholder:font-medium shadow-2xs"
-                    placeholder="Type to search or complete topics… e.g. rus, dock, python, k8s"
+                    placeholder="Type to search or complete topics… e.g. tax, retail, finance, inventory, ai"
                     autoComplete="off"
                   />
                   {topicSearch && (
@@ -548,7 +636,7 @@ export default function ProfilePage() {
                           <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                         )}
                         <span className="text-[10px] font-mono font-black uppercase tracking-widest text-amber-300">
-                          {isAiResult ? "Gemini AI Suggested Topics" : "Keyword Autocomplete Matches"}
+                          {isAiResult ? "AI Suggested Topics" : "Keyword Autocomplete Matches"}
                         </span>
                       </div>
                       <span className="text-[10px] font-mono text-slate-300">
@@ -619,7 +707,7 @@ export default function ProfilePage() {
                       <div className="px-4 py-3.5 flex items-center justify-center gap-3 bg-indigo-50/50">
                         <span className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-700 rounded-full animate-spin"></span>
                         <span className="text-xs font-mono font-bold text-indigo-700 uppercase tracking-wider">
-                          Gemini AI completing keywords for &quot;{topicSearch}&quot;…
+                          AI completing keywords for &quot;{topicSearch}&quot;…
                         </span>
                       </div>
                     )}
@@ -659,14 +747,14 @@ export default function ProfilePage() {
                   <span><MessageSquare className="w-4 h-4" /></span> CUSTOM AI INSTRUCTION PROMPT
                 </div>
                 <p className="text-xs sm:text-sm text-slate-600 font-medium">
-                  Tell the Google Gemini model how you want it to format and analyze technical news items for you:
+                  Tell the AI engine how you want it to format and analyze industry news items for you:
                 </p>
                 <textarea
                   rows={4}
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   className="w-full bg-slate-950 text-emerald-300 font-mono text-xs sm:text-sm p-4 rounded-xl border border-slate-800 leading-relaxed outline-none shadow-inner resize-y"
-                  placeholder="e.g. Compare all concepts to C# and Angular..."
+                  placeholder="e.g. Highlight practical takeaways, business and financial impacts, and actionable steps tailored to my daily work..."
                 />
               </div>
 
@@ -676,9 +764,9 @@ export default function ProfilePage() {
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    "Concise & Direct (2-Min Read)",
-                    "Architectural Analysis (Deep Tech)",
-                    "Beginner Python Step-by-Step"
+                    "Clear & Actionable (Executive Summary)",
+                    "Practical Business & Financial Takeaways",
+                    "In-Depth Professional Analysis"
                   ].map((tone) => (
                     <button
                       key={tone}
@@ -703,13 +791,13 @@ export default function ProfilePage() {
 
             <div className="mt-8 pt-6 border-t-2 border-slate-900 flex flex-wrap items-center justify-between gap-4 font-mono">
               <span className="text-xs font-bold text-slate-500">
-                Ready to deploy preferences to Gemini?
+                {isSetupMode ? "Ready to launch your personalized intelligence deck?" : "Ready to deploy preferences to Becon AI?"}
               </span>
               <button
                 type="submit"
-                className="w-full sm:w-auto px-8 py-3.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-mono font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-lg cursor-pointer flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+                className="w-full sm:w-auto px-8 py-3.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-mono font-black text-sm uppercase tracking-widest rounded-xl transition-colors shadow-lg cursor-pointer flex items-center justify-center gap-2"
               >
-                <span><Save className="w-4 h-4" /> Save & Apply AI Customizations</span>
+                <span><Save className="w-4 h-4" /> {isSetupMode ? "Save Preferences & Launch Gazette Feed" : "Save Preferences & Enter Home Page"}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

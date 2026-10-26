@@ -2,14 +2,54 @@ import time
 from datetime import datetime
 import re
 import html
+import urllib.parse
 from typing import List, Dict, Tuple
 import feedparser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.schemas import BriefingCard
 from app.ai_service import generate_action_card
 
-# Comprehensive mapping from popular topics and developer domains to live RSS feeds
+# Comprehensive mapping from popular topics and industries to live RSS feeds
 TOPIC_FEED_MAP: Dict[str, Tuple[str, str]] = {
+    # Beauty, Cosmetics & Fashion
+    "beauty": ("Beauty & Cosmetics", "https://news.google.com/rss/search?q=Beauty+Cosmetics+Trends&hl=en-US&gl=US&ceid=US:en"),
+    "fashion": ("Fashion & Style", "https://news.google.com/rss/search?q=Fashion+Apparel+Trends&hl=en-US&gl=US&ceid=US:en"),
+    "cosmetics": ("Cosmetics & Skincare", "https://news.google.com/rss/search?q=Cosmetics+Skincare+Industry&hl=en-US&gl=US&ceid=US:en"),
+    "apparel": ("Fashion & Apparel", "https://news.google.com/rss/search?q=Apparel+Fashion+Retail&hl=en-US&gl=US&ceid=US:en"),
+    "hair": ("Hair Care & Styling", "https://news.google.com/rss/search?q=Hair+Care+Styling+Trends&hl=en-US&gl=US&ceid=US:en"),
+    "skincare": ("Skincare & Wellness", "https://news.google.com/rss/search?q=Skincare+Dermatology+Trends&hl=en-US&gl=US&ceid=US:en"),
+
+    # Accounting, Finance & Tax
+    "tax regulations & gst compliance": ("Tax & Compliance", "https://news.google.com/rss/search?q=Tax+Compliance+GST+Regulations&hl=en-US&gl=US&ceid=US:en"),
+    "tax": ("Tax & Regulations", "https://news.google.com/rss/search?q=Tax+Regulations+Accounting&hl=en-US&gl=US&ceid=US:en"),
+    "gst": ("GST & Tax", "https://news.google.com/rss/search?q=GST+Tax+Compliance&hl=en-US&gl=US&ceid=US:en"),
+    "corporate accounting & audit standards": ("Accounting & Audit", "https://news.google.com/rss/search?q=Corporate+Accounting+Audit+Standards&hl=en-US&gl=US&ceid=US:en"),
+    "accounting": ("Accounting", "https://news.google.com/rss/search?q=Corporate+Accounting+Standards&hl=en-US&gl=US&ceid=US:en"),
+    "audit": ("Audit & Compliance", "https://news.google.com/rss/search?q=Financial+Auditing+Compliance&hl=en-US&gl=US&ceid=US:en"),
+    "financial forecasting & cash flow": ("Finance & Cash Flow", "https://news.google.com/rss/search?q=Financial+Forecasting+Cash+Flow+Business&hl=en-US&gl=US&ceid=US:en"),
+    "finance": ("Finance", "https://news.google.com/rss/search?q=Corporate+Finance+Banking+Markets&hl=en-US&gl=US&ceid=US:en"),
+    "banking, payments & fintech": ("Fintech & Payments", "https://news.google.com/rss/search?q=Fintech+Digital+Banking+Payments&hl=en-US&gl=US&ceid=US:en"),
+    "fintech": ("Fintech", "https://news.google.com/rss/search?q=Fintech+Payments+Innovation&hl=en-US&gl=US&ceid=US:en"),
+
+    # Retail, Shop Owner & Inventory
+    "retail & shop inventory management": ("Retail & Inventory", "https://news.google.com/rss/search?q=Retail+Store+Inventory+Management&hl=en-US&gl=US&ceid=US:en"),
+    "retail": ("Retail Operations", "https://news.google.com/rss/search?q=Retail+Store+Commerce+POS&hl=en-US&gl=US&ceid=US:en"),
+    "shop": ("Shop Management", "https://news.google.com/rss/search?q=Retail+Shop+Operations+Storefront&hl=en-US&gl=US&ceid=US:en"),
+    "inventory": ("Inventory & Supply", "https://news.google.com/rss/search?q=Inventory+Management+Supply+Chain&hl=en-US&gl=US&ceid=US:en"),
+    "customer retention & retail pos": ("Retail POS", "https://news.google.com/rss/search?q=Customer+Retention+Retail+POS&hl=en-US&gl=US&ceid=US:en"),
+    "pos": ("POS & Retail", "https://news.google.com/rss/search?q=Point+of+Sale+Retail+Tech&hl=en-US&gl=US&ceid=US:en"),
+    
+    # Business, E-Commerce & Growth
+    "small business growth & finance": ("Small Business", "https://news.google.com/rss/search?q=Small+Business+Growth+Finance&hl=en-US&gl=US&ceid=US:en"),
+    "small business": ("Small Business", "https://news.google.com/rss/search?q=Small+Business+Strategy+Revenue&hl=en-US&gl=US&ceid=US:en"),
+    "business": ("Business Intelligence", "https://news.google.com/rss/search?q=Business+Strategy+Markets+Commerce&hl=en-US&gl=US&ceid=US:en"),
+    "e-commerce & digital sales": ("E-Commerce", "https://news.google.com/rss/search?q=Ecommerce+Digital+Sales+Trends&hl=en-US&gl=US&ceid=US:en"),
+    "e-commerce": ("E-Commerce", "https://news.google.com/rss/search?q=Ecommerce+Online+Retail+Store&hl=en-US&gl=US&ceid=US:en"),
+    "ecommerce": ("E-Commerce", "https://news.google.com/rss/search?q=Ecommerce+Online+Retail+Store&hl=en-US&gl=US&ceid=US:en"),
+    "digital marketing & social selling": ("Marketing & Sales", "https://news.google.com/rss/search?q=Digital+Marketing+Social+Selling+Retail&hl=en-US&gl=US&ceid=US:en"),
+    "supply chain & vendor management": ("Supply Chain", "https://news.google.com/rss/search?q=Supply+Chain+Logistics+Management&hl=en-US&gl=US&ceid=US:en"),
+    "business law & regulatory filings": ("Business Law", "https://news.google.com/rss/search?q=Business+Law+Corporate+Regulations&hl=en-US&gl=US&ceid=US:en"),
+
     # Gemini & Generative AI
     "google gemini & generative ai": ("Generative AI", "https://dev.to/feed/tag/ai"),
     "generative ai": ("Generative AI", "https://dev.to/feed/tag/ai"),
@@ -94,12 +134,12 @@ TOPIC_FEED_MAP: Dict[str, Tuple[str, str]] = {
 }
 
 DEFAULT_FEED_SOURCES = {
-    "Architecture": "https://dev.to/feed/tag/architecture",
-    "Cloud & Azure": "https://dev.to/feed/tag/azure",
+    "Business & Markets": "https://feeds.bbci.co.uk/news/business/rss.xml",
     "Generative AI": "https://dev.to/feed/tag/ai",
-    "Security": "https://dev.to/feed/tag/security",
-    "Databases": "https://dev.to/feed/tag/database",
-    "Micro-Frontends": "https://dev.to/feed/tag/microfrontends",
+    "Finance & Accounting": "https://news.google.com/rss/search?q=Corporate+Finance+Accounting&hl=en-US&gl=US&ceid=US:en",
+    "Retail & Commerce": "https://news.google.com/rss/search?q=Retail+Store+Commerce+POS&hl=en-US&gl=US&ceid=US:en",
+    "Technology": "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    "Cloud & Systems": "https://dev.to/feed/tag/cloud",
 }
 
 # Multi-tenant cache dictionary: key -> {"data": [...], "timestamp": float}
@@ -114,6 +154,34 @@ def clean_html_tags(text: str) -> str:
     clean_text = re.sub(r'\s+', ' ', clean_text).strip()
     return clean_text
 
+def get_topic_default_image(tag_name: str, title: str) -> str:
+    combined = (tag_name + " " + title).lower()
+    if any(k in combined for k in ["beauty", "hair", "nail", "skin", "cosmetic", "makeup", "curler", "manicure", "salon", "spa"]):
+        return "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["fashion", "apparel", "clothing", "hoodie", "dress", "style", "wear", "shoes", "outfit", "runway"]):
+        return "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["tax", "accounting", "audit", "gst", "bookkeeping", "ledger", "invoice"]):
+        return "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["finance", "banking", "fintech", "stock", "invest", "cash"]):
+        return "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["retail", "shop", "store", "pos", "inventory", "merchandising", "ecommerce", "e-commerce"]):
+        return "https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["food", "restaurant", "cafe", "coffee", "dining", "chef", "bakery"]):
+        return "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["health", "medical", "clinic", "doctor", "wellness", "fitness"]):
+        return "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["real estate", "property", "architecture", "housing"]):
+        return "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["ai", "gemini", "artificial intelligence", "machine learning"]):
+        return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["cloud", "azure", "aws", "devops", "kubernetes", "docker"]):
+        return "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["security", "cyber", "privacy", "zero-trust"]):
+        return "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=800&auto=format&fit=crop"
+    if any(k in combined for k in ["software", "code", "programming", "react", "angular", "python", "rust", ".net", "c#"]):
+        return "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800&auto=format&fit=crop"
+    return "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800&auto=format&fit=crop"
+
 def resolve_feed_for_topic(topic: str) -> Tuple[str, str]:
     t_clean = topic.strip().lower()
     if t_clean in TOPIC_FEED_MAP:
@@ -124,12 +192,10 @@ def resolve_feed_for_topic(topic: str) -> Tuple[str, str]:
         if k in t_clean or t_clean in k:
             return v
             
-    # Fallback to dev.to dynamic tag endpoint
-    slug = re.sub(r'[^a-z0-9]', '', t_clean)
-    if not slug:
-        slug = "programming"
+    # Universal Google News RSS feed for ANY custom topic or industry!
+    encoded = urllib.parse.quote(topic.strip())
     display_name = topic.strip().title()
-    return (display_name, f"https://dev.to/feed/tag/{slug}")
+    return (display_name, f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en")
 
 def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str, str]:
     title = entry.get("title", "No Title")
@@ -190,12 +256,15 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
     if not published_at:
         published_at = datetime.now().strftime("%b %d, %Y")
 
+    is_real = bool(image_url and image_url.strip())
+
     return {
         "title": title,
         "link": link,
         "summary": summary,
         "tag": tag_name,
-        "image_url": image_url,
+        "image_url": image_url if is_real else None,
+        "is_real_image": is_real,
         "published_at": published_at
     }
 
@@ -213,10 +282,11 @@ def fetch_topic_feed_items(topic: str, limit: int = 8) -> Tuple[str, List[Dict[s
         print(f"[Topic Ingestion Error] Failed to fetch '{tag_name}' ({url}): {e}")
         return tag_name, []
 
-def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 4) -> List[Dict[str, str]]:
+def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 15) -> List[Dict[str, str]]:
     """
     Fetches raw articles dynamically matching the user's selected interests.
     If user_interests contains topics, pulls articles from those specific topic feeds first.
+    Interleaves articles evenly so all selected topics get fair representation.
     """
     topics = [t.strip() for t in user_interests.split(",") if t.strip()]
     feed_sources_to_use: List[Tuple[str, str]] = []
@@ -228,25 +298,18 @@ def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 4) ->
             if url not in seen_urls:
                 seen_urls.add(url)
                 feed_sources_to_use.append((tag_name, url))
-        
-        # If user picked fewer than 3 topics, backfill with general engineering feeds
-        if len(feed_sources_to_use) < 3:
-            for fallback_tag, fallback_url in DEFAULT_FEED_SOURCES.items():
-                if fallback_url not in seen_urls:
-                    seen_urls.add(fallback_url)
-                    feed_sources_to_use.append((fallback_tag, fallback_url))
-                if len(feed_sources_to_use) >= 4:
-                    break
+        actual_limit = max(15, 30 // len(feed_sources_to_use))
     else:
         feed_sources_to_use = list(DEFAULT_FEED_SOURCES.items())
+        actual_limit = max(6, limit_per_source)
 
-    print(f"[Feed Fetcher] Querying {len(feed_sources_to_use)} live feeds for interests: {user_interests[:60]}...")
+    print(f"[Feed Fetcher] Querying {len(feed_sources_to_use)} live feeds (limit {actual_limit}/feed) for interests: {user_interests[:60]}...")
 
     def fetch_single_feed(tag_name: str, url: str) -> List[Dict[str, str]]:
         try:
             feed = feedparser.parse(url)
             items = []
-            for entry in feed.entries[:limit_per_source]:
+            for entry in feed.entries[:actual_limit]:
                 item = parse_feed_entry(entry, tag_name, url)
                 items.append(item)
             return items
@@ -255,12 +318,22 @@ def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 4) ->
             return []
 
     # Parallelize feed fetching
-    articles: List[Dict[str, str]] = []
+    topic_results: List[List[Dict[str, str]]] = []
     with ThreadPoolExecutor(max_workers=8) as executor:
         future_map = {executor.submit(fetch_single_feed, tag, url): tag for tag, url in feed_sources_to_use}
         for future in future_map:
             feed_items = future.result()
-            articles.extend(feed_items)
+            if feed_items:
+                topic_results.append(feed_items)
+
+    # Interleave items across feeds so topics are evenly distributed
+    articles: List[Dict[str, str]] = []
+    if topic_results:
+        max_len = max(len(it) for it in topic_results)
+        for i in range(max_len):
+            for it in topic_results:
+                if i < len(it):
+                    articles.append(it[i])
 
     print(f"[Feed Fetcher] Successfully gathered {len(articles)} raw articles matching user topics.")
     return articles
@@ -295,6 +368,7 @@ def worker_generate_card(index: int, item: Dict[str, str], role: str, interests:
         title=item["title"],
         source_url=item["link"],
         image_url=item.get("image_url"),
+        is_real_image=bool(item.get("is_real_image", False)),
         published_at=item.get("published_at") or datetime.now().strftime("%b %d, %Y"),
         target_role=role,
         target_stack=[item["tag"], "AI Customized"],
@@ -305,27 +379,32 @@ def worker_generate_card(index: int, item: Dict[str, str], role: str, interests:
 
 def get_live_briefings(
     force_refresh: bool = False,
-    user_role: str = "Senior Software Engineer",
+    user_role: str = "Professional",
     user_interests: str = "",
     custom_prompt: str = "",
     page: int = 1,
     limit: int = 16,
-    scope: str = "all"
+    scope: str = "all",
+    offset: int = None
 ) -> List[dict]:
     current_time = time.time()
-    cache_key = f"{user_role.strip().lower()}|{user_interests.strip().lower()}|{custom_prompt.strip().lower()}"
+    cache_key = f"v3|{user_role.strip().lower()}|{user_interests.strip().lower()}|{custom_prompt.strip().lower()}"
     cached = _USER_CACHES.get(cache_key)
 
     # 1. SCOPE = "TOP" (FAST RENDER TOP 5 CARDS IN ~1.8 SECONDS)
     if scope == "top":
         if not force_refresh and cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
             cards = cached.get("data", [])
-            if len(cards) >= 5:
+            has_fallback = any(
+                "Real-time signal reported for" in str(c.get("card_content", {}).get("what_happened", []))
+                for c in cards
+            )
+            if not has_fallback and len(cards) >= 5:
                 print(f"[Cache Hit - Top 5] Serving top 5 AI cards for: {cache_key[:50]}...")
                 return cards[:5]
 
         print(f"[Fast Render - Top 5] Ingesting feeds & generating top 5 cards for: {cache_key[:50]}...")
-        raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=4)
+        raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=15)
         if not raw_articles:
             if cached and cached.get("data"):
                 return cached["data"][:5]
@@ -349,7 +428,7 @@ def get_live_briefings(
             results.sort(key=lambda x: x[0])
             top_cards = [res[1] for res in results]
 
-        # Cache top 5 and the raw articles for the subsequent lazy-loaded "remaining" request
+        # Cache top 5 and the raw articles for subsequent requests
         _USER_CACHES[cache_key] = {
             "data": top_cards,
             "raw_articles": raw_articles,
@@ -362,20 +441,19 @@ def get_live_briefings(
     # 2. SCOPE = "REMAINING" (LAZY LOAD REMAINING CARDS FOR BENTO DECK)
     elif scope == "remaining":
         if not force_refresh and cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
-            # If already generated full cards, return remaining
             if not cached.get("top_only", False) and len(cached.get("data", [])) > 5:
-                print(f"[Cache Hit - Remaining] Serving {len(cached['data'][5:])} remaining cards.")
-                return cached["data"][5:]
+                print(f"[Cache Hit - Remaining] Serving {len(cached['data'][5:17])} remaining cards.")
+                return cached["data"][5:17]
 
         print(f"[Lazy Load - Remaining] Generating remaining cards for: {cache_key[:50]}...")
         raw_articles = cached.get("raw_articles") if cached else None
-        if not raw_articles:
-            raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=4)
+        if not raw_articles or len(raw_articles) < 10:
+            raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=15)
 
-        if not raw_articles or len(raw_articles) <= 5:
+        if not raw_articles:
             return []
 
-        target_articles = raw_articles[5:20]
+        target_articles = raw_articles[5:17]
         remaining_cards = []
         with ThreadPoolExecutor(max_workers=6) as executor:
             future_map = {
@@ -401,13 +479,75 @@ def get_live_briefings(
             "timestamp": current_time,
             "top_only": False
         }
-        print(f"[Lazy Load Complete] Generated & cached {len(remaining_cards)} remaining cards.")
+        print(f"[Lazy Load Complete] Generated & cached {len(remaining_cards)} remaining cards for Bento deck.")
         return remaining_cards
 
-    # 3. SCOPE = "ALL" (DEFAULT / FULL FETCH)
+    # 3. DIRECT OFFSET / INFINITE SCROLL (GIVES EXACTLY UNSEEN CARDS MATCHING TOPICS)
+    elif offset is not None or (page and page > 1):
+        req_offset = offset if offset is not None else ((page - 1) * limit)
+        print(f"[Infinite Scroll] Requesting offset {req_offset}, limit {limit} for {cache_key[:50]}...")
+        
+        cached_cards = cached.get("data", []) if cached else []
+        if len(cached_cards) >= req_offset + limit:
+            print(f"[Cache Hit - Infinite Scroll] Serving existing cards {req_offset}..{req_offset + limit}")
+            return cached_cards[req_offset : req_offset + limit]
+
+        raw_articles = cached.get("raw_articles") if cached else None
+        if not raw_articles or len(raw_articles) < req_offset + limit:
+            fresh = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=20)
+            if not raw_articles:
+                raw_articles = fresh
+            else:
+                seen_titles = {a["title"].lower().strip() for a in raw_articles}
+                for a in fresh:
+                    if a["title"].lower().strip() not in seen_titles:
+                        raw_articles.append(a)
+                        seen_titles.add(a["title"].lower().strip())
+
+        target_articles = raw_articles[req_offset : req_offset + limit]
+        if not target_articles:
+            # If still short, slice from beginning or cycle
+            target_articles = raw_articles[:limit]
+
+        new_cards = []
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            future_map = {
+                executor.submit(worker_generate_card, req_offset + idx, item, user_role, user_interests, custom_prompt): req_offset + idx
+                for idx, item in enumerate(target_articles)
+            }
+            results = []
+            for future in as_completed(future_map):
+                idx = future_map[future]
+                try:
+                    data = future.result()
+                    results.append((idx, data))
+                except Exception as e:
+                    print(f"[Infinite Worker Exception] Item {idx} failed: {e}")
+            results.sort(key=lambda x: x[0])
+            new_cards = [res[1] for res in results]
+
+        if cached:
+            cached["data"] = cached_cards + new_cards
+            cached["raw_articles"] = raw_articles
+        else:
+            _USER_CACHES[cache_key] = {
+                "data": new_cards,
+                "raw_articles": raw_articles,
+                "timestamp": current_time,
+                "top_only": False
+            }
+
+        return new_cards
+
+    # 4. SCOPE = "ALL" (DEFAULT / FULL FETCH)
     else:
         if not force_refresh and cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
-            if not cached.get("top_only", False):
+            cards = cached.get("data", [])
+            has_fallback = any(
+                "Real-time signal reported for" in str(c.get("card_content", {}).get("what_happened", []))
+                for c in cards
+            )
+            if not has_fallback and not cached.get("top_only", False):
                 all_data = cached["data"]
                 start = (page - 1) * limit
                 paged_cards = all_data[start : start + limit]
@@ -416,13 +556,13 @@ def get_live_briefings(
 
         raw_articles = cached.get("raw_articles") if cached else None
         if not raw_articles:
-            raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=4)
+            raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=15)
         if not raw_articles:
             if cached and cached.get("data"):
                 return cached["data"]
             return []
 
-        target_articles = raw_articles[:20]
+        target_articles = raw_articles[:17]
         cards_list = []
         with ThreadPoolExecutor(max_workers=6) as executor:
             future_map = {
@@ -454,11 +594,11 @@ def get_live_briefings(
 
 def search_topic_briefings(
     topic: str,
-    user_role: str = "Senior Software Engineer",
+    user_role: str = "Professional",
     limit: int = 6
 ) -> List[dict]:
     """
-    Synthesizes real-time developer news cards tailored to any specific favorite subject or topic using Gemini AI.
+    Synthesizes real-time intelligence cards tailored to any specific favorite subject or topic using Gemini AI.
     """
     clean_topic = topic.strip()
     if not clean_topic:
@@ -496,7 +636,7 @@ def search_topic_briefings(
                 item,
                 user_role,
                 clean_topic,
-                f"Highlight specific practical applications and architectural impact of {clean_topic}."
+                f"Highlight specific practical applications, operational impact, and actionable takeaways of {clean_topic} for a {user_role}."
             ): idx
             for idx, item in enumerate(target)
         }

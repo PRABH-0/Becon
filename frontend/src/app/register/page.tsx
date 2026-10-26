@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, ArrowRight, Lock, Mail, User, AlertCircle } from "lucide-react";
+import { UserPlus, ArrowRight, Lock, Mail, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useLoader } from "@/context/LoadingContext";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -30,10 +31,10 @@ export default function RegisterPage() {
         const data = await res.json();
         localStorage.setItem("becon_token", data.access_token);
         showLoader(
-          "Creating Developer Profile...",
-          "Setting up your AI career briefing engine..."
+          "Account Created Successfully!",
+          "Opening profile & topic preferences setup..."
         );
-        router.push("/onboarding");
+        router.push("/profile?setup=true");
       } else {
         const data = await res.json();
         setError(data.detail || "Failed to register");
@@ -54,7 +55,7 @@ export default function RegisterPage() {
           </h1>
         </Link>
         <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-slate-900 font-serif">
-          Create Developer Profile
+          Create Your Profile
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600 font-medium">
           Already have an account?{" "}
@@ -110,14 +111,27 @@ export default function RegisterPage() {
                   <Lock className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg pl-10 pr-3 py-2.5 text-slate-950 font-semibold text-sm transition-colors outline-none shadow-xs"
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg pl-10 pr-10 py-2.5 text-slate-950 font-semibold text-sm transition-colors outline-none shadow-xs"
                   required
                   minLength={6}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
               <p className="text-[10px] font-mono text-slate-500 mt-1.5">
                 Must be at least 6 characters long.
@@ -128,13 +142,13 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-black font-mono tracking-widest uppercase text-white bg-rose-600 hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-600 transition-all cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed transform hover:-translate-y-0.5"
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-black font-mono tracking-widest uppercase text-white bg-rose-600 hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-600 transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" /> Create Account <ArrowRight className="w-4 h-4" />
+                    <UserPlus className="w-4 h-4" /> Create Account <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>

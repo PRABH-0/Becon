@@ -16,7 +16,7 @@ const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
 export function LoadingProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("Curating Your Daily Gazette...");
-  const [subtitle, setSubtitle] = useState("Analyzing real-time signals & generating Gemini briefings");
+  const [subtitle, setSubtitle] = useState("Analyzing real-time signals & generating personalized briefings");
 
   const showLoader = useCallback((msg?: string, sub?: string) => {
     if (msg) setMessage(msg);

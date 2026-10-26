@@ -16,8 +16,8 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "BECON | The Daily Developer Gazette",
-  description: "Curated engineering architecture & career signals, structured with tactical next steps for all tech stacks.",
+  title: "BECON | The Daily Intelligence Gazette",
+  description: "Personalized industry news, business intelligence & professional briefings, structured with tactical next steps for all professions.",
 };
 
 export default function RootLayout({

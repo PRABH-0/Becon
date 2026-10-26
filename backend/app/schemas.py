@@ -8,7 +8,7 @@ class ActionGuidance(BaseModel):
         ..., description="Category of action to take"
     )
     guidance: str = Field(
-        ..., description="Specific, actionable advice for the developer"
+        ..., description="Specific, actionable advice for the user"
     )
 
 
@@ -18,10 +18,10 @@ class BriefingCardContent(BaseModel):
         ..., description="1-2 concise bullet points explaining the news item"
     )
     why_it_matters: str = Field(
-        ..., description="Industry & career relevance of this news"
+        ..., description="Industry & professional relevance of this news"
     )
     how_it_affects_you: str = Field(
-        ..., description="Direct personal impact on the user's role and stack"
+        ..., description="Direct personal impact on the user's role and interests"
     )
     what_to_do_next: ActionGuidance = Field(
         ..., description="Tactical advice on what the user should do next"
@@ -36,13 +36,16 @@ class BriefingCard(BaseModel):
     )
     title: str = Field(..., description="Clean, readable headline")
     source_url: str = Field(..., description="Link to original news/blog article")
-    target_role: str = Field(default="Developer")
+    target_role: str = Field(default="User")
     target_stack: List[str] = Field(default_factory=list)
     priority: str | None = Field(
         default="brief", description="UI layout category: lead, major, brief, watch, spotlight"
     )
     image_url: str | None = Field(
         default=None, description="Direct hero/cover image extracted from original blog post"
+    )
+    is_real_image: bool = Field(
+        default=False, description="True ONLY if image genuinely came from the article's real RSS/media resource"
     )
     published_at: str | None = Field(
         default=None, description="Original publication date or human-readable timestamp"

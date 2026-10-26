@@ -146,10 +146,10 @@ Planned infrastructure: PostgreSQL for users, sources, events and cards, a sched
 [x] Environment setup and FastAPI foundation
 [x] Pydantic schema design
 [x] FastAPI endpoints and Next.js integration
+[x] Database (Supabase PostgreSQL integration)
 [ ] RSS ingestion engine
 [ ] Gemini summarization engine
 [ ] Ingestion pipeline connected to the API
-[ ] Database, scheduler and caching
 [ ] Feedback-based ranking
 [ ] Email digest and Telegram alerts
 [ ] Live deployment and user feedback

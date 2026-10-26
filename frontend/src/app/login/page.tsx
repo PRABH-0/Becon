@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, ArrowRight, Lock, Mail, AlertCircle } from "lucide-react";
+import { LogIn, ArrowRight, Lock, Mail, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useLoader } from "@/context/LoadingContext";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -34,8 +35,8 @@ export default function LoginPage() {
         const data = await res.json();
         localStorage.setItem("becon_token", data.access_token);
         showLoader(
-          "Authenticating Developer Profile...",
-          "Preparing your personalized Gazette newsroom & tech feeds"
+          "Authenticating User Profile...",
+          "Preparing your personalized Gazette newsroom & intelligence feeds"
         );
         router.push("/");
       } else {
@@ -63,7 +64,7 @@ export default function LoginPage() {
         <p className="mt-2 text-center text-sm text-slate-600 font-medium">
           Or{" "}
           <Link href="/register" className="font-bold text-rose-600 hover:text-rose-500 transition-colors">
-            create a new developer profile
+            create a new account & profile
           </Link>
         </p>
       </div>
@@ -111,12 +112,25 @@ export default function LoginPage() {
                   <Lock className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg pl-10 pr-3 py-2.5 text-slate-950 font-semibold text-sm transition-colors outline-none shadow-xs"
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg pl-10 pr-10 py-2.5 text-slate-950 font-semibold text-sm transition-colors outline-none shadow-xs"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -150,7 +164,7 @@ export default function LoginPage() {
                   <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" /> Sign In <ArrowRight className="w-4 h-4" />
+                    <LogIn className="w-4 h-4" /> Sign In <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
