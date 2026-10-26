@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Bot, User, ArrowRight, Sparkles } from "lucide-react";
 import { useLoader } from "@/context/LoadingContext";
 
+const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+
 interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -47,7 +49,7 @@ export default function OnboardingPage() {
     }
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/onboarding/chat", {
+      const res = await fetch(`${API}/api/onboarding/chat`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

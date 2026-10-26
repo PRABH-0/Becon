@@ -268,7 +268,7 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
         "published_at": published_at
     }
 
-def fetch_topic_feed_items(topic: str, limit: int = 8) -> Tuple[str, List[Dict[str, str]]]:
+def fetch_topic_feed_items(topic: str, limit: int = 30) -> Tuple[str, List[Dict[str, str]]]:
     tag_name, url = resolve_feed_for_topic(topic)
     print(f"[Topic Feed Fetcher] Querying '{url}' for subject '{topic}'...")
     try:
@@ -595,10 +595,13 @@ def get_live_briefings(
 def search_topic_briefings(
     topic: str,
     user_role: str = "Professional",
-    limit: int = 6
+    limit: int = 6,
+    offset: int = 0,
+    page: int = 1
 ) -> List[dict]:
     """
     Synthesizes real-time intelligence cards tailored to any specific favorite subject or topic using Gemini AI.
+    Supports continuous pagination through offset and page numbers.
     """
     clean_topic = topic.strip()
     if not clean_topic:
@@ -607,57 +610,81 @@ def search_topic_briefings(
     current_time = time.time()
     cache_key = f"search|{clean_topic.lower()}|{user_role.strip().lower()}"
     cached = _USER_CACHES.get(cache_key)
+
+    # 1. If we already generated and cached cards covering this offset, return them immediately
     if cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
-        print(f"[Search Cache Hit] Serving cached AI cards for topic: {clean_topic}")
-        return cached["data"][:limit]
+        cached_cards = cached.get("data", [])
+        if len(cached_cards) >= offset + limit:
+            print(f"[Search Cache Hit] Serving cached AI cards for '{clean_topic}' (slice {offset}..{offset+limit})")
+            return cached_cards[offset : offset + limit]
 
-    print(f"[Search Topic AI] Ingesting & synthesizing news for favorite subject: '{clean_topic}'...")
-    tag_name, raw_articles = fetch_topic_feed_items(clean_topic, limit=limit)
-    if not raw_articles:
-        slug = re.sub(r'[^a-z0-9]', '', clean_topic.lower())
-        if slug and slug != clean_topic.lower():
-            tag_name, raw_articles = fetch_topic_feed_items(slug, limit=limit)
+    # 2. Retrieve or fetch raw articles
+    raw_articles = []
+    if cached and cached.get("raw_articles"):
+        raw_articles = cached["raw_articles"]
+    else:
+        print(f"[Search Topic AI] Ingesting & synthesizing news for favorite subject: '{clean_topic}'...")
+        tag_name, raw_articles = fetch_topic_feed_items(clean_topic, limit=30)
+        if not raw_articles:
+            slug = re.sub(r'[^a-z0-9]', '', clean_topic.lower())
+            if slug and slug != clean_topic.lower():
+                tag_name, raw_articles = fetch_topic_feed_items(slug, limit=30)
 
-    if not raw_articles:
-        general = fetch_raw_feed_items(user_interests="", limit_per_source=4)
-        filtered = [
-            a for a in general
-            if clean_topic.lower() in a["title"].lower() or clean_topic.lower() in a["summary"].lower()
-        ]
-        raw_articles = filtered if filtered else general[:limit]
+        if not raw_articles:
+            general = fetch_raw_feed_items(user_interests="", limit_per_source=6)
+            filtered = [
+                a for a in general
+                if clean_topic.lower() in a["title"].lower() or clean_topic.lower() in a["summary"].lower()
+            ]
+            raw_articles = filtered if filtered else general
 
-    target = raw_articles[:limit]
+    # 3. Determine target slice for synthesis
+    if len(raw_articles) > offset:
+        target = raw_articles[offset : offset + limit]
+    else:
+        # Wrap around raw articles if more editions are pulled than feed length
+        if raw_articles:
+            wrap_offset = offset % len(raw_articles)
+            target = (raw_articles + raw_articles)[wrap_offset : wrap_offset + limit]
+        else:
+            target = []
+
     results = []
-    with ThreadPoolExecutor(max_workers=min(6, len(target)) if len(target) > 0 else 1) as executor:
-        future_map = {
-            executor.submit(
-                worker_generate_card,
-                idx,
-                item,
-                user_role,
-                clean_topic,
-                f"Highlight specific practical applications, operational impact, and actionable takeaways of {clean_topic} for a {user_role}."
-            ): idx
-            for idx, item in enumerate(target)
-        }
-        res_list = []
-        for future in as_completed(future_map):
-            idx = future_map[future]
-            try:
-                card_data = future.result()
-                res_list.append((idx, card_data))
-            except Exception as e:
-                print(f"[Search Worker Error] Item {idx}: {e}")
-        res_list.sort(key=lambda x: x[0])
-        results = [r[1] for r in res_list]
+    if target:
+        with ThreadPoolExecutor(max_workers=min(6, len(target))) as executor:
+            future_map = {
+                executor.submit(
+                    worker_generate_card,
+                    offset + idx,
+                    item,
+                    user_role,
+                    clean_topic,
+                    f"Highlight specific practical applications, operational impact, and actionable takeaways of {clean_topic} for a {user_role} (Edition {page})."
+                ): idx
+                for idx, item in enumerate(target)
+            }
+            res_list = []
+            for future in as_completed(future_map):
+                idx = future_map[future]
+                try:
+                    card_data = future.result()
+                    clean_slug = re.sub(r'[^a-z0-9]', '', clean_topic.lower()) or "topic"
+                    card_data["id"] = f"search-{clean_slug}-ed{page}-{offset + idx}"
+                    res_list.append((idx, card_data))
+                except Exception as e:
+                    print(f"[Search Worker Error] Item {idx}: {e}")
+            res_list.sort(key=lambda x: x[0])
+            results = [r[1] for r in res_list]
 
     if results:
+        existing_cards = cached.get("data", []) if cached else []
+        all_cards = existing_cards + results
         _USER_CACHES[cache_key] = {
-            "data": results,
+            "data": all_cards,
             "raw_articles": raw_articles,
             "timestamp": current_time,
             "top_only": False
         }
-        print(f"[Search Topic Complete] Generated {len(results)} AI cards for '{clean_topic}'.")
+        print(f"[Search Topic Complete] Generated {len(results)} new cards for '{clean_topic}' (total: {len(all_cards)}).")
 
     return results

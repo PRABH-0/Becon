@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
 
+const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+
 const SUGGESTED_ROLES = [
   "Accountant / Finance",
   "Shop Owner / Retail",
@@ -135,7 +137,7 @@ export default function ProfilePage() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/api/topic-search?q=${encodeURIComponent(query)}`
+          `${API}/api/topic-search?q=${encodeURIComponent(query)}`
         );
         if (res.ok) {
           const data = await res.json();
@@ -200,7 +202,7 @@ export default function ProfilePage() {
       }
       showLoader("Loading User Profile...", "Retrieving your profile & topic interests from database...");
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/profile", {
+        const res = await fetch(`${API}/api/profile`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
@@ -269,7 +271,7 @@ export default function ProfilePage() {
       `Configuring AI news pipeline for ${finalRole} & ${interests.length} focus topics...`
     );
     try {
-      await fetch("http://127.0.0.1:8000/api/profile", {
+      await fetch(`${API}/api/profile`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -284,7 +286,7 @@ export default function ProfilePage() {
         custom_prompt: customPrompt,
         refresh: "true"
       });
-      fetch(`http://127.0.0.1:8000/api/briefings?${params.toString()}`, {
+      fetch(`${API}/api/briefings?${params.toString()}`, {
         method: "GET"
       }).catch(() => {});
 

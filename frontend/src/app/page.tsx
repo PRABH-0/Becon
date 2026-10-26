@@ -1,11 +1,13 @@
 "use client";
 
-import { User, RefreshCcw, Zap, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ArrowRight, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar } from "lucide-react";
+import { User, RefreshCcw, Zap, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ChevronLeft, ChevronRight, ArrowRight, ArrowUp, BookOpen, Sun, Moon, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
+
+const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 interface ActionGuidance {
   action_type: "learn" | "apply" | "avoid" | "prepare";
@@ -352,10 +354,94 @@ export default function Home() {
   const isLoadingMoreRef = useRef<boolean>(false);
   const canTriggerRef = useRef<boolean>(true);
   const pageNumberRef = useRef<number>(1);
+  const activeSearchTopicRef = useRef<string>("");
+  const searchedStoriesRef = useRef<BriefingCard[] | null>(null);
+
+  useEffect(() => {
+    activeSearchTopicRef.current = activeSearchTopic;
+  }, [activeSearchTopic]);
+
+  useEffect(() => {
+    searchedStoriesRef.current = searchedStories;
+  }, [searchedStories]);
 
   // Smart Auto-Hide Header (Hide on scroll down, reveal on scroll up)
   const [headerVisible, setHeaderVisible] = useState<boolean>(true);
   const lastScrollYRef = useRef<number>(0);
+
+  // Floating Back to Top Arrow Button State
+  const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+
+  // Dark / Light Mode Theme State
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("becon_theme");
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initialDark = savedTheme === "dark" || (!savedTheme && prefersDark);
+    setIsDarkMode(initialDark);
+    if (initialDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    setIsDarkMode((prev) => {
+      const nextMode = !prev;
+      if (nextMode) {
+        document.documentElement.classList.add("dark");
+        localStorage.setItem("becon_theme", "dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+        localStorage.setItem("becon_theme", "light");
+      }
+      return nextMode;
+    });
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  // Edition Coverage Topics Scroll Controls
+  const coverageScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState<boolean>(false);
+  const [canScrollRight, setCanScrollRight] = useState<boolean>(true);
+
+  const checkCoverageScroll = useCallback(() => {
+    const el = coverageScrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 6);
+  }, []);
+
+  const scrollCoverage = (direction: "left" | "right") => {
+    const el = coverageScrollRef.current;
+    if (!el) return;
+    const distance = 260;
+    el.scrollBy({
+      left: direction === "left" ? -distance : distance,
+      behavior: "smooth",
+    });
+  };
+
+  useEffect(() => {
+    const el = coverageScrollRef.current;
+    if (!el) return;
+    checkCoverageScroll();
+    el.addEventListener("scroll", checkCoverageScroll, { passive: true });
+    window.addEventListener("resize", checkCoverageScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", checkCoverageScroll);
+      window.removeEventListener("resize", checkCoverageScroll);
+    };
+  }, [userInterests, checkCoverageScroll]);
 
   useEffect(() => {
     setDailyHeading(getDailyBeconHeading());
@@ -380,52 +466,179 @@ export default function Home() {
       const activeRole = userRole;
       const activeInterests = userInterests.length > 0 ? userInterests.join(", ") : "";
       const activePrompt = customPrompt;
+      const currentSearchTopic = activeSearchTopicRef.current.trim();
+      const isSearchActive = Boolean(currentSearchTopic && searchedStoriesRef.current !== null);
 
-      const params = new URLSearchParams();
-      if (activeRole) params.set("role", activeRole);
-      if (activeInterests) params.set("interests", activeInterests);
-      if (activePrompt) params.set("custom_prompt", activePrompt);
-      params.set("offset", String(briefings.length));
-      params.set("page", String(nextPage));
-      params.set("limit", "6");
-
-      let incomingCards: BriefingCard[] = [];
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 9000);
-        const res = await fetch(`http://127.0.0.1:8000/api/briefings?${params.toString()}`, {
-          signal: controller.signal
+      if (isSearchActive) {
+        // --- 1. SEARCH CONTINUOUS PAGINATION ---
+        const currentOffset = searchedStoriesRef.current ? searchedStoriesRef.current.length : 0;
+        const searchParams = new URLSearchParams({
+          query: currentSearchTopic,
+          role: activeRole,
+          limit: "6",
+          offset: String(currentOffset),
+          page: String(nextPage),
         });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const data: BriefingCard[] = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            incomingCards = data;
+
+        let incomingCards: BriefingCard[] = [];
+
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 9000);
+          const res = await fetch(`${API}/api/search-topic?${searchParams.toString()}`, {
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const data: BriefingCard[] = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              incomingCards = data.map((c) => ({
+                ...c,
+                rank: undefined,
+              }));
+            }
           }
+        } catch (fetchErr) {
+          console.error("Backend error fetching next search edition:", fetchErr);
         }
-      } catch {
-        // Backend offline, timed out or error; fallback smoothly below
-      }
 
-      // If backend returned no cards or duplicates, use specialized next edition broadsheet cards
-      if (!incomingCards || incomingCards.length === 0) {
-        incomingCards = getNextEditionCards(nextPage, activeRole, activeInterests);
-      }
-
-      await minDelay;
-
-      setBriefings((prev) => {
-        const existingIds = new Set(prev.map((c) => c.id));
-        const existingTitles = new Set(prev.map((c) => c.title.toLowerCase().trim()));
-        let unique = incomingCards.filter(
-          (c) => !existingIds.has(c.id) && !existingTitles.has(c.title.toLowerCase().trim())
-        );
-        if (unique.length === 0) {
-          unique = getNextEditionCards(nextPage, activeRole, activeInterests);
+        // If backend returned no cards (e.g. backend offline or end of feed), generate continuous themed search cards
+        if (!incomingCards || incomingCards.length === 0) {
+          const topicSlug = currentSearchTopic.toLowerCase().replace(/[^a-z0-9]/g, "") || "topic";
+          incomingCards = [
+            {
+              id: `search-${topicSlug}-ed${nextPage}-1`,
+              title: `${currentSearchTopic.toUpperCase()}: Market Developments & Strategic Shifts (Edition ${nextPage})`,
+              source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
+              image_url: "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=800&auto=format&fit=crop",
+              target_role: activeRole,
+              target_stack: [currentSearchTopic.toUpperCase(), "ANALYSIS"],
+              priority: "major",
+              card_content: {
+                what_happened: [
+                  `Expanded regional developments and ecosystem adoption reported across ${currentSearchTopic} commercial networks.`,
+                  `New regulatory guidelines and institutional investments accelerate cross-border integration.`
+                ],
+                why_it_matters: `Directly impacts operational workflows, market trends, and consumer standards within the ${currentSearchTopic} domain.`,
+                how_it_affects_you: `Requires validation of ongoing operational roadmaps and alignment with emerging market expectations.`,
+                what_to_do_next: {
+                  action_type: "apply",
+                  guidance: `Incorporate updated intelligence protocols for ${currentSearchTopic} initiatives.`
+                }
+              }
+            },
+            {
+              id: `search-${topicSlug}-ed${nextPage}-2`,
+              title: `Global Infrastructure & Supply Modernization in ${currentSearchTopic.toUpperCase()}`,
+              source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
+              image_url: "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?q=80&w=800&auto=format&fit=crop",
+              target_role: activeRole,
+              target_stack: [currentSearchTopic.toUpperCase(), "INNOVATION"],
+              priority: "major",
+              card_content: {
+                what_happened: [
+                  `Infrastructure modernization and digital transformation milestones reached for ${currentSearchTopic} operations.`,
+                  `Independent benchmarks confirm significant efficiency gains through modernized toolchains.`
+                ],
+                why_it_matters: `Lowers operational latency and unlocks sustained long-term competitive leverage.`,
+                how_it_affects_you: `Benchmark internal capabilities against industry best practices to identify optimization opportunities.`,
+                what_to_do_next: {
+                  action_type: "learn",
+                  guidance: `Review latest reference implementations and case studies on ${currentSearchTopic}.`
+                }
+              }
+            },
+            {
+              id: `search-${topicSlug}-ed${nextPage}-3`,
+              title: `Regulatory Compliance, Risk Mitigation & Governance in ${currentSearchTopic.toUpperCase()}`,
+              source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
+              image_url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800&auto=format&fit=crop",
+              target_role: activeRole,
+              target_stack: [currentSearchTopic.toUpperCase(), "SECURITY"],
+              priority: "major",
+              card_content: {
+                what_happened: [
+                  `Updated security standards and governance policies published for ${currentSearchTopic} stakeholder groups.`,
+                  `Compliance verification processes must be audited prior to multi-region rollout.`
+                ],
+                why_it_matters: `Ensures legal adherence and prevents vulnerability exposure in critical systems.`,
+                how_it_affects_you: `Review third-party integrations and supplier commitments for standard compliance.`,
+                what_to_do_next: {
+                  action_type: "prepare",
+                  guidance: `Audit current systems against revised governance standards for ${currentSearchTopic}.`
+                }
+              }
+            }
+          ];
         }
-        return [...prev, ...unique];
-      });
+
+        await minDelay;
+
+        // Append directly to searchedStories so the UI Bento Deck immediately renders them!
+        setSearchedStories((prev) => {
+          const prevList = prev || [];
+          const existingIds = new Set(prevList.map((c) => c.id));
+          const existingTitles = new Set(prevList.map((c) => c.title.toLowerCase().trim()));
+          let unique = incomingCards.filter(
+            (c) => !existingIds.has(c.id) && !existingTitles.has(c.title.toLowerCase().trim())
+          );
+          if (unique.length === 0) {
+            unique = incomingCards.map((c, i) => ({
+              ...c,
+              id: `${c.id}-pg${nextPage}-${i}`,
+            }));
+          }
+          return [...prevList, ...unique];
+        });
+
+      } else {
+        // --- 2. DEFAULT BROADSHEET FEED PAGINATION ---
+        const params = new URLSearchParams();
+        if (activeRole) params.set("role", activeRole);
+        if (activeInterests) params.set("interests", activeInterests);
+        if (activePrompt) params.set("custom_prompt", activePrompt);
+        params.set("offset", String(briefings.length));
+        params.set("page", String(nextPage));
+        params.set("limit", "6");
+
+        let incomingCards: BriefingCard[] = [];
+
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 9000);
+          const res = await fetch(`${API}/api/briefings?${params.toString()}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const data: BriefingCard[] = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              incomingCards = data;
+            }
+          }
+        } catch {
+          // Backend offline, timed out or error; fallback smoothly below
+        }
+
+        // If backend returned no cards or duplicates, use specialized next edition broadsheet cards
+        if (!incomingCards || incomingCards.length === 0) {
+          incomingCards = getNextEditionCards(nextPage, activeRole, activeInterests);
+        }
+
+        await minDelay;
+
+        setBriefings((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const existingTitles = new Set(prev.map((c) => c.title.toLowerCase().trim()));
+          let unique = incomingCards.filter(
+            (c) => !existingIds.has(c.id) && !existingTitles.has(c.title.toLowerCase().trim())
+          );
+          if (unique.length === 0) {
+            unique = getNextEditionCards(nextPage, activeRole, activeInterests);
+          }
+          return [...prev, ...unique];
+        });
+      }
 
       pageNumberRef.current = nextPage;
       setEditionNumber(nextPage);
@@ -451,14 +664,18 @@ export default function Home() {
     setIsSearchingTopic(true);
     setActiveSearchTopic(query);
     setSearchError("");
+    pageNumberRef.current = 1;
+    setEditionNumber(1);
 
     try {
       const params = new URLSearchParams({
         query,
         role: userRole,
         limit: "6",
+        offset: "0",
+        page: "1",
       });
-      const res = await fetch(`http://127.0.0.1:8000/api/search-topic?${params.toString()}`);
+      const res = await fetch(`${API}/api/search-topic?${params.toString()}`);
       if (res.ok) {
         const data: BriefingCard[] = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -506,6 +723,8 @@ export default function Home() {
     setActiveSearchTopic("");
     setSearchedStories(null);
     setSearchError("");
+    pageNumberRef.current = 1;
+    setEditionNumber(1);
   };
 
   // Scroll, Wheel & Touch Listeners for reaching the bottom & continuing to scroll
@@ -550,6 +769,9 @@ export default function Home() {
         setHeaderVisible(true);
       }
       lastScrollYRef.current = currentScrollY;
+
+      // Reveal back to top arrow button when scrolled down
+      setShowScrollTop(currentScrollY > 250);
 
       if (isLoadingMoreRef.current || !canTriggerRef.current || loading) return;
       const scrollPos = window.innerHeight + currentScrollY;
@@ -597,7 +819,7 @@ export default function Home() {
     const fetchProfileAndBriefings = async () => {
       showLoader("Curating Your Daily Gazette...", "Fast-rendering top 5 priority briefings for your stack");
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/profile", {
+        const res = await fetch(`${API}/api/profile`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
@@ -672,7 +894,7 @@ export default function Home() {
       topParams.set("limit", "5");
       if (forceRefresh) topParams.set("refresh", "true");
 
-      const topRes = await fetch(`http://127.0.0.1:8000/api/briefings?${topParams.toString()}`);
+      const topRes = await fetch(`${API}/api/briefings?${topParams.toString()}`);
       if (topRes.ok) {
         const topData: BriefingCard[] = await topRes.json();
         if (Array.isArray(topData) && topData.length > 0) {
@@ -692,7 +914,7 @@ export default function Home() {
           remParams.set("scope", "remaining");
 
           try {
-            const remRes = await fetch(`http://127.0.0.1:8000/api/briefings?${remParams.toString()}`);
+            const remRes = await fetch(`${API}/api/briefings?${remParams.toString()}`);
             if (remRes.ok) {
               const remData: BriefingCard[] = await remRes.json();
               if (Array.isArray(remData) && remData.length > 0) {
@@ -729,16 +951,16 @@ export default function Home() {
   };
 
   const getActionBadgeColor = (type: string) => {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case "apply":
-        return "bg-emerald-100 text-emerald-950 border-emerald-300 font-bold";
+        return "bg-slate-100/90 dark:bg-slate-800/80 text-emerald-600 dark:text-emerald-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
       case "learn":
-        return "bg-blue-100 text-blue-950 border-blue-300 font-bold";
+        return "bg-slate-100/90 dark:bg-slate-800/80 text-sky-600 dark:text-sky-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
       case "avoid":
-        return "bg-rose-100 text-rose-950 border-rose-300 font-bold";
+        return "bg-slate-100/90 dark:bg-slate-800/80 text-rose-600 dark:text-rose-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
       case "prepare":
       default:
-        return "bg-amber-100 text-amber-950 border-amber-300 font-bold";
+        return "bg-slate-100/90 dark:bg-slate-800/80 text-amber-600 dark:text-amber-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
     }
   };
 
@@ -905,6 +1127,33 @@ export default function Home() {
                       <ArrowRight className="w-4 h-4" />
                     </Link>
 
+                    <Link
+                      href="/about"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center justify-between w-full p-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-[11px] font-bold cursor-pointer border border-transparent hover:border-slate-700"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span><BookOpen className="w-4 h-4 text-amber-300" /></span>
+                        <span>About Becon & Manifesto</span>
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toggleTheme();
+                        setShowProfileMenu(false);
+                      }}
+                      className="flex items-center justify-between w-full p-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-[11px] font-bold cursor-pointer border border-transparent hover:border-slate-700"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>{isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}</span>
+                        <span>Theme: {isDarkMode ? "Dark Mode (Active)" : "Light Mode (Active)"}</span>
+                      </span>
+                      <span className="text-[10px] uppercase font-mono text-amber-400 font-bold">{isDarkMode ? "Light" : "Dark"}</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -946,39 +1195,114 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 2. EDITION INDEX RIBBON (ALL SIGNALS IN ONE VIEW) */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 shadow-2xs">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3 font-mono text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-            <span className="text-slate-900 font-black mr-2 shrink-0 flex items-center gap-1.5">
-              <span className="flex items-center gap-1.5"><Layers className="w-4 h-4 text-slate-900" /> EDITION COVERAGE:</span>
-            </span>
+      {/* 2. EDITION INDEX RIBBON (ALL SIGNALS IN ONE VIEW WITH PREV/NEXT CONTROLS & THEME SWITCHER) */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-2 shadow-2xs transition-colors duration-200">
+        <div className="max-w-[1600px] mx-auto flex items-center gap-2 sm:gap-3 font-mono text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+          {/* Label */}
+          <div className="flex items-center gap-1.5 text-slate-900 dark:text-slate-100 font-black shrink-0 pr-2 border-r border-slate-200 dark:border-slate-800 select-none">
+            <Layers className="w-4 h-4 text-slate-900 dark:text-amber-400" />
+            <span className="hidden sm:inline">EDITION COVERAGE:</span>
+            <span className="sm:hidden">COVERAGE:</span>
+          </div>
+
+          {/* Previous Button */}
+          <button
+            type="button"
+            onClick={() => scrollCoverage("left")}
+            disabled={!canScrollLeft}
+            aria-label="Previous topics"
+            title="Scroll topics left"
+            className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Topics Container with Hidden Scrollbar */}
+          <div
+            ref={coverageScrollRef}
+            className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5"
+            style={{
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
             {userInterests.length > 0 ? (
               userInterests.map((interest) => (
                 <span
                   key={interest}
-                  className="bg-amber-100 text-amber-950 border border-amber-300 font-bold px-2.5 py-0.5 rounded shrink-0 shadow-2xs"
+                  className="bg-amber-100 dark:bg-amber-950/60 text-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 font-bold px-2.5 py-0.5 rounded shrink-0 shadow-2xs select-none"
                 >
                   ✓ {interest.toUpperCase()}
                 </span>
               ))
             ) : (
               <>
-                <span className="bg-slate-100 border border-slate-200/90 px-2.5 py-0.5 rounded text-slate-800 shrink-0">
+                <span className="bg-slate-100 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 px-2.5 py-0.5 rounded text-slate-800 dark:text-slate-200 shrink-0 select-none">
                   SYSTEM ARCHITECTURE
                 </span>
-                <span className="bg-slate-100 border border-slate-200/90 px-2.5 py-0.5 rounded text-slate-800 shrink-0">
+                <span className="bg-slate-100 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 px-2.5 py-0.5 rounded text-slate-800 dark:text-slate-200 shrink-0 select-none">
                   CLOUD & AZURE
                 </span>
-                <span className="bg-slate-100 border border-slate-200/90 px-2.5 py-0.5 rounded text-slate-800 shrink-0">
+                <span className="bg-slate-100 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 px-2.5 py-0.5 rounded text-slate-800 dark:text-slate-200 shrink-0 select-none">
                   GENERATIVE AI
                 </span>
-                <span className="bg-slate-100 border border-slate-200/90 px-2.5 py-0.5 rounded text-slate-800 shrink-0">
+                <span className="bg-slate-100 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 px-2.5 py-0.5 rounded text-slate-800 dark:text-slate-200 shrink-0 select-none">
                   SECURITY & DEVOPS
                 </span>
               </>
             )}
           </div>
+
+          {/* Next Button */}
+          <button
+            type="button"
+            onClick={() => scrollCoverage("right")}
+            disabled={!canScrollRight}
+            aria-label="Next topics"
+            title="Scroll topics right"
+            className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+
+          {/* Subtle Vertical Divider */}
+          <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0 mx-0.5 sm:mx-1"></div>
+
+          {/* Theme Switch Toggle (On Sub-header Rightmost Position) */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isDarkMode}
+            onClick={toggleTheme}
+            aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            className="relative inline-flex items-center h-7 w-14 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-300 ease-in-out focus:outline-none select-none bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-inner group"
+          >
+            {/* Left Track Icon (Sun) */}
+            <span className="absolute left-1.5 flex items-center justify-center pointer-events-none text-amber-500/70 dark:text-slate-600">
+              <Sun className="w-3.5 h-3.5" />
+            </span>
+
+            {/* Right Track Icon (Moon) */}
+            <span className="absolute right-1.5 flex items-center justify-center pointer-events-none text-slate-400 dark:text-amber-300/70">
+              <Moon className="w-3.5 h-3.5" />
+            </span>
+
+            {/* Sliding Knob */}
+            <span
+              className={`relative z-10 flex items-center justify-center w-6 h-6 rounded-full shadow-md transition-transform duration-300 ease-in-out ${
+                isDarkMode
+                  ? "translate-x-7 bg-slate-800 border border-slate-600 text-amber-300"
+                  : "translate-x-0 bg-white border border-slate-200 text-amber-500"
+              }`}
+            >
+              {isDarkMode ? (
+                <Moon className="w-3.5 h-3.5 fill-amber-300 text-amber-300 transition-transform duration-200 group-hover:rotate-12" />
+              ) : (
+                <Sun className="w-3.5 h-3.5 fill-amber-500 text-amber-500 transition-transform duration-200 group-hover:rotate-45" />
+              )}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -988,7 +1312,7 @@ export default function Home() {
           transform: isLoadingMore ? "translateY(-120px)" : "translateY(0px)",
           transition: "transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.45s ease",
         }}
-        className={`relative z-10 min-h-screen bg-[#FAF8F5] text-slate-800 font-sans selection:bg-slate-900 selection:text-white pb-16 will-change-transform ${
+        className={`relative z-10 min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-16 will-change-transform transition-colors duration-200 ${
           isLoadingMore ? "shadow-[0_-20px_45px_rgba(0,0,0,0.65)]" : ""
         }`}
       >
@@ -996,23 +1320,23 @@ export default function Home() {
       <main className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 pt-6">
         {loading ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-pulse">
-            <div className="lg:col-span-5 h-[650px] bg-slate-200/60 rounded-xl border border-slate-300"></div>
-            <div className="lg:col-span-7 h-[650px] bg-slate-200/60 rounded-xl border border-slate-300"></div>
+            <div className="lg:col-span-5 h-[650px] bg-slate-200/60 dark:bg-slate-800/60 rounded-xl border border-slate-300 dark:border-slate-800"></div>
+            <div className="lg:col-span-7 h-[650px] bg-slate-200/60 dark:bg-slate-800/60 rounded-xl border border-slate-300 dark:border-slate-800"></div>
           </div>
         ) : (
           <div className="space-y-8">
             
             {/* TOP BALANCED SHOWCASE: #1 CRITICAL UPDATE (LEFT) + THE QUICK WIRE (RIGHT) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-10 border-b-2 border-slate-900">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-10 border-b-2 border-slate-900 dark:border-slate-800">
               
               {/* TOP MOST IMPORTANT UPDATE (LEFT 5 COLS) */}
               {leadStory && (
                 <div className="lg:col-span-5 flex flex-col">
-                  <div className="flex items-center justify-between border-b-2 border-slate-900 pb-2 mb-3 font-mono">
+                  <div className="flex items-center justify-between border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 font-mono">
                     <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase bg-rose-600 text-white shadow-xs">
                       <Flame className="w-3.5 h-3.5" /> #1 CRITICAL UPDATE
                     </span>
-                    <span className="text-slate-500 text-[10px] font-bold uppercase font-mono">
+                    <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase font-mono">
                       • TOP SIGNAL
                     </span>
                   </div>
@@ -1023,11 +1347,11 @@ export default function Home() {
               {/* DAILY DISPATCHES / QUICK WIRE + TELEMETRY (RIGHT 7 COLS) */}
               <div className="lg:col-span-7 flex flex-col justify-between">
                 <div className="flex flex-col flex-1">
-                  <div className="border-b-2 border-slate-900 pb-2 mb-3 flex items-center justify-between font-mono">
-                    <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 flex items-center gap-1.5">
-                      <Radio className="w-4 h-4" /> THE QUICK WIRE • RAPID SIGNALS
+                  <div className="border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 flex items-center justify-between font-mono">
+                    <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
+                      <Radio className="w-4 h-4 text-rose-500" /> THE QUICK WIRE • RAPID SIGNALS
                     </span>
-                    <span className="text-[10px] font-bold bg-slate-200 text-slate-800 px-2 py-0.5 rounded uppercase">
+                    <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded uppercase">
                       DISPATCHES
                     </span>
                   </div>
@@ -1041,20 +1365,6 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-
-                {/* GAZETTE INTELLIGENCE TELEMETRY BAR */}
-                <div className="mt-4 p-3.5 rounded-xl bg-slate-900 text-slate-300 font-mono text-xs border border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">GAZETTE FEED PIPELINE</span>
-                    <span className="text-emerald-400 text-[10px] bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800">ACTIVE</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-[10px] text-slate-400">
-                    <span>COVERAGE: <strong className="text-slate-200">6 DOMAINS</strong></span>
-                    <span>SIGNALS: <strong className="text-slate-200">{briefings.length} CURATED</strong></span>
-                    <span>AI SYNTHESIS: <strong className="text-slate-200">ACTIVE & READY</strong></span>
-                  </div>
-                </div>
               </div>
 
             </div>
@@ -1062,17 +1372,17 @@ export default function Home() {
             {/* FULL-WIDTH BENTO EDITORIAL DECK: ARCHITECTURE & DEEP TAKES */}
             <section className="flex flex-col space-y-6 pb-12 pt-2">
               <div
-                className={`sticky z-30 bg-[#FAF8F5] border-b-2 border-slate-900 transition-all duration-300 ease-in-out w-screen ml-[calc(-50vw+50%)] ${
+                className={`sticky z-30 bg-[#FAF8F5] dark:bg-[#070b12] border-b-2 border-slate-900 dark:border-slate-800 transition-all duration-300 ease-in-out w-screen ml-[calc(-50vw+50%)] ${
                   headerVisible ? "top-[57px] shadow-xs" : "top-0 shadow-md"
                 }`}
               >
                 <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between font-mono gap-3">
-                  <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 flex items-center gap-2 shrink-0">
-                    <span className="font-serif font-black tracking-widest text-sm sm:text-base text-slate-950">
+                  <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 dark:text-white flex items-center gap-2 shrink-0">
+                    <span className="font-serif font-black tracking-widest text-sm sm:text-base text-slate-950 dark:text-white">
                       BECON
                     </span>
                     <span className="text-slate-400 font-mono font-bold">//</span>
-                    <span className="font-mono font-black text-slate-900 text-xs sm:text-[13px] tracking-wide">
+                    <span className="font-mono font-black text-slate-900 dark:text-slate-100 text-xs sm:text-[13px] tracking-wide">
                       {dailyHeading}
                     </span>
                   </span>
@@ -1083,19 +1393,19 @@ export default function Home() {
                     className="flex-1 max-w-sm sm:max-w-md mx-2 relative flex items-center min-w-[260px]"
                   >
                     <div className="relative w-full flex items-center">
-                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 pointer-events-none" />
+                      <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 absolute left-3 pointer-events-none" />
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search topic (e.g. Tax Laws, Retail, AI, Finance, Tech)..."
-                        className="w-full pl-8 pr-20 py-1.5 text-xs font-mono bg-white border border-slate-300 focus:border-slate-900 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all shadow-2xs"
+                        className="w-full pl-8 pr-20 py-1.5 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-amber-400 transition-all shadow-2xs"
                       />
                       {searchQuery && (
                         <button
                           type="button"
                           onClick={handleClearSearch}
-                          className="absolute right-[66px] text-slate-400 hover:text-slate-700 p-0.5 text-xs font-bold cursor-pointer top-1/2 -translate-y-1/2"
+                          className="absolute right-[66px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-0.5 text-xs font-bold cursor-pointer top-1/2 -translate-y-1/2"
                           title="Clear"
                         >
                           <X className="w-3 h-3" />
@@ -1104,7 +1414,7 @@ export default function Home() {
                       <button
                         type="submit"
                         disabled={isSearchingTopic || !searchQuery.trim()}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 h-[22px] px-2 rounded bg-slate-950 hover:bg-slate-800 text-amber-300 text-[10px] font-black uppercase font-mono tracking-wider transition-all disabled:bg-slate-800 disabled:text-amber-300/80 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1 shadow-2xs border border-slate-700"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 h-[22px] px-2 rounded bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 text-[10px] font-black uppercase font-mono tracking-wider transition-all disabled:bg-slate-800 disabled:text-amber-300/80 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1 shadow-2xs border border-slate-700"
                       >
                         {isSearchingTopic ? (
                           <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
@@ -1117,12 +1427,12 @@ export default function Home() {
 
                   <div className="flex items-center gap-2 shrink-0">
                     {loadingRemaining ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                         <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
                         <span>AI SYNTHESIZING REMAINING TAKES...</span>
                       </span>
                     ) : (
-                      <span className="text-[11px] font-mono text-slate-500 font-bold hidden xl:inline">
+                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-bold hidden xl:inline">
                         FULL BROADSHEET DENSITY • ALL COLUMNS UNIFIED
                       </span>
                     )}
@@ -1132,14 +1442,14 @@ export default function Home() {
 
               {/* ACTIVE SUBJECT SEARCH STATUS BAR */}
               {activeSearchTopic && (
-                <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-300 flex flex-wrap items-center justify-between gap-3 font-mono text-xs shadow-2xs animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2 text-amber-950 font-bold">
-                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="p-3 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex flex-wrap items-center justify-between gap-3 font-mono text-xs shadow-2xs animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 text-amber-950 dark:text-amber-200 font-bold">
+                    <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                     <span>
-                      AI Synthesized News for: <strong className="text-slate-950 underline underline-offset-2">"{activeSearchTopic}"</strong>
+                      AI Synthesized News for: <strong className="text-slate-950 dark:text-amber-100 underline underline-offset-2">"{activeSearchTopic}"</strong>
                     </span>
                     {searchedStories && (
-                      <span className="text-[10px] bg-amber-200/90 text-amber-900 px-2 py-0.5 rounded font-black">
+                      <span className="text-[10px] bg-amber-200/90 dark:bg-amber-900 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded font-black">
                         {searchedStories.length} UPDATES
                       </span>
                     )}
@@ -1147,7 +1457,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handleClearSearch}
-                    className="flex items-center gap-1.5 text-[11px] font-black text-rose-700 hover:text-rose-950 bg-white hover:bg-rose-50 border border-rose-200 hover:border-rose-400 px-3 py-1 rounded-lg transition-all cursor-pointer shadow-2xs"
+                    className="flex items-center gap-1.5 text-[11px] font-black text-rose-700 dark:text-rose-300 hover:text-rose-950 dark:hover:text-rose-100 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900 px-3 py-1 rounded-lg transition-all cursor-pointer shadow-2xs"
                   >
                     <X className="w-3 h-3" />
                     <span>Reset Bento Feed</span>
@@ -1157,7 +1467,7 @@ export default function Home() {
 
               {/* SEARCH ERROR NOTIFICATION */}
               {searchError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-mono text-xs flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 font-mono text-xs flex items-center justify-between">
                   <span>{searchError}</span>
                   <button onClick={handleClearSearch} className="font-bold underline cursor-pointer">
                     Clear Search
@@ -1231,17 +1541,17 @@ export default function Home() {
                     )}
                   </>
                 ) : searchedStories !== null ? (
-                  <div className="col-span-1 md:col-span-2 xl:col-span-3 p-8 rounded-xl bg-white border border-slate-300 text-center font-mono space-y-3 shadow-xs">
-                    <p className="text-slate-900 font-bold text-sm">
+                  <div className="col-span-1 md:col-span-2 xl:col-span-3 p-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-center font-mono space-y-3 shadow-xs">
+                    <p className="text-slate-900 dark:text-slate-100 font-bold text-sm">
                       No live news articles found for "{activeSearchTopic}".
                     </p>
-                    <p className="text-slate-500 text-xs">
+                    <p className="text-slate-500 dark:text-slate-400 text-xs">
                       Try searching another technology keyword (e.g. Docker, Kubernetes, PostgreSQL, Rust, Go).
                     </p>
                     <button
                       type="button"
                       onClick={handleClearSearch}
-                      className="px-4 py-2 rounded-lg bg-slate-950 text-amber-300 text-xs font-bold font-mono hover:bg-slate-800 transition-colors cursor-pointer"
+                      className="px-4 py-2 rounded-lg bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 text-xs font-bold font-mono transition-colors cursor-pointer border border-slate-700"
                     >
                       Reset to Curated Bento Deck
                     </button>
@@ -1278,25 +1588,99 @@ export default function Home() {
         )}
 
         {/* BOTTOM GAZETTE END DETECTOR & PULL PROMPT */}
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-12 pt-8 border-t-2 border-slate-300 flex flex-col items-center justify-center text-center">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-12 pt-8 border-t-2 border-slate-300 dark:border-slate-800 flex flex-col items-center justify-center text-center">
           <button
             type="button"
             onClick={triggerLoadMore}
             disabled={isLoadingMore}
-            className="group flex flex-col items-center gap-1.5 px-6 py-2.5 rounded-xl bg-white hover:bg-slate-950 border-2 border-slate-900 transition-all shadow-xs hover:shadow-md cursor-pointer"
+            className="group flex flex-col items-center gap-1.5 px-6 py-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-950 dark:hover:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 transition-all shadow-xs hover:shadow-md cursor-pointer"
           >
-            <div className="flex items-center gap-2 font-mono text-xs font-black uppercase tracking-wider text-slate-900 group-hover:text-amber-300 transition-colors">
+            <div className="flex items-center gap-2 font-mono text-xs font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 group-hover:text-amber-300 transition-colors">
               <ChevronDown className={`w-4 h-4 ${isLoadingMore ? "animate-spin text-amber-500" : "animate-bounce group-hover:text-amber-300"}`} />
               <span>{isLoadingMore ? "Lifting Page • Dispatching New Edition..." : "Scroll Down Or Click To Load More Updates"}</span>
             </div>
-            <span className="text-[10px] font-mono text-slate-500 group-hover:text-slate-400">
+            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 group-hover:text-slate-400">
               Gazette Edition {editionNumber} • Pull up or scroll to reveal next briefings
             </span>
           </button>
         </div>
+
+        {/* EDITORIAL FOOTER */}
+        <footer className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-16 pt-8 pb-12 border-t border-slate-300 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 dark:text-slate-400 font-mono text-xs">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-serif font-black tracking-wider uppercase text-sm">
+            <span>BECON INTELLIGENCE GAZETTE</span>
+            <span className="text-slate-400 dark:text-slate-500 font-mono text-[11px] font-normal hidden sm:inline">• Not News. Updates You Can Act On.</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-5 font-bold">
+            <Link href="/about" className="hover:text-slate-900 dark:hover:text-amber-300 transition-colors">
+              About & Manifesto
+            </Link>
+            <Link href="/onboarding" className="hover:text-slate-900 dark:hover:text-amber-300 transition-colors">
+              AI Onboarding
+            </Link>
+            <Link href="/profile" className="hover:text-slate-900 dark:hover:text-amber-300 transition-colors">
+              Stack Settings
+            </Link>
+          </div>
+        </footer>
       </main>
       </div>
+
+      {/* FLOATING BACK TO TOP ARROW BUTTON */}
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={scrollToTop}
+          aria-label="Back to top"
+          title="Back to top"
+          className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 w-10 h-10 rounded-xl bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border-2 border-slate-900 dark:border-slate-600 shadow-lg dark:shadow-2xl dark:shadow-black/70 flex items-center justify-center group cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:hover:border-amber-400 dark:hover:shadow-[0_0_20px_rgba(251,191,36,0.3)] active:translate-y-0 active:scale-95 animate-in fade-in zoom-in-90 select-none"
+        >
+          <ArrowUp className="w-4 h-4 text-slate-900 dark:text-amber-300 group-hover:text-amber-500 dark:group-hover:text-amber-200 transition-all duration-200 group-hover:-translate-y-0.5" />
+          <span className="sr-only">Back to top</span>
+        </button>
+      )}
     </div>
+  );
+}
+
+/* CLASSIC EDITORIAL STATUS BADGE RENDERER */
+function renderActionBadge(actionType: string) {
+  const type = (actionType || "prepare").toLowerCase().trim();
+
+  let textColor = "text-amber-600 dark:text-amber-400";
+  let label = "PREPARE";
+
+  if (type === "apply") {
+    textColor = "text-emerald-600 dark:text-emerald-400";
+    label = "APPLY";
+  } else if (type === "learn") {
+    textColor = "text-sky-600 dark:text-sky-400";
+    label = "LEARN";
+  } else if (type === "avoid") {
+    textColor = "text-rose-600 dark:text-rose-400";
+    label = "AVOID";
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold uppercase tracking-wider bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs select-none ${textColor}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+/* CLASSIC EDITORIAL STACK / TOPIC TAG RENDERER */
+function renderStackTag(tag: string) {
+  const cleanTag = tag.replace(/^#/, "").trim();
+  return (
+    <span
+      key={tag}
+      className="inline-flex items-center gap-1 text-[10px] font-sans font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs select-none hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+    >
+      <span className="text-slate-400 dark:text-slate-500 font-mono text-[9px] font-bold">/</span>
+      <span className="truncate">{cleanTag}</span>
+    </span>
   );
 }
 
@@ -1309,43 +1693,31 @@ function renderLeadSidebarCard(
   return (
     <article
       key={card.id}
-      className="rounded-xl bg-white border-2 border-slate-900 p-5 sm:p-6 shadow-sm flex flex-col justify-between flex-1 h-full"
+      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-5 sm:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between flex-1 h-full"
     >
       <div>
         {/* Top Badges & Actions */}
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-black px-2 py-0.5 rounded bg-slate-950 text-amber-300 border border-slate-800 uppercase tracking-wider font-mono shadow-xs">
-              #01
+            <span className="inline-flex items-center text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border border-slate-800 dark:border-amber-400 uppercase tracking-wider shadow-xs">
+              LEAD // 01
             </span>
-            {card.target_stack.slice(0, 2).map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 uppercase tracking-wider font-mono"
-              >
-                #{tag}
-              </span>
-            ))}
-            <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-50 border border-slate-200/90 px-2 py-0.5 rounded flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400" />
+            {card.target_stack.slice(0, 2).map((tag) => renderStackTag(tag))}
+            <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
               <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
           </div>
-          <span
-            className={`text-[10px] px-2 py-0.5 rounded border uppercase font-mono font-bold tracking-wider ${getBadgeColor(
-              card.card_content.what_to_do_next.action_type
-            )}`}
-          >
-            {card.card_content.what_to_do_next.action_type}
-          </span>
+          {renderActionBadge(card.card_content.what_to_do_next.action_type)}
         </div>
 
         {/* Headline */}
-        <h3 className="text-xl sm:text-2xl font-black text-slate-950 font-serif tracking-tight leading-tight mb-3">
+        <h3 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-slate-50 font-serif tracking-tight leading-tight mb-3">
           <a
             href={card.source_url}
             target="_blank"
             rel="noreferrer"
+            className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors"
           >
             {card.title}
           </a>
@@ -1353,7 +1725,7 @@ function renderLeadSidebarCard(
 
         {/* Compact Hero Image (Spot 1 - Always high quality and compact) */}
         {leadImageUrl ? (
-          <div className="relative w-full h-36 sm:h-44 rounded-lg overflow-hidden my-3 border border-slate-200/90 bg-slate-100 shadow-2xs">
+          <div className="relative w-full h-36 sm:h-44 rounded-lg overflow-hidden my-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={leadImageUrl}
@@ -1365,8 +1737,8 @@ function renderLeadSidebarCard(
         ) : null}
 
         {/* 2 Key Takeaway Bullets */}
-        <div className="mb-3.5 p-3 rounded-lg bg-slate-50 border border-slate-200/90 text-xs text-slate-700 space-y-1.5">
-          <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-950 flex items-center gap-1">
+        <div className="mb-3.5 p-3 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
+          <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-950 dark:text-slate-100 flex items-center gap-1">
             <Pin className="w-3.5 h-3.5 text-rose-600" />
             <span>KEY SIGNALS:</span>
           </div>
@@ -1381,22 +1753,22 @@ function renderLeadSidebarCard(
         </div>
 
         {/* Why It Matters */}
-        <p className="text-slate-600 text-xs leading-relaxed mb-4 font-normal line-clamp-3">
-          <strong className="text-slate-900 font-semibold font-mono text-[11px]">IMPACT: </strong>
+        <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed mb-4 font-normal line-clamp-3">
+          <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[11px]">IMPACT: </strong>
           {card.card_content.why_it_matters}
         </p>
       </div>
 
       {/* Action Bar with Resource Link */}
-      <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2.5 font-mono">
-        <span className="text-slate-500 text-[11px] truncate">
-          Role: <strong className="text-slate-800 font-semibold">{card.target_role}</strong>
+      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 font-mono">
+        <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
+          Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
         </span>
         <a
           href={card.source_url}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-amber-300 hover:text-amber-200 font-bold text-xs transition-all shadow-xs shrink-0 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 hover:text-amber-200 font-bold text-xs transition-all shadow-xs shrink-0 cursor-pointer border border-transparent dark:border-slate-700"
           title="Open original resource documentation"
         >
           <span>Resource</span>
@@ -1423,29 +1795,16 @@ function renderRectangleCard(
         isFullWidth
           ? "col-span-1 md:col-span-2 xl:col-span-3"
           : "col-span-1 md:col-span-2 xl:col-span-2"
-      } rounded-xl bg-white border border-slate-300 hover:border-slate-900 transition-all p-5 sm:p-6 shadow-xs hover:shadow-md flex flex-col justify-between`}
+      } rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-5 sm:p-6 shadow-xs hover:shadow-md flex flex-col justify-between`}
     >
       <div>
         {/* Top Header Row */}
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            {card.target_stack.slice(0, 2).map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200/80 uppercase tracking-wider font-mono"
-              >
-                #{tag}
-              </span>
-            ))}
-            <span
-              className={`text-[9px] px-2 py-0.5 rounded border uppercase font-mono font-bold tracking-wider ${getBadgeColor(
-                card.card_content.what_to_do_next.action_type
-              )}`}
-            >
-              {card.card_content.what_to_do_next.action_type}
-            </span>
-            <span className="text-[10px] font-mono font-semibold text-slate-500 bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400" />
+            {card.target_stack.slice(0, 2).map((tag) => renderStackTag(tag))}
+            {renderActionBadge(card.card_content.what_to_do_next.action_type)}
+            <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
               <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
           </div>
@@ -1455,7 +1814,7 @@ function renderRectangleCard(
             href={card.source_url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-950 hover:text-amber-300 text-slate-700 font-mono text-[11px] font-bold transition-all border border-slate-200 shrink-0"
+            className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono text-[11px] font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0"
             title="Open original resource documentation"
           >
             <span>Resource</span>
@@ -1467,7 +1826,7 @@ function renderRectangleCard(
         {hasValidImage ? (
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start">
             {/* Left Image Thumbnail */}
-            <div className="relative w-full sm:w-48 md:w-56 h-36 sm:h-44 shrink-0 rounded-lg overflow-hidden border border-slate-200/90 bg-slate-100 shadow-2xs">
+            <div className="relative w-full sm:w-48 md:w-56 h-36 sm:h-44 shrink-0 rounded-lg overflow-hidden border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={resolvedImageUrl!}
@@ -1479,18 +1838,18 @@ function renderRectangleCard(
 
             {/* Right Text Content */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-base sm:text-lg font-bold font-serif text-slate-950 leading-snug mb-2">
-                <a href={card.source_url} target="_blank" rel="noreferrer">
+              <h3 className="text-base sm:text-lg font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug mb-2">
+                <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
                   {card.title}
                 </a>
               </h3>
 
               {/* 2 Key Takeaway Bullets */}
               <div className="mb-2 space-y-1">
-                <ul className="space-y-1 text-xs text-slate-700">
+                <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
                   {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
                     <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                      <span className="text-slate-400 font-bold shrink-0">•</span>
+                      <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
                       <span className="line-clamp-2">{bullet}</span>
                     </li>
                   ))}
@@ -1498,26 +1857,26 @@ function renderRectangleCard(
               </div>
 
               {/* Why It Matters */}
-              <p className="text-slate-600 text-[11px] sm:text-xs leading-relaxed font-normal line-clamp-2">
-                <strong className="text-slate-900 font-semibold font-mono text-[10px]">IMPACT: </strong>
+              <p className="text-slate-600 dark:text-slate-400 text-[11px] sm:text-xs leading-relaxed font-normal line-clamp-2">
+                <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[10px]">IMPACT: </strong>
                 {card.card_content.why_it_matters}
               </p>
             </div>
           </div>
         ) : (
           <div>
-            <h3 className="text-lg sm:text-xl font-bold font-serif text-slate-950 leading-snug my-2">
-              <a href={card.source_url} target="_blank" rel="noreferrer">
+            <h3 className="text-lg sm:text-xl font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug my-2">
+              <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
                 {card.title}
               </a>
             </h3>
 
             {/* 2 Key Takeaway Bullets */}
             <div className="mb-2.5 space-y-1">
-              <ul className="space-y-1 text-xs text-slate-700">
+              <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
                 {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
                   <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                    <span className="text-slate-400 font-bold shrink-0">•</span>
+                    <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
                     <span className="line-clamp-2">{bullet}</span>
                   </li>
                 ))}
@@ -1525,8 +1884,8 @@ function renderRectangleCard(
             </div>
 
             {/* Why It Matters */}
-            <p className="text-slate-600 text-xs sm:text-sm leading-relaxed mb-3 font-normal line-clamp-2">
-              <strong className="text-slate-900 font-semibold font-mono text-[11px]">IMPACT: </strong>
+            <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm leading-relaxed mb-3 font-normal line-clamp-2">
+              <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[11px]">IMPACT: </strong>
               {card.card_content.why_it_matters}
             </p>
           </div>
@@ -1534,15 +1893,15 @@ function renderRectangleCard(
       </div>
 
       {/* Footer */}
-      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 text-xs mt-3 font-mono">
-        <span className="text-slate-500 text-[11px] truncate">
-          Role: <strong className="text-slate-800 font-semibold">{card.target_role}</strong>
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 text-xs mt-3 font-mono">
+        <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
+          Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
         </span>
         <a
           href={card.source_url}
           target="_blank"
           rel="noreferrer"
-          className="text-[11px] px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-950 hover:text-amber-300 text-slate-700 font-bold flex items-center gap-1.5 transition-colors border border-slate-200 cursor-pointer shrink-0 font-mono"
+          className="text-[11px] px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-bold flex items-center gap-1.5 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer shrink-0 font-mono"
           title="Open original resource documentation"
         >
           <span>Resource</span>
@@ -1564,17 +1923,15 @@ function renderSquareCard(
   return (
     <article
       key={card.id}
-      className="col-span-1 rounded-xl bg-white border border-slate-300 hover:border-slate-900 transition-all p-5 shadow-xs hover:shadow-md flex flex-col justify-between"
+      className="col-span-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-5 shadow-xs hover:shadow-md flex flex-col justify-between"
     >
       <div>
-        {/* Top Row with Rank, Tag, and Direct Resource Icon Link */}
+        {/* Top Row with Tag and Direct Resource Icon Link */}
         <div className="flex items-center justify-between gap-1.5 mb-2.5">
           <div className="flex items-center gap-1.5 truncate">
-            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200/80 uppercase tracking-wider font-mono truncate">
-              #{card.target_stack[0]}
-            </span>
-            <span className="text-[9px] font-mono text-slate-500 flex items-center gap-1 shrink-0">
-              <Calendar className="w-2.5 h-2.5 text-slate-400" />
+            {renderStackTag(card.target_stack[0])}
+            <span className="text-[9.5px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 shrink-0">
+              <Calendar className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500" />
               <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
           </div>
@@ -1583,7 +1940,7 @@ function renderSquareCard(
             href={card.source_url}
             target="_blank"
             rel="noreferrer"
-            className="text-slate-400 hover:text-slate-950 transition-colors p-1"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-950 dark:hover:text-amber-300 transition-colors p-1"
             title="Open original resource documentation"
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -1592,7 +1949,7 @@ function renderSquareCard(
 
         {/* Optional Image Thumbnail when showImage is true */}
         {hasValidImage && (
-          <div className="relative w-full h-32 sm:h-36 rounded-lg overflow-hidden mb-3 border border-slate-200/90 bg-slate-100 shadow-2xs">
+          <div className="relative w-full h-32 sm:h-36 rounded-lg overflow-hidden mb-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={resolvedImageUrl!}
@@ -1604,18 +1961,18 @@ function renderSquareCard(
         )}
 
         {/* Headline */}
-        <h3 className="text-base font-bold font-serif text-slate-950 leading-snug line-clamp-2 mb-2">
-          <a href={card.source_url} target="_blank" rel="noreferrer">
+        <h3 className="text-base font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug line-clamp-2 mb-2">
+          <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
             {card.title}
           </a>
         </h3>
 
         {/* 2 Key Signal Bullets */}
         <div className="mb-2 space-y-1">
-          <ul className="space-y-1 text-xs text-slate-700">
+          <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
             {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
               <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                <span className="text-slate-400 font-bold shrink-0">•</span>
+                <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
                 <span className="line-clamp-2">{bullet}</span>
               </li>
             ))}
@@ -1623,31 +1980,25 @@ function renderSquareCard(
         </div>
 
         {/* Why It Matters / Impact Snippet */}
-        <p className="text-slate-600 text-[11px] leading-relaxed font-normal line-clamp-2 mb-2">
-          <strong className="text-slate-900 font-semibold font-mono text-[10px]">IMPACT: </strong>
+        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed font-normal line-clamp-2 mb-2">
+          <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[10px]">IMPACT: </strong>
           {card.card_content.why_it_matters}
         </p>
       </div>
 
       {/* Footer */}
-      <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto font-mono">
-        <span
-          className={`text-[9px] px-2 py-0.5 rounded border uppercase font-bold tracking-wider ${getBadgeColor(
-            card.card_content.what_to_do_next.action_type
-          )}`}
-        >
-          {card.card_content.what_to_do_next.action_type}
-        </span>
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 mt-auto">
+        {renderActionBadge(card.card_content.what_to_do_next.action_type)}
 
         <a
           href={card.source_url}
           target="_blank"
           rel="noreferrer"
-          className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-950 hover:text-amber-300 text-slate-700 font-mono text-[10px] font-bold transition-all border border-slate-200 shrink-0 flex items-center gap-1 shadow-2xs"
+          className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono text-[10px] font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0 flex items-center gap-1 shadow-2xs"
           title="Open original resource documentation"
         >
           <span>Resource</span>
-          <ExternalLink className="w-3 h-3" />
+          <ExternalLink className="w-3.5 h-3.5" />
         </a>
       </div>
     </article>
@@ -1663,64 +2014,56 @@ function renderBriefCard(
   return (
     <article
       key={card.id}
-      className="rounded-xl bg-white border border-slate-200 p-4 sm:p-5 shadow-2xs hover:border-slate-400 transition-all flex flex-col justify-between h-full"
+      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col justify-between h-full"
     >
       <div>
         <div className="flex items-center justify-between gap-2 mb-2.5">
           <div className="flex items-center gap-1.5 truncate">
             {rankNumber !== undefined && rankNumber <= 5 && (
-              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-950 text-amber-300 font-mono shrink-0">
+              <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 dark:bg-slate-800 text-amber-300 border border-slate-800 dark:border-slate-700 shrink-0">
                 #{String(rankNumber).padStart(2, "0")}
               </span>
             )}
-            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-700 uppercase tracking-wider font-mono truncate">
-              #{card.target_stack[0]}
-            </span>
+            {renderStackTag(card.target_stack[0])}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <a
               href={card.source_url}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-950 hover:text-amber-300 text-slate-700 font-mono transition-all border border-slate-200 shrink-0"
+              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono transition-all border border-slate-200 dark:border-slate-700 shrink-0"
               title="Open original resource documentation"
             >
               <span>Resource</span>
-              <ExternalLink className="w-3 h-3" />
+              <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>
 
-        <h4 className="text-sm sm:text-base font-bold font-serif text-slate-900 leading-snug line-clamp-2 mb-2">
-          <a href={card.source_url} target="_blank" rel="noreferrer">
+        <h4 className="text-sm sm:text-base font-bold font-serif text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 mb-2">
+          <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
             {card.title}
           </a>
         </h4>
 
-        <p className="text-slate-600 text-xs leading-relaxed line-clamp-3">
+        <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed line-clamp-3">
           {card.card_content.what_happened[0] || card.card_content.why_it_matters}
         </p>
 
         {card.card_content.why_it_matters && card.card_content.what_happened[0] && (
-          <p className="text-slate-500 text-[11px] leading-relaxed line-clamp-2 font-mono pt-2 mt-2 border-t border-dashed border-slate-100">
-            <span className="font-bold text-slate-700">IMPACT: </span>
+          <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed line-clamp-2 font-mono pt-2 mt-2 border-t border-dashed border-slate-100 dark:border-slate-800">
+            <span className="font-bold text-slate-700 dark:text-slate-300">IMPACT: </span>
             {card.card_content.why_it_matters}
           </p>
         )}
       </div>
 
-      <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono text-slate-500 mt-3">
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-3">
         <span className="truncate flex items-center gap-1">
           <Calendar className="w-2.5 h-2.5 text-slate-400" />
           <span>{card.published_at || "Oct 23, 2026"}</span>
         </span>
-        <span
-          className={`px-1.5 py-0.5 rounded text-[9px] border uppercase font-bold ${getBadgeColor(
-            card.card_content.what_to_do_next.action_type
-          )}`}
-        >
-          {card.card_content.what_to_do_next.action_type}
-        </span>
+        {renderActionBadge(card.card_content.what_to_do_next.action_type)}
       </div>
     </article>
   );

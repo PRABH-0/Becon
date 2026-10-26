@@ -6,6 +6,8 @@ import Link from "next/link";
 import { LogIn, ArrowRight, Lock, Mail, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useLoader } from "@/context/LoadingContext";
 
+const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +27,7 @@ export default function LoginPage() {
       formData.append("username", email);
       formData.append("password", password);
 
-      const res = await fetch("http://127.0.0.1:8000/api/login", {
+      const res = await fetch(`${API}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: formData.toString()
@@ -170,6 +172,16 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+        </div>
+
+        <div className="mt-6 text-center">
+          <Link
+            href="/about"
+            className="font-mono text-xs text-slate-500 hover:text-slate-900 transition-colors inline-flex items-center gap-1.5 font-bold"
+          >
+            <span>Learn how Becon works & read our manifesto</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </div>
     </div>
