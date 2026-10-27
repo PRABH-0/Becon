@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar, LogOut } from "lucide-react";
+import { User, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar, LogOut, LogIn } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -1136,7 +1136,7 @@ export default function Home() {
                         onClick={() => setShowProfileMenu(false)}
                         className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
                       >
-                        <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                        <LogIn className="w-4 h-4 text-amber-500 shrink-0" />
                         <span>Sign In / Create Account</span>
                       </Link>
                     )}

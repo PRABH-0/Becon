@@ -3,23 +3,17 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserPlus, ArrowRight, Lock, Mail, AlertCircle, Eye, EyeOff, Sparkles } from "lucide-react";
-import { useLoader } from "@/context/LoadingContext";
+import { Compass, AlertCircle, ArrowRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabaseClient";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 export default function RegisterPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
   const router = useRouter();
-  const { showLoader } = useLoader();
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -79,37 +73,6 @@ export default function RegisterPage() {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-
-    try {
-      const res = await fetch(`${API}/api/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem("becon_token", data.access_token);
-        showLoader(
-          "Account Created Successfully!",
-          "Opening profile & topic preferences setup..."
-        );
-        router.push("/profile?setup=true");
-      } else {
-        const data = await res.json();
-        setError(data.detail || "Failed to register");
-      }
-    } catch (err) {
-      setError("Unable to connect to the server.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="h-screen max-h-screen w-full bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 overflow-y-auto no-scrollbar selection:bg-slate-900 selection:text-white py-4 sm:py-6 transition-colors duration-200 relative">
       {/* Top Right Theme Toggle */}
@@ -127,30 +90,36 @@ export default function RegisterPage() {
           Create Your Profile
         </h2>
         <p className="mt-1 text-center text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium">
-          Already have an account?{" "}
-          <Link href="/login" className="font-bold text-rose-600 hover:text-rose-500 dark:text-rose-400 dark:hover:text-rose-300 transition-colors">
-            Sign in here
-          </Link>
+          Get customized signals matched to your engineering stack
         </p>
 
-        <div className="w-full mt-5 sm:mt-6">
-          <div className="bg-white dark:bg-slate-900 py-6 sm:py-7 px-5 sm:px-8 shadow-xl dark:shadow-slate-950/80 border-2 border-slate-900 dark:border-slate-800 rounded-2xl relative overflow-hidden transition-colors">
-            {/* Glassmorphism gradient orb */}
+        <div className="w-full mt-6">
+          <div className="bg-white dark:bg-slate-900 py-7 px-5 sm:px-8 shadow-xl dark:shadow-slate-950/80 border-2 border-slate-900 dark:border-slate-800 rounded-2xl relative overflow-hidden transition-colors">
+            {/* Glassmorphism subtle background glow */}
             <div className="absolute -top-24 -left-24 w-48 h-48 bg-indigo-200 dark:bg-indigo-950/40 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-50 animate-blob pointer-events-none"></div>
             <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-rose-200 dark:bg-rose-950/40 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-50 animate-blob animation-delay-2000 pointer-events-none"></div>
 
-            <div className="relative z-10 space-y-3 mb-4">
-              {/* GOOGLE SIGN IN BUTTON */}
+            <div className="relative z-10 space-y-4">
+              {error && (
+                <div className="bg-rose-50 dark:bg-rose-950/40 border-l-4 border-rose-500 p-3 rounded-r-lg shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
+                    <p className="text-xs font-bold text-rose-700 dark:text-rose-300 font-mono uppercase tracking-wider">{error}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* 1. GOOGLE SIGN IN BUTTON */}
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                disabled={isGoogleLoading || isGuestLoading || isLoading}
-                className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-750 font-semibold text-xs sm:text-sm shadow-xs transition-all cursor-pointer disabled:opacity-60"
+                disabled={isGoogleLoading || isGuestLoading}
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-750 font-semibold text-xs sm:text-sm shadow-xs transition-all cursor-pointer disabled:opacity-60"
               >
                 {isGoogleLoading ? (
                   <div className="h-4 w-4 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                     <path
                       fill="#4285F4"
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -172,118 +141,33 @@ export default function RegisterPage() {
                 <span>Continue with Google</span>
               </button>
 
-              {/* GUEST ACCESS BUTTON */}
+              {/* 2. GUEST ACCESS BUTTON (WITH COMPASS EXPLORATION ICON) */}
               <button
                 type="button"
                 onClick={handleGuestLogin}
-                disabled={isGoogleLoading || isGuestLoading || isLoading}
-                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-600 font-mono text-xs font-semibold tracking-wide transition-all cursor-pointer disabled:opacity-60"
+                disabled={isGoogleLoading || isGuestLoading}
+                className="group w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-600 font-mono text-xs font-semibold tracking-wide transition-all cursor-pointer disabled:opacity-60"
               >
                 {isGuestLoading ? (
-                  <div className="h-3.5 w-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="h-4 w-4 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <Compass className="w-4 h-4 text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors shrink-0" />
                 )}
                 <span>Continue as Guest (Instant Access)</span>
               </button>
 
-              {/* OR DIVIDER */}
-              <div className="relative my-3 pt-1">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200 dark:border-slate-800" />
-                </div>
-                <div className="relative flex justify-center text-[10px] font-mono uppercase tracking-wider">
-                  <span className="bg-white dark:bg-slate-900 px-3 text-slate-400 dark:text-slate-500 font-bold">
-                    Or with email
-                  </span>
-                </div>
+              {/* VALUE BADGES */}
+              <div className="pt-2 flex items-center justify-center gap-3 text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none">
+                <span>Instant Access</span>
+                <span>•</span>
+                <span>Zero Setup</span>
+                <span>•</span>
+                <span>Strict Privacy</span>
               </div>
             </div>
-
-            <form className="space-y-4 sm:space-y-5 relative z-10" onSubmit={handleRegister} autoComplete="off">
-              {error && (
-                <div className="bg-rose-50 dark:bg-rose-950/40 border-l-4 border-rose-500 p-3 rounded-r-lg shadow-sm">
-                  <div className="flex items-center gap-2.5">
-                    <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
-                    <p className="text-xs font-bold text-rose-700 dark:text-rose-300 font-mono uppercase tracking-wider">{error}</p>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Email Address
-                </label>
-                <div className="mt-1 relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                  </div>
-                  <input
-                    type="email"
-                    autoComplete="off"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 rounded-lg pl-10 pr-3 py-2 text-slate-950 dark:text-slate-100 font-semibold text-sm transition-colors outline-none shadow-xs"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Password
-                </label>
-                <div className="mt-1 relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                  </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 rounded-lg pl-10 pr-10 py-2 text-slate-950 dark:text-slate-100 font-semibold text-sm transition-colors outline-none shadow-xs"
-                    required
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none cursor-pointer"
-                    tabIndex={-1}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-                <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-1">
-                  Must be at least 6 characters long.
-                </p>
-              </div>
-
-              <div>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex justify-center items-center gap-2 py-2.5 sm:py-3 px-4 border border-transparent rounded-lg shadow-md text-xs sm:text-sm font-black font-mono tracking-widest uppercase text-white bg-rose-600 hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-600 transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? (
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <UserPlus className="w-4 h-4" /> Create Account <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
           </div>
 
-          <div className="mt-4 sm:mt-5 text-center">
+          <div className="mt-5 text-center">
             <Link
               href="/about"
               className="font-mono text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-amber-300 transition-colors inline-flex items-center gap-1.5 font-bold"
