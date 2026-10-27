@@ -36,10 +36,6 @@ export default function LoginPage() {
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem("becon_token", data.access_token);
-        showLoader(
-          "Authenticating User Profile...",
-          "Preparing your personalized Gazette newsroom & intelligence feeds"
-        );
         router.push("/");
       } else {
         const data = await res.json();

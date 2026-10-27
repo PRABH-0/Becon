@@ -444,10 +444,21 @@ export default function Home() {
   }, [userInterests, checkCoverageScroll]);
 
   useEffect(() => {
+    hideLoader();
     setDailyHeading(getDailyBeconHeading());
     const cachedName = localStorage.getItem("becon_user_name");
     if (cachedName) setUserName(cachedName);
-  }, []);
+    const cachedCards = localStorage.getItem("becon_cached_briefings");
+    if (cachedCards) {
+      try {
+        const parsed = JSON.parse(cachedCards);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setBriefings(parsed);
+          setLoading(false);
+        }
+      } catch {}
+    }
+  }, [hideLoader]);
 
   const router = useRouter();
 
@@ -817,7 +828,7 @@ export default function Home() {
     }
     
     const fetchProfileAndBriefings = async () => {
-      showLoader("Curating Your Daily Gazette...", "Fast-rendering top 5 priority briefings for your stack");
+      hideLoader();
       try {
         const res = await fetch(`${API}/api/profile`, {
           headers: { "Authorization": `Bearer ${token}` }
@@ -872,12 +883,7 @@ export default function Home() {
   const fetchAllBriefings = async (forceRefresh = false, profile: any = null) => {
     setLoading(true);
     setLoadingRemaining(false);
-    if (forceRefresh) {
-      showLoader(
-        "Ingesting Latest Industry Signals...",
-        "Becon AI is synthesizing breaking updates for your topics"
-      );
-    }
+    hideLoader();
     const activeRole = profile?.role ?? userRole;
     const activeInterests = profile?.interests ?? (userInterests.length > 0 ? userInterests.join(", ") : "");
     const activePrompt = profile?.customPrompt ?? customPrompt;
@@ -898,12 +904,14 @@ export default function Home() {
       if (topRes.ok) {
         const topData: BriefingCard[] = await topRes.json();
         if (Array.isArray(topData) && topData.length > 0) {
-          setBriefings(
-            topData.map((c, index) => ({
-              ...c,
-              rank: c.rank ?? index + 1,
-            }))
-          );
+          const mappedTop = topData.map((c, index) => ({
+            ...c,
+            rank: c.rank ?? index + 1,
+          }));
+          setBriefings(mappedTop);
+          try {
+            localStorage.setItem("becon_cached_briefings", JSON.stringify(mappedTop));
+          } catch {}
           // INSTANTLY REVEAL TOP SCREEN TO USER!
           setLoading(false);
           hideLoader();
@@ -926,7 +934,11 @@ export default function Home() {
                       ...c,
                       rank: c.rank ?? prev.length + idx + 1,
                     }));
-                  return [...prev, ...newCards];
+                  const full = [...prev, ...newCards];
+                  try {
+                    localStorage.setItem("becon_cached_briefings", JSON.stringify(full));
+                  } catch {}
+                  return full;
                 });
               }
             }
@@ -1048,18 +1060,18 @@ export default function Home() {
 
       {/* 1. TOP HEADER BAR (SMART AUTO-HIDE ON SCROLL DOWN, SLIDE DOWN ON SCROLL UP) */}
       <header
-        className={`bg-slate-950 text-slate-200 py-3 px-4 sm:px-6 border-b border-slate-800 shadow-md sticky top-0 z-50 transition-transform duration-300 ease-in-out ${
+        className={`bg-slate-950 text-slate-200 py-2.5 sm:py-3 px-3 sm:px-6 border-b border-slate-800 shadow-md sticky top-0 z-50 transition-transform duration-300 ease-in-out ${
           headerVisible ? "translate-y-0" : "-translate-y-full"
         }`}
       >
-        <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/" className="hover:opacity-85 transition-opacity">
-              <h1 className="font-serif text-2xl sm:text-3xl font-black tracking-widest text-white uppercase drop-shadow-xs">
+              <h1 className="font-serif text-xl sm:text-2xl md:text-3xl font-black tracking-widest text-white uppercase drop-shadow-xs">
                 B E C O N
               </h1>
             </Link>
-            <span className="text-slate-400 font-bold text-xs border-l border-slate-700 pl-3 tracking-widest uppercase font-mono hidden sm:inline">
+            <span className="text-slate-400 font-bold text-xs border-l border-slate-700 pl-3 tracking-widest uppercase font-mono hidden md:inline">
               THE DAILY INTELLIGENCE GAZETTE
             </span>
           </div>
@@ -1196,13 +1208,12 @@ export default function Home() {
       </header>
 
       {/* 2. EDITION INDEX RIBBON (ALL SIGNALS IN ONE VIEW WITH PREV/NEXT CONTROLS & THEME SWITCHER) */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-2 shadow-2xs transition-colors duration-200">
-        <div className="max-w-[1600px] mx-auto flex items-center gap-2 sm:gap-3 font-mono text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-1.5 sm:py-2 shadow-2xs transition-colors duration-200">
+        <div className="max-w-[1600px] mx-auto flex items-center gap-1.5 sm:gap-3 font-mono text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
           {/* Label */}
-          <div className="flex items-center gap-1.5 text-slate-900 dark:text-slate-100 font-black shrink-0 pr-2 border-r border-slate-200 dark:border-slate-800 select-none">
-            <Layers className="w-4 h-4 text-slate-900 dark:text-amber-400" />
-            <span className="hidden sm:inline">EDITION COVERAGE:</span>
-            <span className="sm:hidden">COVERAGE:</span>
+          <div className="flex items-center gap-1 text-slate-900 dark:text-slate-100 font-black shrink-0 pr-1.5 sm:pr-2 border-r border-slate-200 dark:border-slate-800 select-none">
+            <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-900 dark:text-amber-400" />
+            <span className="hidden sm:inline">COVERAGE:</span>
           </div>
 
           {/* Previous Button */}
@@ -1217,10 +1228,10 @@ export default function Home() {
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {/* Topics Container with Hidden Scrollbar */}
+          {/* Topics Container with Hidden Scrollbar & Touch Panning */}
           <div
             ref={coverageScrollRef}
-            className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5"
+            className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5 touch-pan-x"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
@@ -1262,11 +1273,11 @@ export default function Home() {
             title="Scroll topics right"
             className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
           {/* Subtle Vertical Divider */}
-          <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0 mx-0.5 sm:mx-1"></div>
+          <div className="h-4 sm:h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0 mx-0.5 sm:mx-1"></div>
 
           {/* Theme Switch Toggle (On Sub-header Rightmost Position) */}
           <button
@@ -1276,23 +1287,23 @@ export default function Home() {
             onClick={toggleTheme}
             aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            className="relative inline-flex items-center h-7 w-14 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-300 ease-in-out focus:outline-none select-none bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-inner group"
+            className="relative inline-flex items-center h-6 w-11 sm:h-7 sm:w-14 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-300 ease-in-out focus:outline-none select-none bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-inner group"
           >
             {/* Left Track Icon (Sun) */}
-            <span className="absolute left-1.5 flex items-center justify-center pointer-events-none text-amber-500/70 dark:text-slate-600">
-              <Sun className="w-3.5 h-3.5" />
+            <span className="absolute left-1 sm:left-1.5 flex items-center justify-center pointer-events-none text-amber-500/70 dark:text-slate-600">
+              <Sun className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </span>
 
             {/* Right Track Icon (Moon) */}
-            <span className="absolute right-1.5 flex items-center justify-center pointer-events-none text-slate-400 dark:text-amber-300/70">
-              <Moon className="w-3.5 h-3.5" />
+            <span className="absolute right-1 sm:right-1.5 flex items-center justify-center pointer-events-none text-slate-400 dark:text-amber-300/70">
+              <Moon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </span>
 
             {/* Sliding Knob */}
             <span
-              className={`relative z-10 flex items-center justify-center w-6 h-6 rounded-full shadow-md transition-transform duration-300 ease-in-out ${
+              className={`relative z-10 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full shadow-md transition-transform duration-300 ease-in-out ${
                 isDarkMode
-                  ? "translate-x-7 bg-slate-800 border border-slate-600 text-amber-300"
+                  ? "translate-x-5 sm:translate-x-7 bg-slate-800 border border-slate-600 text-amber-300"
                   : "translate-x-0 bg-white border border-slate-200 text-amber-500"
               }`}
             >
@@ -1317,80 +1328,76 @@ export default function Home() {
         }`}
       >
       {/* 3. MULTI-COLUMN HIGH-DENSITY BROADSHEET WITH TOP SHOWCASE & FULL-WIDTH BENTO GRID */}
-      <main className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 pt-6">
-        {loading ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-pulse">
-            <div className="lg:col-span-5 h-[650px] bg-slate-200/60 dark:bg-slate-800/60 rounded-xl border border-slate-300 dark:border-slate-800"></div>
-            <div className="lg:col-span-7 h-[650px] bg-slate-200/60 dark:bg-slate-800/60 rounded-xl border border-slate-300 dark:border-slate-800"></div>
-          </div>
-        ) : (
-          <div className="space-y-8">
+      <main className="max-w-[1600px] w-full mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
+        <div className="space-y-6 sm:space-y-8">
+          
+          {/* TOP BALANCED SHOWCASE: #1 CRITICAL UPDATE (LEFT) + THE QUICK WIRE (RIGHT) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 pb-8 sm:pb-10 border-b-2 border-slate-900 dark:border-slate-800">
             
-            {/* TOP BALANCED SHOWCASE: #1 CRITICAL UPDATE (LEFT) + THE QUICK WIRE (RIGHT) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-10 border-b-2 border-slate-900 dark:border-slate-800">
-              
-              {/* TOP MOST IMPORTANT UPDATE (LEFT 5 COLS) */}
-              {leadStory && (
-                <div className="lg:col-span-5 flex flex-col">
-                  <div className="flex items-center justify-between border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 font-mono">
-                    <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase bg-rose-600 text-white shadow-xs">
-                      <Flame className="w-3.5 h-3.5" /> #1 CRITICAL UPDATE
-                    </span>
-                    <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase font-mono">
-                      • TOP SIGNAL
-                    </span>
-                  </div>
-                  {renderLeadSidebarCard(leadStory, getActionBadgeColor, leadImageUrl)}
-                </div>
-              )}
-
-              {/* DAILY DISPATCHES / QUICK WIRE + TELEMETRY (RIGHT 7 COLS) */}
-              <div className="lg:col-span-7 flex flex-col justify-between">
-                <div className="flex flex-col flex-1">
-                  <div className="border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 flex items-center justify-between font-mono">
-                    <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
-                      <Radio className="w-4 h-4 text-rose-500" /> THE QUICK WIRE • RAPID SIGNALS
-                    </span>
-                    <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded uppercase">
-                      DISPATCHES
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 gap-3.5 flex-1">
-                    {topWireStories.map((card, idx) =>
-                      renderBriefCard(
-                        card,
-                        getActionBadgeColor,
-                        idx < 4 ? idx + 2 : undefined
-                      )
-                    )}
-                  </div>
-                </div>
+            {/* TOP MOST IMPORTANT UPDATE (LEFT 5 COLS) */}
+            <div className="lg:col-span-5 flex flex-col">
+              <div className="flex items-center justify-between border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 font-mono">
+                <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase bg-rose-600 text-white shadow-xs">
+                  <Flame className="w-3.5 h-3.5" /> #1 CRITICAL UPDATE
+                </span>
+                <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase font-mono">
+                  • TOP SIGNAL
+                </span>
               </div>
-
+              {loading || !leadStory
+                ? renderLeadSkeleton()
+                : renderLeadSidebarCard(leadStory, getActionBadgeColor, leadImageUrl)}
             </div>
 
+            {/* DAILY DISPATCHES / QUICK WIRE + TELEMETRY (RIGHT 7 COLS) */}
+            <div className="lg:col-span-7 flex flex-col justify-between">
+              <div className="flex flex-col flex-1">
+                <div className="border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 flex items-center justify-between font-mono">
+                  <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
+                    <Radio className="w-4 h-4 text-rose-500" /> THE QUICK WIRE • RAPID SIGNALS
+                  </span>
+                  <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded uppercase">
+                    DISPATCHES
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 gap-3.5 flex-1">
+                  {loading || topWireStories.length === 0
+                    ? [2, 3, 4, 5].map((rank) => renderBriefSkeleton(rank))
+                    : topWireStories.map((card, idx) =>
+                        renderBriefCard(
+                          card,
+                          getActionBadgeColor,
+                          idx < 4 ? idx + 2 : undefined
+                        )
+                      )}
+                </div>
+              </div>
+            </div>
+
+          </div>
+
             {/* FULL-WIDTH BENTO EDITORIAL DECK: ARCHITECTURE & DEEP TAKES */}
-            <section className="flex flex-col space-y-6 pb-12 pt-2">
+            <section className="flex flex-col space-y-5 sm:space-y-6 pb-12 pt-2">
               <div
-                className={`sticky z-30 bg-[#FAF8F5] dark:bg-[#070b12] border-b-2 border-slate-900 dark:border-slate-800 transition-all duration-300 ease-in-out w-screen ml-[calc(-50vw+50%)] ${
-                  headerVisible ? "top-[57px] shadow-xs" : "top-0 shadow-md"
+                className={`sticky z-30 bg-[#FAF8F5] dark:bg-[#070b12] border-b-2 border-slate-900 dark:border-slate-800 transition-all duration-300 ease-in-out -mx-3 sm:-mx-6 px-3 sm:px-6 ${
+                  headerVisible ? "top-[50px] sm:top-[57px] shadow-xs" : "top-0 shadow-md"
                 }`}
               >
-                <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between font-mono gap-3">
-                  <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 dark:text-white flex items-center gap-2 shrink-0">
+                <div className="max-w-[1600px] mx-auto py-2 sm:py-3 flex flex-wrap items-center justify-between font-mono gap-2 sm:gap-3">
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 truncate max-w-[200px] sm:max-w-none">
                     <span className="font-serif font-black tracking-widest text-sm sm:text-base text-slate-950 dark:text-white">
                       BECON
                     </span>
                     <span className="text-slate-400 font-mono font-bold">//</span>
-                    <span className="font-mono font-black text-slate-900 dark:text-slate-100 text-xs sm:text-[13px] tracking-wide">
+                    <span className="font-mono font-black text-slate-900 dark:text-slate-100 text-xs sm:text-[13px] tracking-wide truncate">
                       {dailyHeading}
                     </span>
-                  </span>
+                  </div>
 
-                  {/* FAVORITE SUBJECT SEARCH FIELD (CRISP, NON-BLURRY, PROPER SPACING) */}
+                  {/* FAVORITE SUBJECT SEARCH FIELD (RESPONSIVE FULL-WIDTH ON MOBILE, FLEXIBLE ON DESKTOP) */}
                   <form
                     onSubmit={handleTopicSearch}
-                    className="flex-1 max-w-sm sm:max-w-md mx-2 relative flex items-center min-w-[260px]"
+                    className="w-full sm:flex-1 sm:max-w-sm md:max-w-md relative flex items-center min-w-0 order-3 sm:order-none mt-1 sm:mt-0"
                   >
                     <div className="relative w-full flex items-center">
                       <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 absolute left-3 pointer-events-none" />
@@ -1398,7 +1405,7 @@ export default function Home() {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search topic (e.g. Tax Laws, Retail, AI, Finance, Tech)..."
+                        placeholder="Search topic (e.g. AI, Retail, Tax, Cloud)..."
                         className="w-full pl-8 pr-20 py-1.5 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-amber-400 transition-all shadow-2xs"
                       />
                       {searchQuery && (
@@ -1427,9 +1434,10 @@ export default function Home() {
 
                   <div className="flex items-center gap-2 shrink-0">
                     {loadingRemaining ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                      <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                         <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-                        <span>AI SYNTHESIZING REMAINING TAKES...</span>
+                        <span className="hidden sm:inline">AI SYNTHESIZING REMAINING TAKES...</span>
+                        <span className="sm:hidden">SYNTHESIZING...</span>
                       </span>
                     ) : (
                       <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-bold hidden xl:inline">
@@ -1476,31 +1484,35 @@ export default function Home() {
               )}
 
               {/* FULL-WIDTH DYNAMIC BENTO GRID (GAPLESS GUARANTEE, SPANS ENTIRE WIDTH) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
                 {isSearchingTopic ? (
-                  <div className="col-span-1 md:col-span-2 xl:col-span-3 min-h-[300px] rounded-2xl bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-2 border-amber-400/80 flex flex-col items-center justify-center p-8 sm:p-12 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)] space-y-3">
-                    {/* Custom News-Loader GIF rendered in crisp white with subtle amber glow */}
-                    <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/News-Loader.gif"
-                        alt="Loading..."
-                        className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
-                        style={{ filter: "brightness(0) invert(1)" }}
-                      />
-                    </div>
+                  <>
+                    <div className="col-span-1 md:col-span-2 xl:col-span-3 min-h-[160px] rounded-2xl bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-2 border-amber-400/80 flex flex-col items-center justify-center p-6 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)] space-y-2">
+                      <div className="relative w-10 h-10 flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/News-Loader.gif"
+                          alt="Loading..."
+                          className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
+                          style={{ filter: "brightness(0) invert(1)" }}
+                        />
+                      </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-                      <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
-                        DISPATCHING AI NEWS FOR: {activeSearchTopic ? activeSearchTopic.toUpperCase() : searchQuery.toUpperCase()}
-                      </span>
-                    </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                        <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
+                          DISPATCHING AI NEWS FOR: {activeSearchTopic ? activeSearchTopic.toUpperCase() : searchQuery.toUpperCase()}
+                        </span>
+                      </div>
 
-                    <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
-                      Querying live multi-domain feeds & running AI synthesis…
-                    </p>
-                  </div>
+                      <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
+                        Querying live multi-domain feeds & running AI synthesis…
+                      </p>
+                    </div>
+                    {[2, 1, 1, 2, 3].map((span, idx) =>
+                      renderBentoSkeletonCard(span, idx)
+                    )}
+                  </>
                 ) : displayedBentoStories.length > 0 ? (
                   <>
                     {(() => {
@@ -1518,26 +1530,17 @@ export default function Home() {
                       });
                     })()}
                     {loadingRemaining && (
-                      <div className="col-span-1 md:col-span-2 xl:col-span-3 min-h-[220px] rounded-2xl bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-2 border-amber-400/80 flex flex-col items-center justify-center p-6 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)] space-y-2.5">
-                        <div className="relative w-12 h-12 flex items-center justify-center">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src="/News-Loader.gif"
-                            alt="Loading..."
-                            className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
-                            style={{ filter: "brightness(0) invert(1)" }}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-                          <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
-                            DISPATCHING REMAINING GAZETTE EDITIONS
-                          </span>
-                        </div>
-                        <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
-                          Synthesizing additional architectural signals, deep takes & action cards…
-                        </p>
-                      </div>
+                      <>
+                        {[2, 1, 1].map((span, idx) =>
+                          renderBentoSkeletonCard(span, idx + 10)
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : loading ? (
+                  <>
+                    {[2, 1, 1, 2, 3].map((span, idx) =>
+                      renderBentoSkeletonCard(span, idx)
                     )}
                   </>
                 ) : searchedStories !== null ? (
@@ -1557,38 +1560,19 @@ export default function Home() {
                     </button>
                   </div>
                 ) : loadingRemaining ? (
-                  <div className="col-span-1 md:col-span-2 xl:col-span-3 min-h-[300px] rounded-2xl bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-2 border-amber-400/80 flex flex-col items-center justify-center p-8 sm:p-12 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)] space-y-3">
-                    {/* Custom News-Loader GIF rendered in crisp white with subtle amber glow */}
-                    <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/News-Loader.gif"
-                        alt="Loading..."
-                        className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
-                        style={{ filter: "brightness(0) invert(1)" }}
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-                      <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
-                        DISPATCHING REMAINING GAZETTE EDITIONS
-                      </span>
-                    </div>
-
-                    <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
-                      Synthesizing additional architectural signals, deep takes & action cards…
-                    </p>
-                  </div>
+                  <>
+                    {[2, 1, 1, 2, 3].map((span, idx) =>
+                      renderBentoSkeletonCard(span, idx)
+                    )}
+                  </>
                 ) : null}
               </div>
             </section>
 
           </div>
-        )}
 
         {/* BOTTOM GAZETTE END DETECTOR & PULL PROMPT */}
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-12 pt-8 border-t-2 border-slate-300 dark:border-slate-800 flex flex-col items-center justify-center text-center">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-12 pt-8 border-t-2 border-slate-300 dark:border-slate-800 flex flex-col items-center justify-center text-center">
           <button
             type="button"
             onClick={triggerLoadMore}
@@ -1606,7 +1590,7 @@ export default function Home() {
         </div>
 
         {/* EDITORIAL FOOTER */}
-        <footer className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-16 pt-8 pb-12 border-t border-slate-300 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 dark:text-slate-400 font-mono text-xs">
+        <footer className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-16 pt-8 pb-12 border-t border-slate-300 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 dark:text-slate-400 font-mono text-xs">
           <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-serif font-black tracking-wider uppercase text-sm">
             <span>BECON INTELLIGENCE GAZETTE</span>
             <span className="text-slate-400 dark:text-slate-500 font-mono text-[11px] font-normal hidden sm:inline">• Not News. Updates You Can Act On.</span>
@@ -1684,6 +1668,233 @@ function renderStackTag(tag: string) {
   );
 }
 
+/* SKELETON RENDERER 1: #1 CRITICAL LEAD STORY SKELETON CARD */
+function renderLeadSkeleton() {
+  return (
+    <article className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between flex-1 h-full select-none">
+      <div>
+        {/* Top Badges & Inner Loader Indicator */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-rose-600 text-white uppercase tracking-wider shadow-xs">
+              LEAD // 01
+            </span>
+            <div className="h-5 w-20 bg-slate-200 dark:bg-slate-800 rounded-md animate-pulse"></div>
+            <div className="h-5 w-16 bg-slate-200 dark:bg-slate-800 rounded-md animate-pulse"></div>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/80 text-[10px] font-mono font-bold text-amber-700 dark:text-amber-400">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+            <span>AI SYNTHESIZING...</span>
+          </div>
+        </div>
+
+        {/* Headline Skeleton */}
+        <div className="space-y-2 mb-3.5">
+          <div className="h-6 sm:h-7 bg-slate-200 dark:bg-slate-800 rounded-md w-11/12 animate-pulse"></div>
+          <div className="h-6 sm:h-7 bg-slate-200 dark:bg-slate-800 rounded-md w-3/4 animate-pulse"></div>
+        </div>
+
+        {/* Hero Image Skeleton Box */}
+        <div className="relative w-full h-36 sm:h-44 rounded-lg my-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 flex flex-col items-center justify-center overflow-hidden gap-2">
+          <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/News-Loader.gif"
+              alt="Loading..."
+              className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_12px_rgba(251,191,36,0.35)]"
+              style={{ filter: "brightness(0) invert(1)" }}
+            />
+          </div>
+          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-mono text-[10px] sm:text-[11px] font-bold tracking-wider uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+            <span>Synthesizing Lead Intelligence</span>
+          </div>
+        </div>
+
+        {/* Key Signals Skeleton Box */}
+        <div className="mb-3.5 p-3 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 space-y-2">
+          <div className="flex items-center gap-1 text-[10px] font-mono font-extrabold text-slate-500 dark:text-slate-400">
+            <Pin className="w-3.5 h-3.5 text-rose-500" />
+            <span>EXTRACTING KEY SIGNALS:</span>
+          </div>
+          <div className="space-y-2 pl-1">
+            <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-full animate-pulse"></div>
+            <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-5/6 animate-pulse"></div>
+          </div>
+        </div>
+
+        {/* Impact Summary Skeleton */}
+        <div className="space-y-1.5 mb-4">
+          <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-full animate-pulse"></div>
+          <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-4/5 animate-pulse"></div>
+        </div>
+      </div>
+
+      {/* Footer Skeleton */}
+      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2.5">
+        <div className="h-4 w-28 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
+        <div className="h-7 w-24 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse"></div>
+      </div>
+    </article>
+  );
+}
+
+/* SKELETON RENDERER 2: QUICK WIRE SKELETON CARD (RIGHT 7 COLS) */
+function renderBriefSkeleton(rankNumber: number) {
+  return (
+    <article
+      key={`brief-skel-${rankNumber}`}
+      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 md:p-5 shadow-2xs flex flex-col justify-between h-full select-none"
+    >
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 dark:bg-slate-800 text-amber-300 border border-slate-800 dark:border-slate-700">
+              #{String(rankNumber).padStart(2, "0")}
+            </span>
+            <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
+          </div>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-[9px] font-mono font-bold text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+            <div className="w-3 h-3 relative flex items-center justify-center shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/News-Loader.gif"
+                alt="Loading..."
+                className="w-full h-full object-contain brightness-0 invert"
+                style={{ filter: "brightness(0) invert(1)" }}
+              />
+            </div>
+            <span>PARSING</span>
+          </div>
+        </div>
+
+        {/* Headline Skeleton */}
+        <div className="space-y-1.5 mb-2.5">
+          <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-full animate-pulse"></div>
+          <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-4/5 animate-pulse"></div>
+        </div>
+
+        {/* Center Loader Box with News-Loader.gif */}
+        <div className="relative w-full h-20 sm:h-24 md:h-28 rounded-lg my-2.5 border border-slate-200/90 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/60 flex flex-col items-center justify-center overflow-hidden gap-1.5 shadow-2xs">
+          <div className="relative w-8 h-8 flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/News-Loader.gif"
+              alt="Loading..."
+              className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_10px_rgba(251,191,36,0.35)]"
+              style={{ filter: "brightness(0) invert(1)" }}
+            />
+          </div>
+          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-mono text-[9.5px] font-bold tracking-wider uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+            <span>Dispatch #{String(rankNumber).padStart(2, "0")}</span>
+          </div>
+        </div>
+
+        {/* Impact Snippet Skeleton */}
+        <div className="pt-2 border-t border-dashed border-slate-100 dark:border-slate-800 space-y-1">
+          <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded w-4/5 animate-pulse"></div>
+        </div>
+      </div>
+
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between mt-3">
+        <div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
+        <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded-full animate-pulse"></div>
+      </div>
+    </article>
+  );
+}
+
+/* SKELETON RENDERER 3: BENTO DECK SKELETON CARD (FULL WIDTH BENTO GRID) */
+function renderBentoSkeletonCard(span: number, keyIndex: number) {
+  const isWide = span >= 2;
+  return (
+    <article
+      key={`bento-skel-${keyIndex}`}
+      className={`${
+        span === 3
+          ? "col-span-1 md:col-span-2 xl:col-span-3"
+          : isWide
+          ? "col-span-1 md:col-span-2 xl:col-span-2"
+          : "col-span-1"
+      } rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-xs flex flex-col justify-between select-none min-h-[190px] sm:min-h-[220px]`}
+    >
+      <div>
+        {/* Top Tag & Action */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-1.5">
+            <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
+            <div className="h-4 w-14 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-slate-500 dark:text-slate-400">
+            <div className="w-3 h-3 relative flex items-center justify-center shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/News-Loader.gif"
+                alt="Loading..."
+                className="w-full h-full object-contain brightness-0 invert"
+                style={{ filter: "brightness(0) invert(1)" }}
+              />
+            </div>
+            <span>AI SYNTHESIZING</span>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        {isWide ? (
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start">
+            <div className="w-full sm:w-48 h-32 sm:h-36 rounded-lg bg-slate-100 dark:bg-slate-800/80 shrink-0 flex flex-col items-center justify-center border border-slate-200 dark:border-slate-800 gap-1.5">
+              <div className="relative w-8 h-8 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/News-Loader.gif"
+                  alt="Loading..."
+                  className="w-full h-full object-contain brightness-0 invert drop-shadow-sm"
+                  style={{ filter: "brightness(0) invert(1)" }}
+                />
+              </div>
+              <span className="text-[9.5px] font-mono font-bold text-amber-500 uppercase tracking-wider">AI Thinking</span>
+            </div>
+            <div className="flex-1 w-full space-y-2">
+              <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded w-11/12 animate-pulse"></div>
+              <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded w-3/4 animate-pulse"></div>
+              <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-full mt-2 animate-pulse"></div>
+              <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-5/6 animate-pulse"></div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            <div className="h-4 sm:h-5 bg-slate-200 dark:bg-slate-800 rounded w-full animate-pulse"></div>
+            <div className="h-4 sm:h-5 bg-slate-200 dark:bg-slate-800 rounded w-4/5 animate-pulse"></div>
+
+            {/* Center Loader Box for square bento card */}
+            <div className="relative w-full h-24 sm:h-28 rounded-lg my-2 border border-slate-200/90 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/60 flex flex-col items-center justify-center overflow-hidden gap-1.5 shadow-2xs">
+              <div className="relative w-8 h-8 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/News-Loader.gif"
+                  alt="Loading..."
+                  className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_10px_rgba(251,191,36,0.35)]"
+                  style={{ filter: "brightness(0) invert(1)" }}
+                />
+              </div>
+              <span className="text-[9.5px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Synthesizing Story</span>
+            </div>
+
+            <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-5/6 animate-pulse"></div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between mt-4">
+        <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded-full animate-pulse"></div>
+        <div className="h-6 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
+      </div>
+    </article>
+  );
+}
+
 /* RENDER HELPER 1: TOP MOST IMPORTANT UPDATE (COMPACT EDITORIAL LEAD BOX ON LEFT) */
 function renderLeadSidebarCard(
   card: BriefingCard,
@@ -1693,7 +1904,7 @@ function renderLeadSidebarCard(
   return (
     <article
       key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-5 sm:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between flex-1 h-full"
+      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between flex-1 h-full"
     >
       <div>
         {/* Top Badges & Actions */}
@@ -1712,7 +1923,7 @@ function renderLeadSidebarCard(
         </div>
 
         {/* Headline */}
-        <h3 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-slate-50 font-serif tracking-tight leading-tight mb-3">
+        <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-950 dark:text-slate-50 font-serif tracking-tight leading-tight mb-3">
           <a
             href={card.source_url}
             target="_blank"
@@ -1795,7 +2006,7 @@ function renderRectangleCard(
         isFullWidth
           ? "col-span-1 md:col-span-2 xl:col-span-3"
           : "col-span-1 md:col-span-2 xl:col-span-2"
-      } rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-5 sm:p-6 shadow-xs hover:shadow-md flex flex-col justify-between`}
+      } rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-4 sm:p-5 md:p-6 shadow-xs hover:shadow-md flex flex-col justify-between`}
     >
       <div>
         {/* Top Header Row */}
@@ -1923,7 +2134,7 @@ function renderSquareCard(
   return (
     <article
       key={card.id}
-      className="col-span-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-5 shadow-xs hover:shadow-md flex flex-col justify-between"
+      className="col-span-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-4 sm:p-5 shadow-xs hover:shadow-md flex flex-col justify-between"
     >
       <div>
         {/* Top Row with Tag and Direct Resource Icon Link */}
@@ -2014,7 +2225,7 @@ function renderBriefCard(
   return (
     <article
       key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col justify-between h-full"
+      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 md:p-5 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col justify-between h-full"
     >
       <div>
         <div className="flex items-center justify-between gap-2 mb-2.5">

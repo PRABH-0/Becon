@@ -35,24 +35,10 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950/30 backdrop-blur-[3px] transition-all duration-200 animate-in fade-in select-none"
+          className="fixed top-0 left-0 right-0 h-1 bg-transparent overflow-hidden z-[10000] pointer-events-none"
         >
           {/* Top edge progress bar */}
-          <div className="fixed top-0 left-0 right-0 h-1 bg-transparent overflow-hidden z-[10000]">
-            <div className="w-1/2 h-full bg-gradient-to-r from-amber-400 via-rose-500 to-indigo-500 rounded-full animate-loader-shimmer" />
-          </div>
-
-          {/* Centered News-Loader.gif */}
-          <div className="flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
-            {/* Custom News-Loader GIF rendered in crisp white */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/News-Loader.gif"
-              alt="Loading..."
-              className="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-md brightness-0 invert"
-              style={{ filter: "brightness(0) invert(1)" }}
-            />
-          </div>
+          <div className="w-1/2 h-full bg-gradient-to-r from-amber-400 via-rose-500 to-indigo-500 rounded-full animate-loader-shimmer" />
         </div>
       )}
     </LoadingContext.Provider>

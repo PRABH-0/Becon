@@ -6,6 +6,8 @@ from google.genai import types
 from app.schemas import BriefingCardContent, ActionGuidance, ChatResponse, ChatMessage
 
 # 1. Load variables from .env file into OS environment variables
+dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(dotenv_path)
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
@@ -13,7 +15,7 @@ if not api_key:
     raise ValueError("GEMINI_API_KEY is missing from .env file!")
 
 client = genai.Client(api_key=api_key)
-MODEL_NAME = "gemini-3.1-flash-lite"
+MODEL_NAME = "gemini-flash-lite-latest"
 
 
 def generate_action_card(
@@ -63,7 +65,8 @@ def generate_action_card(
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=BriefingCardContent,
-                    temperature=0.3,
+                    temperature=0.2,
+                    max_output_tokens=650,
                 ),
             )
             

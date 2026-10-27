@@ -3,11 +3,15 @@ from datetime import datetime
 import re
 import html
 import urllib.parse
+import socket
 from typing import List, Dict, Tuple
 import feedparser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.schemas import BriefingCard
 from app.ai_service import generate_action_card
+
+# Set socket timeout to prevent any hanging feeds from stalling generation
+socket.setdefaulttimeout(7.0)
 
 # Comprehensive mapping from popular topics and industries to live RSS feeds
 TOPIC_FEED_MAP: Dict[str, Tuple[str, str]] = {
