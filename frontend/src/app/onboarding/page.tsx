@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bot, User, ArrowRight, Sparkles } from "lucide-react";
 import { useLoader } from "@/context/LoadingContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -94,20 +95,25 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-slate-800 font-sans flex flex-col">
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans flex flex-col transition-colors duration-200">
       {/* Header */}
-      <header className="bg-slate-950 text-slate-200 py-4 px-6 border-b border-slate-800 shadow-sm sticky top-0 z-50">
+      <header className="bg-slate-950 text-slate-200 py-3.5 px-4 sm:px-6 border-b border-slate-800 shadow-sm sticky top-0 z-50">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="font-serif text-2xl font-black tracking-widest text-white uppercase flex items-center gap-2">
-              <Bot className="text-rose-500" /> B E C O N <span className="font-mono text-xs text-slate-400 bg-slate-900 px-2 py-0.5 rounded ml-2 hidden sm:inline">AI ONBOARDING</span>
-            </h1>
+            <Link href="/" className="hover:opacity-85 transition-opacity">
+              <h1 className="font-serif text-xl sm:text-2xl font-black tracking-widest text-white uppercase flex items-center gap-2">
+                <Bot className="text-rose-500" /> B E C O N <span className="font-mono text-xs text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded ml-2 hidden sm:inline">AI ONBOARDING</span>
+              </h1>
+            </Link>
           </div>
-          {onboardingComplete && (
-            <div className="text-emerald-400 font-mono text-xs font-bold flex items-center gap-1.5 animate-pulse">
-              <Sparkles className="w-4 h-4" /> PROFILE COMPLETE
-            </div>
-          )}
+          <div className="flex items-center gap-3 sm:gap-4">
+            {onboardingComplete && (
+              <div className="text-emerald-400 font-mono text-xs font-bold flex items-center gap-1.5 animate-pulse">
+                <Sparkles className="w-4 h-4" /> PROFILE COMPLETE
+              </div>
+            )}
+            <ThemeToggle size="sm" />
+          </div>
         </div>
       </header>
 
@@ -120,12 +126,12 @@ export default function OnboardingPage() {
               <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-4 shadow-sm ${
                 msg.role === 'user' 
                   ? 'bg-indigo-600 text-white rounded-tr-sm' 
-                  : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm shadow-md'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-sm shadow-md'
               }`}>
                 {msg.role !== 'user' && (
-                  <div className="flex items-center gap-2 mb-1.5 border-b border-slate-100 pb-1.5">
+                  <div className="flex items-center gap-2 mb-1.5 border-b border-slate-100 dark:border-slate-800 pb-1.5">
                     <Bot className="w-4 h-4 text-rose-500" />
-                    <span className="text-[10px] font-black font-mono tracking-widest text-slate-400 uppercase">Becon AI</span>
+                    <span className="text-[10px] font-black font-mono tracking-widest text-slate-400 dark:text-slate-500 uppercase">Becon AI</span>
                   </div>
                 )}
                 <div className="text-sm font-medium leading-relaxed whitespace-pre-wrap">
@@ -137,13 +143,13 @@ export default function OnboardingPage() {
 
           {isTyping && (
             <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-md flex items-center gap-3">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl rounded-tl-sm p-4 shadow-md flex items-center gap-3">
                 <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  <div className="w-2 h-2 bg-slate-300 dark:bg-slate-700 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 bg-slate-300 dark:bg-slate-700 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 bg-slate-300 dark:bg-slate-700 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                 </div>
-                <span className="text-xs font-mono font-bold text-slate-400">Becon AI is thinking...</span>
+                <span className="text-xs font-mono font-bold text-slate-400 dark:text-slate-500">Becon AI is thinking...</span>
               </div>
             </div>
           )}
@@ -151,7 +157,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* Input Area */}
-        <div className="pt-4 bg-[#FAF8F5] sticky bottom-0">
+        <div className="pt-4 bg-[#FAF8F5] dark:bg-[#070b12] sticky bottom-0 transition-colors">
           <form onSubmit={handleSend} className="relative flex items-center">
             <input
               type="text"
@@ -159,7 +165,7 @@ export default function OnboardingPage() {
               onChange={(e) => setInput(e.target.value)}
               disabled={isTyping || onboardingComplete}
               placeholder={onboardingComplete ? "Redirecting to your profile..." : "Type your answer..."}
-              className="w-full bg-white border-2 border-slate-300 focus:border-indigo-600 rounded-xl pl-4 pr-14 py-4 text-slate-900 font-semibold shadow-lg transition-colors outline-none disabled:bg-slate-100 disabled:text-slate-400"
+              className="w-full bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 focus:border-indigo-600 dark:focus:border-amber-400 rounded-xl pl-4 pr-14 py-4 text-slate-900 dark:text-slate-100 font-semibold shadow-lg transition-colors outline-none disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
             <button
               type="submit"
@@ -169,7 +175,7 @@ export default function OnboardingPage() {
               <ArrowRight className="w-5 h-5" />
             </button>
           </form>
-          <div className="text-center mt-3 text-[10px] font-mono text-slate-400 font-bold tracking-widest uppercase">
+          <div className="text-center mt-3 text-[10px] font-mono text-slate-400 dark:text-slate-500 font-bold tracking-widest uppercase">
             Powered by Becon AI Intelligence
           </div>
         </div>

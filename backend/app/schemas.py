@@ -88,6 +88,16 @@ class UserProfileBase(BaseModel):
         description="Synthesis tone and analytical depth",
         examples=["Architectural Analysis (Deep Tech)"]
     )
+    picture_url: str | None = Field(
+        default=None,
+        description="Avatar picture URL (e.g. from Gmail/Google)",
+        examples=["https://lh3.googleusercontent.com/a/..."]
+    )
+    auth_provider: str | None = Field(
+        default="local",
+        description="Authentication provider: 'local', 'google', or 'guest'",
+        examples=["google"]
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -157,6 +167,12 @@ class UserRegister(BaseModel):
             ]
         }
     }
+
+class SupabaseAuthSync(BaseModel):
+    email: str = Field(..., description="User email from Supabase Auth", examples=["prabhjot@gmail.com"])
+    name: str | None = Field(default=None, description="User full name from OAuth", examples=["Prabhjot Singh"])
+    picture_url: str | None = Field(default=None, description="Gmail / Google avatar URL", examples=["https://lh3.googleusercontent.com/a/..."])
+    provider: str = Field(default="google", description="Auth provider ('google', etc.)", examples=["google"])
 
 class ChatMessage(BaseModel):
     role: str = Field(

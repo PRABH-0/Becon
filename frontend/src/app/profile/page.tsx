@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -306,7 +307,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-slate-800 font-sans selection:bg-slate-900 selection:text-white pb-20">
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-20 transition-colors duration-200">
       {/* 1. HEADER BAR */}
       <header className="bg-slate-950 text-slate-200 py-3.5 px-4 sm:px-6 border-b border-slate-800 shadow-sm sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-4">
@@ -320,13 +321,14 @@ export default function ProfilePage() {
               AI PERSONALIZATION & USER PROFILE
             </span>
           </div>
-          <div className="flex items-center gap-4 font-mono">
+          <div className="flex items-center gap-3 sm:gap-4 font-mono">
             <Link
               href="/"
-              className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 font-bold px-4 py-1.5 rounded-lg text-xs tracking-wider transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+              className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 font-bold px-3 sm:px-4 py-1.5 rounded-lg text-xs tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 shadow-xs cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" /><span>Return to Daily Gazette</span>
+              <ArrowLeft className="w-4 h-4" /><span className="hidden sm:inline">Return to Daily Gazette</span><span className="sm:hidden">Gazette</span>
             </Link>
+            <ThemeToggle size="sm" />
             <button
               type="button"
               onClick={() => {
@@ -354,7 +356,7 @@ export default function ProfilePage() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 mt-10">
         {/* NEW ACCOUNT SETUP ONBOARDING BANNER */}
         {isSetupMode && (
-          <div className="mb-8 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-slate-900 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="mb-8 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-900 dark:to-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="flex items-start gap-3.5">
               <div className="w-10 h-10 rounded-xl bg-slate-950 text-amber-300 font-mono font-black text-lg flex items-center justify-center shrink-0 shadow-sm border border-slate-800">
                 ★
@@ -368,10 +370,10 @@ export default function ProfilePage() {
                     NEW ACCOUNT CREATED
                   </span>
                 </div>
-                <h3 className="font-serif font-black text-lg sm:text-xl text-slate-950 mt-1">
+                <h3 className="font-serif font-black text-lg sm:text-xl text-slate-950 dark:text-white mt-1">
                   Select Your Role, Profession & Interested Topics
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-700 font-medium mt-0.5 max-w-2xl">
+                <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-medium mt-0.5 max-w-2xl">
                   Pick the topics, industries, and focus areas you care about (e.g. Accounting, Retail, Business, Tech). When you hit Save, Becon AI will personalize your morning intelligence gazette and launch your feed!
                 </p>
               </div>
@@ -382,12 +384,12 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <div className="border-b-2 border-slate-900 pb-4 mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div className="border-b-2 border-slate-900 dark:border-slate-800 pb-4 mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl sm:text-4xl font-black font-serif text-slate-950 tracking-tight leading-none mb-1">
+            <h2 className="text-3xl sm:text-4xl font-black font-serif text-slate-950 dark:text-white tracking-tight leading-none mb-1">
               User Profile & AI Personalization
             </h2>
-            <p className="text-slate-600 font-normal text-sm sm:text-base">
+            <p className="text-slate-600 dark:text-slate-400 font-normal text-sm sm:text-base">
               Tailor how Becon&apos;s AI engine reads breaking industry updates, aligns with your profession & interests, and constructs your personalized action briefings.
             </p>
           </div>
@@ -396,40 +398,40 @@ export default function ProfilePage() {
         <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
           {/* LEFT COLUMN: BASIC USER & PROFESSIONAL DETAILS (5 COLUMNS) */}
-          <section className="lg:col-span-5 space-y-6 bg-white border-2 border-slate-900 p-6 sm:p-8 rounded-2xl shadow-md h-fit">
-            <div className="border-b border-slate-200 pb-3 font-mono flex items-center justify-between">
-              <span className="text-xs font-black uppercase tracking-widest text-slate-950 flex items-center gap-2">
+          <section className="lg:col-span-5 space-y-6 bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-6 sm:p-8 rounded-2xl shadow-md h-fit">
+            <div className="border-b border-slate-200 dark:border-slate-800 pb-3 font-mono flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-950 dark:text-white flex items-center gap-2">
                 <span><User className="w-4 h-4" /></span> USER & PROFESSIONAL DETAILS
               </span>
-              <span className="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded uppercase">
+              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold px-2 py-0.5 rounded uppercase">
                 IDENTITY
               </span>
             </div>
 
             <div className="space-y-4 font-sans text-sm">
               <div>
-                <label className="block text-xs font-bold font-mono text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Full Name
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg px-3.5 py-2 text-slate-950 font-semibold text-sm transition-colors outline-none"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 rounded-lg px-3.5 py-2 text-slate-950 dark:text-slate-100 font-semibold text-sm transition-colors outline-none shadow-xs"
                   placeholder="Enter your name"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold font-mono text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Primary Profession / Role
                 </label>
                 <input
                   type="text"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg px-3.5 py-2 text-slate-950 font-semibold text-sm transition-colors outline-none"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 rounded-lg px-3.5 py-2 text-slate-950 dark:text-slate-100 font-semibold text-sm transition-colors outline-none shadow-xs"
                   placeholder="e.g. Accountant, Shop Owner, Software Engineer, Manager"
                   required
                 />
@@ -441,8 +443,8 @@ export default function ProfilePage() {
                       onClick={() => setRole(r)}
                       className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
                         role === r
-                          ? "bg-slate-900 text-amber-300 border-slate-900 shadow-2xs"
-                          : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                          ? "bg-slate-900 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border-slate-900 dark:border-amber-400 shadow-2xs"
+                          : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                       }`}
                     >
                       {r}
@@ -455,26 +457,26 @@ export default function ProfilePage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold font-mono text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Email Address (For Daily Gazette Digest)
                 </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg px-3.5 py-2 text-slate-950 font-semibold text-sm transition-colors outline-none"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 rounded-lg px-3.5 py-2 text-slate-950 dark:text-slate-100 font-semibold text-sm transition-colors outline-none shadow-xs"
                   placeholder="you@example.com"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold font-mono text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Experience Level
                 </label>
                 <select
                   value={experience}
                   onChange={(e) => setExperience(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-lg px-3.5 py-2 text-slate-950 font-semibold text-sm transition-colors outline-none cursor-pointer"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 rounded-lg px-3.5 py-2 text-slate-950 dark:text-slate-100 font-semibold text-sm transition-colors outline-none cursor-pointer shadow-xs"
                 >
                   <option value="Entry / Beginner (0-2 Years)">Entry / Beginner (0-2 Years)</option>
                   <option value="Mid-Level / Established (3-5 Years)">Mid-Level / Established (3-5 Years)</option>
@@ -484,24 +486,24 @@ export default function ProfilePage() {
               </div>
             </div>
             
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-300 font-mono text-xs space-y-2">
-              <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-300 dark:border-slate-800 font-mono text-xs space-y-2">
+              <div className="font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                 <span><Shield className="w-4 h-4" /></span> PRIVACY GUARANTEE
               </div>
-              <p className="text-slate-600 text-[11px] leading-relaxed font-sans font-medium">
+              <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed font-sans font-medium">
                 Your profile settings are kept locally in your browser storage and transmitted directly to your private AI processing endpoint. Zero third-party telemetry.
               </p>
             </div>
           </section>
 
           {/* RIGHT COLUMN: AI INTEL & TOPIC PREFERENCES (7 COLUMNS) */}
-          <section className="lg:col-span-7 space-y-8 bg-white border-2 border-slate-900 p-6 sm:p-8 rounded-2xl shadow-md flex flex-col justify-between">
+          <section className="lg:col-span-7 space-y-8 bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-6 sm:p-8 rounded-2xl shadow-md flex flex-col justify-between">
             <div className="space-y-6">
-              <div className="border-b border-slate-200 pb-3 font-mono flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-black uppercase tracking-widest text-slate-950 flex items-center gap-2">
+              <div className="border-b border-slate-200 dark:border-slate-800 pb-3 font-mono flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-black uppercase tracking-widest text-slate-950 dark:text-white flex items-center gap-2">
                   <span><Target className="w-4 h-4" /></span> WHAT ARE YOU INTERESTED IN MOST? (SELECT TOPICS)
                 </span>
-                <span className="text-[10px] bg-indigo-100 text-indigo-950 border border-indigo-200 font-bold px-2 py-0.5 rounded uppercase">
+                <span className="text-[10px] bg-indigo-100 dark:bg-indigo-950/70 text-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold px-2 py-0.5 rounded uppercase">
                   AI TOPICS & FOCUS
                 </span>
               </div>
@@ -513,14 +515,14 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              <p className="text-xs sm:text-sm text-slate-600 font-medium">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium">
                 Search or click topics below to highlight what Becon&apos;s live AI engine should prioritize for your daily intelligence feed:
               </p>
 
               {/* ACTIVE FOCUS TOPICS / CURRENTLY SELECTED TOPICS */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                     Active Focus Topics ({interests.length} Selected)
                   </span>
@@ -606,7 +608,7 @@ export default function ProfilePage() {
                       }
                     }}
                     onFocus={() => topicSearch.trim() && setShowSuggestions(true)}
-                    className="w-full bg-slate-50 border border-slate-300 focus:border-slate-900 focus:bg-white rounded-xl pl-10 pr-10 py-2.5 text-slate-950 font-semibold text-sm transition-all outline-none placeholder:text-slate-400 placeholder:font-medium shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 rounded-xl pl-10 pr-10 py-2.5 text-slate-950 dark:text-slate-100 font-semibold text-sm transition-all outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
                     placeholder="Type to search or complete topics… e.g. tax, retail, finance, inventory, ai"
                     autoComplete="off"
                   />
@@ -624,7 +626,7 @@ export default function ProfilePage() {
 
                 {/* SUGGESTIONS DROPDOWN */}
                 {showSuggestions && topicSearch.trim() && (
-                  <div className="absolute z-30 left-0 right-0 mt-1.5 bg-white border-2 border-slate-900 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="absolute z-30 left-0 right-0 mt-1.5 bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
                     {/* DROPDOWN HEADER */}
                     <div className="px-4 py-2 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -728,8 +730,8 @@ export default function ProfilePage() {
                         onClick={() => toggleInterest(topic)}
                         className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer border shadow-2xs flex items-center gap-1.5 ${
                           isSelected
-                            ? "bg-slate-950 text-amber-300 border-slate-950 shadow-sm"
-                            : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-300 hover:border-slate-400"
+                            ? "bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border-slate-950 dark:border-amber-400 shadow-sm"
+                            : "bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-slate-400"
                         }`}
                       >
                         <span>{isSelected ? "✓" : "+"}</span>
@@ -740,11 +742,11 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="pt-6 border-t border-slate-200 space-y-4">
-                <div className="font-mono text-xs font-black uppercase tracking-widest text-slate-950 flex items-center gap-2">
+              <div className="pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                <div className="font-mono text-xs font-black uppercase tracking-widest text-slate-950 dark:text-white flex items-center gap-2">
                   <span><MessageSquare className="w-4 h-4" /></span> CUSTOM AI INSTRUCTION PROMPT
                 </div>
-                <p className="text-xs sm:text-sm text-slate-600 font-medium">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium">
                   Tell the AI engine how you want it to format and analyze industry news items for you:
                 </p>
                 <textarea
@@ -757,7 +759,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="pt-4 space-y-3">
-                <label className="block text-xs font-bold font-mono text-slate-700 uppercase tracking-wider">
+                <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Action Card Tone & Depth Density
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -772,8 +774,8 @@ export default function ProfilePage() {
                       onClick={() => setAiTone(tone)}
                       className={`p-3 rounded-xl border text-left text-xs font-mono font-bold tracking-wider cursor-pointer transition-all ${
                         aiTone === tone
-                          ? "bg-indigo-50 border-2 border-indigo-700 text-indigo-950 font-black shadow-xs"
-                          : "bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100"
+                          ? "bg-indigo-50 dark:bg-indigo-950/50 border-2 border-indigo-700 dark:border-indigo-500 text-indigo-950 dark:text-indigo-200 font-black shadow-xs"
+                          : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
@@ -787,8 +789,8 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-8 pt-6 border-t-2 border-slate-900 flex flex-wrap items-center justify-between gap-4 font-mono">
-              <span className="text-xs font-bold text-slate-500">
+            <div className="mt-8 pt-6 border-t-2 border-slate-900 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 font-mono">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isSetupMode ? "Ready to launch your personalized intelligence deck?" : "Ready to deploy preferences to Becon AI?"}
               </span>
               <button

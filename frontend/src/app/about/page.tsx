@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Sparkles,
   ArrowRight,
@@ -125,7 +126,7 @@ export default function AboutPage() {
   const currentCard = SAMPLE_CARDS[selectedRole];
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-slate-800 font-sans flex flex-col selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans flex flex-col selection:bg-slate-900 selection:text-white transition-colors duration-200">
       {/* 1. TOP EDITORIAL HEADER BAR */}
       <header className="bg-slate-950 text-slate-200 py-3.5 px-4 sm:px-6 border-b border-slate-800 sticky top-0 z-50 backdrop-blur-md bg-opacity-95 shadow-md">
         <div className="max-w-[1500px] mx-auto flex items-center justify-between gap-4">
@@ -162,6 +163,7 @@ export default function AboutPage() {
             >
               Profile & Stack
             </Link>
+            <ThemeToggle size="sm" />
             <Link
               href="/login"
               className="px-3.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black tracking-wider uppercase transition-all shadow-xs cursor-pointer"
@@ -242,13 +244,13 @@ export default function AboutPage() {
       {/* 3. THE PROBLEM VS BECON (COMPARISON TABLE) */}
       <section className="py-16 px-4 sm:px-6 max-w-6xl mx-auto w-full">
         <div className="text-center mb-12">
-          <span className="text-xs font-mono font-bold tracking-widest uppercase text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded">
+          <span className="text-xs font-mono font-bold tracking-widest uppercase text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 px-2.5 py-1 rounded">
             THE PARADIGM SHIFT
           </span>
-          <h3 className="font-serif text-2xl sm:text-4xl font-black text-slate-950 mt-3">
+          <h3 className="font-serif text-2xl sm:text-4xl font-black text-slate-950 dark:text-white mt-3">
             Why Developer News Feeds Are Broken
           </h3>
-          <p className="text-slate-600 max-w-2xl mx-auto mt-2 text-sm sm:text-base">
+          <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mt-2 text-sm sm:text-base">
             Modern software engineers are bombarded with hot takes, duplicate press releases, and
             engagement farming algorithms that bury actual breaking changes.
           </p>
@@ -256,16 +258,16 @@ export default function AboutPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Traditional Feeds */}
-          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-300 shadow-sm flex flex-col justify-between">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-8 border border-slate-300 dark:border-slate-800 shadow-sm flex flex-col justify-between">
             <div>
-              <div className="flex items-center gap-2 mb-4 text-rose-600 font-mono text-xs font-bold uppercase tracking-wider">
+              <div className="flex items-center gap-2 mb-4 text-rose-600 dark:text-rose-400 font-mono text-xs font-bold uppercase tracking-wider">
                 <XCircle className="w-4 h-4" />
                 <span>Traditional Tech Feeds & Social Feeds</span>
               </div>
-              <h4 className="font-serif text-xl font-bold text-slate-900 mb-4">
+              <h4 className="font-serif text-xl font-bold text-slate-900 dark:text-slate-100 mb-4">
                 Built to maximize your screen time
               </h4>
-              <ul className="space-y-3.5 text-sm text-slate-600">
+              <ul className="space-y-3.5 text-sm text-slate-600 dark:text-slate-300">
                 <li className="flex items-start gap-2.5">
                   <span className="text-rose-500 font-bold shrink-0">✕</span>
                   <span><strong>Same feed for everyone:</strong> A junior web designer and a senior cloud SRE see the exact same generic headline.</span>
@@ -284,7 +286,7 @@ export default function AboutPage() {
                 </li>
               </ul>
             </div>
-            <div className="mt-6 pt-4 border-t border-slate-100 font-mono text-xs text-slate-400">
+            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 font-mono text-xs text-slate-400 dark:text-slate-500">
               Result: 45 minutes lost to mindless scrolling, zero code changes made.
             </div>
           </div>
@@ -327,16 +329,16 @@ export default function AboutPage() {
       </section>
 
       {/* 4. INTERACTIVE ACTION CARD ANATOMY */}
-      <section className="py-16 px-4 sm:px-6 bg-white border-y border-slate-200">
+      <section className="py-16 px-4 sm:px-6 bg-white dark:bg-[#0a0f1d] border-y border-slate-200 dark:border-slate-800 transition-colors">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10">
-            <span className="text-xs font-mono font-bold tracking-widest uppercase text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded">
+            <span className="text-xs font-mono font-bold tracking-widest uppercase text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded">
               INTERACTIVE DEMONSTRATION
             </span>
-            <h3 className="font-serif text-2xl sm:text-4xl font-black text-slate-950 mt-3">
+            <h3 className="font-serif text-2xl sm:text-4xl font-black text-slate-950 dark:text-white mt-3">
               The 4-Part Action Card Anatomy
             </h3>
-            <p className="text-slate-600 max-w-2xl mx-auto mt-2 text-sm sm:text-base">
+            <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mt-2 text-sm sm:text-base">
               Every update in Becon adheres to a strict editorial schema enforced by Google Gemini AI.
               Switch roles below to inspect how the same event is analyzed for different stacks.
             </p>
@@ -348,8 +350,8 @@ export default function AboutPage() {
                 onClick={() => setSelectedRole("frontend")}
                 className={`px-3.5 py-2 rounded-xl border transition-all cursor-pointer font-bold ${
                   selectedRole === "frontend"
-                    ? "bg-slate-950 text-amber-300 border-slate-900 shadow-sm"
-                    : "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-300"
+                    ? "bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border-slate-900 dark:border-amber-400 shadow-sm"
+                    : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700"
                 }`}
               >
                 Frontend (React / Next.js)
@@ -359,8 +361,8 @@ export default function AboutPage() {
                 onClick={() => setSelectedRole("devops")}
                 className={`px-3.5 py-2 rounded-xl border transition-all cursor-pointer font-bold ${
                   selectedRole === "devops"
-                    ? "bg-slate-950 text-amber-300 border-slate-900 shadow-sm"
-                    : "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-300"
+                    ? "bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border-slate-900 dark:border-amber-400 shadow-sm"
+                    : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700"
                 }`}
               >
                 DevOps & Cloud (Kubernetes)
@@ -370,8 +372,8 @@ export default function AboutPage() {
                 onClick={() => setSelectedRole("dotnet")}
                 className={`px-3.5 py-2 rounded-xl border transition-all cursor-pointer font-bold ${
                   selectedRole === "dotnet"
-                    ? "bg-slate-950 text-amber-300 border-slate-900 shadow-sm"
-                    : "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-300"
+                    ? "bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border-slate-900 dark:border-amber-400 shadow-sm"
+                    : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700"
                 }`}
               >
                 Mobile & .NET (.NET MAUI)
@@ -381,8 +383,8 @@ export default function AboutPage() {
                 onClick={() => setSelectedRole("finance")}
                 className={`px-3.5 py-2 rounded-xl border transition-all cursor-pointer font-bold ${
                   selectedRole === "finance"
-                    ? "bg-slate-950 text-amber-300 border-slate-900 shadow-sm"
-                    : "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-300"
+                    ? "bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border-slate-900 dark:border-amber-400 shadow-sm"
+                    : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700"
                 }`}
               >
                 Finance & Tax (GST / ERP)
@@ -391,39 +393,39 @@ export default function AboutPage() {
           </div>
 
           {/* Action Card Showcase */}
-          <div className="max-w-3xl mx-auto rounded-2xl bg-white border-2 border-slate-900 shadow-xl p-6 sm:p-8">
+          <div className="max-w-3xl mx-auto rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 shadow-xl p-6 sm:p-8">
             {/* Header Meta */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded bg-slate-950 text-amber-300">
+                <span className="font-mono text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded bg-slate-950 dark:bg-slate-800 text-amber-300 border border-transparent dark:border-slate-700">
                   {currentCard.category}
                 </span>
                 <span className={`font-mono text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${currentCard.actionColor}`}>
                   {currentCard.actionType}
                 </span>
               </div>
-              <div className="font-mono text-xs text-slate-500 flex items-center gap-1.5">
+              <div className="font-mono text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                 <span>Role:</span>
-                <strong className="text-slate-900 font-semibold">{currentCard.role}</strong>
+                <strong className="text-slate-900 dark:text-slate-200 font-semibold">{currentCard.role}</strong>
               </div>
             </div>
 
             {/* Title */}
-            <h4 className="font-serif text-xl sm:text-2xl font-black text-slate-950 mt-4 mb-5 leading-snug">
+            <h4 className="font-serif text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-4 mb-5 leading-snug">
               {currentCard.title}
             </h4>
 
             {/* 4 Sections Breakdown */}
             <div className="space-y-4 font-sans text-sm">
               {/* 1. What Happened */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center gap-1.5 text-xs font-mono font-extrabold uppercase tracking-wider text-slate-950 mb-2">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-1.5 text-xs font-mono font-extrabold uppercase tracking-wider text-slate-950 dark:text-slate-100 mb-2">
                   <Pin className="w-3.5 h-3.5 text-rose-600" />
                   <span>1. WHAT HAPPENED</span>
                 </div>
                 <ul className="space-y-1.5 pl-1">
                   {currentCard.whatHappened.map((bullet, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-slate-700 text-xs sm:text-sm">
+                    <li key={idx} className="flex items-start gap-2 text-slate-700 dark:text-slate-300 text-xs sm:text-sm">
                       <span className="text-rose-600 font-bold shrink-0">•</span>
                       <span>{bullet}</span>
                     </li>
@@ -432,21 +434,21 @@ export default function AboutPage() {
               </div>
 
               {/* 2. Why It Matters */}
-              <div className="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-100">
-                <div className="text-xs font-mono font-extrabold uppercase tracking-wider text-indigo-900 mb-1">
+              <div className="p-3.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60">
+                <div className="text-xs font-mono font-extrabold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 mb-1">
                   2. WHY IT MATTERS (ARCHITECTURAL CONTEXT)
                 </div>
-                <p className="text-slate-700 text-xs sm:text-sm leading-relaxed">
+                <p className="text-slate-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed">
                   {currentCard.whyItMatters}
                 </p>
               </div>
 
               {/* 3. How It Affects You */}
-              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80">
-                <div className="text-xs font-mono font-extrabold uppercase tracking-wider text-amber-900 mb-1">
+              <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60">
+                <div className="text-xs font-mono font-extrabold uppercase tracking-wider text-amber-900 dark:text-amber-300 mb-1">
                   3. HOW IT AFFECTS YOU (ROLE IMPACT)
                 </div>
-                <p className="text-slate-700 text-xs sm:text-sm leading-relaxed">
+                <p className="text-slate-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed">
                   {currentCard.howItAffectsYou}
                 </p>
               </div>
@@ -464,15 +466,15 @@ export default function AboutPage() {
             </div>
 
             {/* Bottom Footer Source Link */}
-            <div className="mt-5 pt-4 border-t border-slate-200 flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-500">
-                Verified Source: <strong className="text-slate-800">{currentCard.sourceName}</strong>
+            <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-mono">
+              <span className="text-slate-500 dark:text-slate-400">
+                Verified Source: <strong className="text-slate-800 dark:text-slate-200">{currentCard.sourceName}</strong>
               </span>
               <a
                 href={currentCard.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 px-3 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-3 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold transition-colors cursor-pointer border border-transparent dark:border-slate-700"
               >
                 <span>Read Original Docs</span>
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -485,27 +487,27 @@ export default function AboutPage() {
       {/* 5. THE AI & INGESTION PIPELINE */}
       <section className="py-16 px-4 sm:px-6 max-w-6xl mx-auto w-full">
         <div className="text-center mb-12">
-          <span className="text-xs font-mono font-bold tracking-widest uppercase text-slate-800 bg-slate-100 border border-slate-300 px-2.5 py-1 rounded">
+          <span className="text-xs font-mono font-bold tracking-widest uppercase text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2.5 py-1 rounded">
             THE INTELLIGENCE ENGINE
           </span>
-          <h3 className="font-serif text-2xl sm:text-4xl font-black text-slate-950 mt-3">
+          <h3 className="font-serif text-2xl sm:text-4xl font-black text-slate-950 dark:text-white mt-3">
             How Becon Synthesizes Your Daily Briefing
           </h3>
-          <p className="text-slate-600 max-w-2xl mx-auto mt-2 text-sm sm:text-base">
+          <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mt-2 text-sm sm:text-base">
             From raw RSS feeds to verified, schema-enforced Action Cards in under a minute.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">
           {/* Step 1 */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-300 shadow-xs hover:shadow-md transition-all">
-            <div className="w-10 h-10 rounded-xl bg-slate-950 text-amber-300 flex items-center justify-center font-mono font-black text-base mb-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-300 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
+            <div className="w-10 h-10 rounded-xl bg-slate-950 text-amber-300 flex items-center justify-center font-mono font-black text-base mb-4 border border-slate-800">
               01
             </div>
-            <h4 className="font-serif text-lg font-bold text-slate-900 mb-2">
+            <h4 className="font-serif text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Continuous Ingestion
             </h4>
-            <p className="text-slate-600 text-sm leading-relaxed">
+            <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
               Becon monitors official engineering blogs, release notes, CVE repositories, and
               RSS/Atom feeds from top organizations (Microsoft, Google, Apple, Linux, AWS,
               Cloudflare, and domain councils).
@@ -513,14 +515,14 @@ export default function AboutPage() {
           </div>
 
           {/* Step 2 */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-300 shadow-xs hover:shadow-md transition-all">
-            <div className="w-10 h-10 rounded-xl bg-slate-950 text-rose-400 flex items-center justify-center font-mono font-black text-base mb-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-300 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
+            <div className="w-10 h-10 rounded-xl bg-slate-950 text-rose-400 flex items-center justify-center font-mono font-black text-base mb-4 border border-slate-800">
               02
             </div>
-            <h4 className="font-serif text-lg font-bold text-slate-900 mb-2">
+            <h4 className="font-serif text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Deduplication & Ranking
             </h4>
-            <p className="text-slate-600 text-sm leading-relaxed">
+            <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
               When multiple publications cover the same release, Becon groups them into a single
               canonical event. The story is then scored against your personal stack and seniority
               level.
@@ -528,14 +530,14 @@ export default function AboutPage() {
           </div>
 
           {/* Step 3 */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-300 shadow-xs hover:shadow-md transition-all">
-            <div className="w-10 h-10 rounded-xl bg-slate-950 text-emerald-400 flex items-center justify-center font-mono font-black text-base mb-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-300 dark:border-slate-800 shadow-xs hover:shadow-md transition-all">
+            <div className="w-10 h-10 rounded-xl bg-slate-950 text-emerald-400 flex items-center justify-center font-mono font-black text-base mb-4 border border-slate-800">
               03
             </div>
-            <h4 className="font-serif text-lg font-bold text-slate-900 mb-2">
+            <h4 className="font-serif text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Gemini Structured Synthesis
             </h4>
-            <p className="text-slate-600 text-sm leading-relaxed">
+            <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
               Google Gemini processes the source material and outputs a Pydantic-validated JSON
               Action Card. Every output is strictly constrained to prevent hallucinations and provide
               clear operational advice.
@@ -623,43 +625,43 @@ export default function AboutPage() {
       {/* 7. TECHNOLOGY ARCHITECTURE */}
       <section className="py-16 px-4 sm:px-6 max-w-5xl mx-auto w-full">
         <div className="text-center mb-10">
-          <span className="text-xs font-mono font-bold tracking-widest uppercase text-slate-800 bg-slate-100 border border-slate-300 px-2.5 py-1 rounded">
+          <span className="text-xs font-mono font-bold tracking-widest uppercase text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2.5 py-1 rounded">
             UNDER THE HOOD
           </span>
-          <h3 className="font-serif text-2xl sm:text-4xl font-black text-slate-950 mt-3">
+          <h3 className="font-serif text-2xl sm:text-4xl font-black text-slate-950 dark:text-white mt-3">
             Production Full-Stack Architecture
           </h3>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 font-mono text-xs">
-          <div className="p-4 rounded-xl bg-white border border-slate-300 shadow-2xs">
-            <div className="text-slate-500 uppercase text-[10px] font-bold mb-1">Frontend</div>
-            <div className="text-slate-950 font-black text-sm">Next.js 16</div>
-            <div className="text-slate-600 text-[11px] mt-1 font-sans">
+          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 shadow-2xs">
+            <div className="text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold mb-1">Frontend</div>
+            <div className="text-slate-950 dark:text-white font-black text-sm">Next.js 16</div>
+            <div className="text-slate-600 dark:text-slate-300 text-[11px] mt-1 font-sans">
               React 19, TypeScript, App Router, Tailwind CSS v4 broadsheet styling.
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-white border border-slate-300 shadow-2xs">
-            <div className="text-slate-500 uppercase text-[10px] font-bold mb-1">Backend API</div>
-            <div className="text-slate-950 font-black text-sm">FastAPI & Python</div>
-            <div className="text-slate-600 text-[11px] mt-1 font-sans">
+          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 shadow-2xs">
+            <div className="text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold mb-1">Backend API</div>
+            <div className="text-slate-950 dark:text-white font-black text-sm">FastAPI & Python</div>
+            <div className="text-slate-600 dark:text-slate-300 text-[11px] mt-1 font-sans">
               Asynchronous endpoint handling, Uvicorn, OAuth2 with JWT authentication.
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-white border border-slate-300 shadow-2xs">
-            <div className="text-slate-500 uppercase text-[10px] font-bold mb-1">AI Orchestration</div>
-            <div className="text-slate-950 font-black text-sm">Google Gemini</div>
-            <div className="text-slate-600 text-[11px] mt-1 font-sans">
+          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 shadow-2xs">
+            <div className="text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold mb-1">AI Orchestration</div>
+            <div className="text-slate-950 dark:text-white font-black text-sm">Google Gemini</div>
+            <div className="text-slate-600 dark:text-slate-300 text-[11px] mt-1 font-sans">
               Schema-enforced JSON structured output via google-genai SDK.
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-white border border-slate-300 shadow-2xs">
-            <div className="text-slate-500 uppercase text-[10px] font-bold mb-1">Persistence</div>
-            <div className="text-slate-950 font-black text-sm">Supabase PostgreSQL</div>
-            <div className="text-slate-600 text-[11px] mt-1 font-sans">
+          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 shadow-2xs">
+            <div className="text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold mb-1">Persistence</div>
+            <div className="text-slate-950 dark:text-white font-black text-sm">Supabase PostgreSQL</div>
+            <div className="text-slate-600 dark:text-slate-300 text-[11px] mt-1 font-sans">
               SQLAlchemy 2.0 ORM, user profile tuning, and persistent action cards.
             </div>
           </div>

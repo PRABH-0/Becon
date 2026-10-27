@@ -14,6 +14,8 @@ class UserProfile(Base):
     customPrompt = Column(String(2000), default="")
     aiTone = Column(String(100), default="Architectural Analysis (Deep Tech)")
     password_hash = Column(String(500), nullable=True)
+    picture_url = Column(String(1000), nullable=True) # Gmail/Google Avatar URL
+    auth_provider = Column(String(50), default="local") # "local", "google", "guest"
     lastUpdated = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class SavedBriefing(Base):

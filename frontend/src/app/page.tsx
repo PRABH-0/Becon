@@ -1,11 +1,13 @@
 "use client";
 
-import { User, RefreshCcw, Zap, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ChevronLeft, ChevronRight, ArrowRight, ArrowUp, BookOpen, Sun, Moon, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar } from "lucide-react";
+import { User, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar, LogOut } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
+import { useTheme } from "@/context/ThemeContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -338,6 +340,8 @@ export default function Home() {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("Professional");
+  const [userAvatar, setUserAvatar] = useState<string>("");
+  const [isGuest, setIsGuest] = useState<boolean>(false);
   const [userInterests, setUserInterests] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState<string>("");
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -372,34 +376,8 @@ export default function Home() {
   // Floating Back to Top Arrow Button State
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
 
-  // Dark / Light Mode Theme State
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("becon_theme");
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialDark = savedTheme === "dark" || (!savedTheme && prefersDark);
-    setIsDarkMode(initialDark);
-    if (initialDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    setIsDarkMode((prev) => {
-      const nextMode = !prev;
-      if (nextMode) {
-        document.documentElement.classList.add("dark");
-        localStorage.setItem("becon_theme", "dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-        localStorage.setItem("becon_theme", "light");
-      }
-      return nextMode;
-    });
-  };
+  // Dark / Light Mode Theme State from Global Context
+  const { isDarkMode, toggleTheme } = useTheme();
 
   const scrollToTop = () => {
     window.scrollTo({
@@ -845,6 +823,16 @@ export default function Home() {
             localStorage.setItem("becon_user_name", clean);
           }
           if (profile.role) setUserRole(profile.role);
+          if (profile.picture_url) {
+            setUserAvatar(profile.picture_url);
+            localStorage.setItem("becon_user_avatar", profile.picture_url);
+          } else {
+            const cached = localStorage.getItem("becon_user_avatar");
+            if (cached) setUserAvatar(cached);
+          }
+          if (profile.auth_provider === "guest" || localStorage.getItem("becon_is_guest") === "true") {
+            setIsGuest(true);
+          }
           if (profile.interests) {
             const list = profile.interests.split(",").map((i: string) => i.trim()).filter(Boolean);
             setUserInterests(list);
@@ -1093,8 +1081,12 @@ export default function Home() {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="group flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-500 text-white pl-1.5 pr-3 py-1 sm:pl-2 sm:pr-3.5 sm:py-1.5 rounded-full transition-all shadow-xs hover:shadow-md cursor-pointer select-none"
               >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-rose-600 to-rose-500 text-white flex items-center justify-center shadow-xs ring-1 ring-white/10 shrink-0">
-                  <User className="w-3.5 h-3.5" />
+                <div className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center shadow-xs ring-1 ring-white/10 shrink-0 overflow-hidden">
+                  {userAvatar ? (
+                    <img src={userAvatar} alt={userFirstName} className="w-full h-full object-cover rounded-full" onError={() => setUserAvatar("")} />
+                  ) : (
+                    <User className="w-3.5 h-3.5" />
+                  )}
                 </div>
                 <span className="font-semibold text-xs sm:text-[13px] text-slate-200 tracking-tight hidden sm:inline font-sans">
                   {userFirstName}
@@ -1106,100 +1098,86 @@ export default function Home() {
                 />
               </button>
 
-              {/* PROFILE DROPDOWN MENU */}
+              {/* PROFILE DROPDOWN MENU (CLASSIC & MINIMALIST) */}
               {showProfileMenu && (
-                <div className="absolute right-0 top-12 w-72 bg-slate-900 border-2 border-slate-700 rounded-2xl shadow-2xl p-4 z-50 text-white font-mono space-y-3.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="pb-3 border-b border-slate-800">
-                    <div className="font-black text-white text-sm truncate flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span>Profile Menu</span>
-                      </span>
-                      <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider bg-emerald-950/60 border border-emerald-800 px-1.5 py-0.5 rounded">
-                        Active
-                      </span>
+                <div className="absolute right-0 top-full mt-2 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/10 dark:shadow-black/50 rounded-xl p-1.5 z-50 text-slate-800 dark:text-slate-200 font-sans animate-in fade-in zoom-in-95 duration-100 select-none">
+                  {/* USER INFO HEADER */}
+                  <div className="px-3 py-2.5 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-100 border border-slate-700/50 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden">
+                      {userAvatar ? (
+                        <img src={userAvatar} alt={userName} className="w-full h-full object-cover rounded-full" onError={() => setUserAvatar("")} />
+                      ) : (
+                        <span>{userFirstName && userFirstName[0] ? userFirstName[0].toUpperCase() : "U"}</span>
+                      )}
                     </div>
-                    <div className="text-[11px] text-slate-300 font-medium truncate mt-1.5 flex items-center gap-1.5 font-sans">
-                      <span className="text-slate-200 font-bold">{userName || "User"}</span>
-                      <span className="text-slate-600">•</span>
-                      <span className="text-slate-400 truncate">{userRole}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate flex items-center gap-1.5">
+                        <span className="truncate">{userName || "Reader"}</span>
+                        {isGuest && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-400/15 text-amber-600 dark:text-amber-400 border border-amber-400/30 uppercase font-bold tracking-wide">
+                            Guest
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                        {userRole || "Member"}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  {/* DIVIDER */}
+                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
+
+                  {/* MENU ITEMS */}
+                  <div className="space-y-0.5">
+                    {isGuest && (
+                      <Link
+                        href="/login"
+                        onClick={() => setShowProfileMenu(false)}
+                        className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span>Sign In / Create Account</span>
+                      </Link>
+                    )}
+
                     <Link
                       href="/profile"
                       onClick={() => setShowProfileMenu(false)}
-                      className="flex items-center justify-between w-full p-3 rounded-xl bg-slate-800 hover:bg-rose-600 hover:text-white text-amber-300 transition-colors text-xs font-black tracking-wider cursor-pointer border border-slate-700 hover:border-rose-500 shadow-2xs"
+                      className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
-                      <span className="flex items-center gap-2">
-                        <span className="text-sm"><User className="w-4 h-4" /></span>
-                        <span>Profile & AI Tuning</span>
-                      </span>
-                      <ArrowRight className="w-4 h-4" />
+                      <User className="w-4 h-4 text-slate-400 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
+                      <span>Profile & Settings</span>
                     </Link>
 
                     <Link
                       href="/about"
                       onClick={() => setShowProfileMenu(false)}
-                      className="flex items-center justify-between w-full p-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-[11px] font-bold cursor-pointer border border-transparent hover:border-slate-700"
+                      className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
-                      <span className="flex items-center gap-2">
-                        <span><BookOpen className="w-4 h-4 text-amber-300" /></span>
-                        <span>About Becon & Manifesto</span>
-                      </span>
-                      <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                      <BookOpen className="w-4 h-4 text-slate-400 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
+                      <span>About Becon</span>
                     </Link>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        toggleTheme();
-                        setShowProfileMenu(false);
-                      }}
-                      className="flex items-center justify-between w-full p-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-[11px] font-bold cursor-pointer border border-transparent hover:border-slate-700"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span>{isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}</span>
-                        <span>Theme: {isDarkMode ? "Dark Mode (Active)" : "Light Mode (Active)"}</span>
-                      </span>
-                      <span className="text-[10px] uppercase font-mono text-amber-400 font-bold">{isDarkMode ? "Light" : "Dark"}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowProfileMenu(false);
-                        fetchAllBriefings(true);
-                      }}
-                      className="flex items-center justify-between w-full p-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-[11px] font-bold cursor-pointer border border-transparent hover:border-slate-700"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span><RefreshCcw className="w-4 h-4" /></span>
-                        <span>Force AI News Refresh</span>
-                      </span>
-                      <span className="flex items-center gap-1.5"><Zap className="w-4 h-4" /></span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        localStorage.removeItem("becon_token");
-                        localStorage.removeItem("becon_user_name");
-                        router.push("/login");
-                      }}
-                      className="flex items-center justify-between w-full p-2.5 rounded-lg hover:bg-rose-900/30 text-rose-400 hover:text-rose-300 transition-colors text-[11px] font-bold cursor-pointer border border-transparent hover:border-rose-900/50"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span>Sign Out</span>
-                      </span>
-                    </button>
                   </div>
 
-                  <div className="pt-2.5 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
-                    <span>AI ENGINE: ONLINE</span>
-                    <span className="text-emerald-400 font-bold">ACTIVE</span>
-                  </div>
+                  {/* DIVIDER */}
+                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
+
+                  {/* LOGOUT */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem("becon_token");
+                      localStorage.removeItem("becon_user_name");
+                      localStorage.removeItem("becon_user_avatar");
+                      localStorage.removeItem("becon_is_guest");
+                      router.push("/login");
+                    }}
+                    className="group flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors text-left cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                    <span>{isGuest ? "Exit Guest Mode" : "Logout"}</span>
+                  </button>
                 </div>
               )}
             </div>

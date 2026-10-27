@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import List, Any, Dict
 from fastapi import FastAPI, Query, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,7 @@ from app.schemas import (
     UserProfileCreate,
     UserProfileResponse,
     UserRegister,
+    SupabaseAuthSync,
     Token,
     ChatRequest,
     ChatResponse,
@@ -413,6 +415,92 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post(
+    "/api/auth/supabase-sync",
+    tags=["Auth"],
+    summary="Sync Supabase OAuth (Google) user with Becon backend",
+    response_model=Token,
+    responses={
+        400: {"description": "Invalid sync payload"},
+        422: {"description": "Validation Error"}
+    }
+)
+def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db)):
+    """
+    Syncs user authenticated via Supabase Google OAuth into the Becon database.
+    Stores/updates their real Gmail profile picture (picture_url), name, and issues a Becon JWT.
+    """
+    email = payload.email.strip().lower()
+    user = db.query(UserProfile).filter(UserProfile.email == email).first()
+    
+    clean_name = payload.name.strip() if payload.name else email.split("@")[0].capitalize()
+    
+    if not user:
+        user = UserProfile(
+            name=clean_name,
+            email=email,
+            picture_url=payload.picture_url,
+            auth_provider=payload.provider or "google",
+            role="Software Engineer",
+            interests="AI & ML, Cloud Architecture, Full-Stack",
+            experience="Senior (5+ Years)",
+            customPrompt="",
+            aiTone="Architectural Analysis (Deep Tech)"
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        updated = False
+        if payload.picture_url and user.picture_url != payload.picture_url:
+            user.picture_url = payload.picture_url
+            updated = True
+        if payload.name and user.name in ("User", "", None):
+            user.name = clean_name
+            updated = True
+        if payload.provider and user.auth_provider != payload.provider:
+            user.auth_provider = payload.provider
+            updated = True
+        if updated:
+            db.commit()
+            db.refresh(user)
+            
+    access_token = create_access_token(data={"sub": user.email, "provider": user.auth_provider or "google"})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post(
+    "/api/auth/guest",
+    tags=["Auth"],
+    summary="Instant guest exploration mode",
+    response_model=Token,
+    responses={
+        422: {"description": "Validation Error"}
+    }
+)
+def guest_auth(db: Session = Depends(get_db)):
+    """
+    Creates an instant guest session with default engineering intelligence preferences.
+    Requires zero credentials or personal data.
+    """
+    guest_uuid = uuid.uuid4().hex[:8]
+    guest_email = f"guest_{guest_uuid}@guest.becon.local"
+    
+    guest_user = UserProfile(
+        name="Guest Reader",
+        email=guest_email,
+        role="Technology Explorer",
+        interests="AI & Generative Models, Cloud Architecture, Full-Stack Development",
+        experience="Curious",
+        auth_provider="guest",
+        picture_url=None
+    )
+    db.add(guest_user)
+    db.commit()
+    db.refresh(guest_user)
+    
+    access_token = create_access_token(data={"sub": guest_user.email, "provider": "guest"})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post(

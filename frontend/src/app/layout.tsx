@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { LoadingProvider } from "@/context/LoadingContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-heading",
@@ -47,8 +48,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col">
-        <LoadingProvider>{children}</LoadingProvider>
+      <body className="min-h-full flex flex-col bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 transition-colors duration-200">
+        <ThemeProvider>
+          <LoadingProvider>{children}</LoadingProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
