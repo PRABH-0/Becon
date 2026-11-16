@@ -1,5 +1,7 @@
 import os
 import json
+import re
+import html
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -12,10 +14,49 @@ load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
-    raise ValueError("GEMINI_API_KEY is missing from .env file!")
-
-client = genai.Client(api_key=api_key)
+    print("[WARNING] GEMINI_API_KEY is not set in .env. AI generation will use fallback cards until a key is added.")
+    client = None
+else:
+    client = genai.Client(api_key=api_key)
 MODEL_NAME = "gemini-flash-lite-latest"
+
+
+def extract_rich_fallback_bullets(raw_summary: str, clean_headline: str, tech_tag: str) -> list[str]:
+    """
+    Extracts authentic, exact highlight lines from raw blog content.
+    Prioritizes the actual lines mentioned in the blog post.
+    """
+    bullets = []
+
+    if raw_summary:
+        # Strip HTML tags and unescape entities
+        cleaned = re.sub(r'<[^>]+>', ' ', raw_summary)
+        cleaned = html.unescape(cleaned)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+        # Split into distinct sentences
+        raw_sentences = [
+            s.strip() for s in re.split(r'(?<=[.!?])\s+', cleaned)
+            if len(s.strip()) > 20 and not any(skip in s.lower() for skip in ["cookie", "subscribe", "terms of", "privacy policy", "all rights reserved", "advertisement", "sign up", "read more"])
+        ]
+
+        for s in raw_sentences:
+            s_clean = s.strip()
+            # Clean off leading metadata tags like 'Quick take'
+            if s_clean.lower().startswith("quick take"):
+                s_clean = s_clean[10:].lstrip(" :-\t")
+            if len(s_clean) > 20:
+                if not s_clean.endswith(('.', '!', '?')):
+                    s_clean += '.'
+                bullets.append(s_clean)
+            if len(bullets) >= 4:
+                break
+
+    if not bullets:
+        bullets.append(f"{clean_headline}: Official updates and technical shifts announced for {tech_tag}.")
+        bullets.append(f"Teams working with {tech_tag} are evaluating implementation details and integration requirements.")
+
+    return bullets
 
 
 def generate_action_card(
@@ -33,6 +74,22 @@ def generate_action_card(
     """
     default_directive = "Provide actionable insights, practical takeaways, and relevant context tailored specifically to the user's role and selected interests."
     applied_directive = custom_prompt if custom_prompt else default_directive
+
+    clean_headline = article_title.split(" - ")[0].strip() if " - " in article_title else article_title.strip()
+    fallback_bullets = extract_rich_fallback_bullets(raw_summary, clean_headline, tech_tag)
+
+    fallback_card = BriefingCardContent(
+        what_happened=fallback_bullets,
+        why_it_matters=f"Directly impacts operational workflows, technical performance, and ecosystem standards across {tech_tag} and related modern systems architecture.",
+        how_it_affects_you=f"As a {user_role}, tracking updates in {clean_headline} enables you to optimize existing pipelines, reduce architectural friction, and apply modern best practices.",
+        what_to_do_next=ActionGuidance(
+            action_type="apply",
+            guidance=f"Assess how current developments in {clean_headline} can be leveraged in your daily {user_role} workflows."
+        )
+    )
+
+    if not client:
+        return fallback_card
 
     prompt = f"""
     You are 'Becon AI', an expert intelligence editor for the Daily Intelligence Gazette.
@@ -86,19 +143,7 @@ def generate_action_card(
             time.sleep(0.5)
 
     print(f"[AI Service Error] Failed to generate card for '{article_title}': {last_err}")
-    clean_headline = article_title.split(" - ")[0].strip() if " - " in article_title else article_title.strip()
-    return BriefingCardContent(
-        what_happened=[
-            f"Key industry update for {tech_tag}: {clean_headline}.",
-            raw_summary[:160].strip() if raw_summary and len(raw_summary) > 20 else f"Live market monitoring detected priority signals around {clean_headline}."
-        ],
-        why_it_matters=f"Directly impacts operational workflows, market trends, and consumer standards within the {tech_tag} domain.",
-        how_it_affects_you=f"As a {user_role}, tracking updates in {clean_headline} allows you to adapt strategy and maintain a strong competitive edge.",
-        what_to_do_next=ActionGuidance(
-            action_type="apply",
-            guidance=f"Assess how current developments in {clean_headline} can be leveraged in your daily {user_role} operations."
-        )
-    )
+    return fallback_card
 
 
 def ai_match_topics(query: str, available_topics: list[str] = None, max_results: int = 3) -> list[str]:
@@ -122,6 +167,8 @@ def ai_match_topics(query: str, available_topics: list[str] = None, max_results:
                     return local_hits
 
     # 2. Call Gemini to dynamically complete and expand user input into concrete keywords
+    if not client:
+        return local_hits
     prompt = f"""You are an intelligent search autocomplete assistant for an industry intelligence and news platform.
 The user is typing in a topic/profession interest search bar and typed: "{clean_q}".
 Generate up to {max_results} relevant, highly-specific topics or keywords that complete or expand upon what the user typed.
@@ -186,6 +233,13 @@ def ai_onboarding_chat(history: list[ChatMessage], available_topics: list[str]) 
 
     Chat History:
 """
+    if not client:
+        return ChatResponse(
+            reply_text="AI key not configured. Please set GEMINI_API_KEY in backend/.env to enable live AI onboarding.",
+            onboarding_complete=False,
+            extracted_data=None
+        )
+
     for msg in history:
         prompt += f"{msg.role}: {msg.content}\n"
         

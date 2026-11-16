@@ -11,8 +11,8 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    # Default fallback to local SQL Server if not provided in .env
-    DATABASE_URL = "mssql+pyodbc://sa:sa123@localhost/becon_db?driver=ODBC+Driver+17+for+SQL+Server"
+    # Default fallback to local SQLite if not provided in .env (zero setup required)
+    DATABASE_URL = "sqlite:///./becon.db"
 
 # SQLAlchemy psycopg2 driver formatting for Postgres
 if DATABASE_URL.startswith("postgres://"):

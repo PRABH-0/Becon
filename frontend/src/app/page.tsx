@@ -77,209 +77,18 @@ function computeBentoSpans(total: number): number[] {
 }
 
 /**
- * Curated High-Resolution Editorial Image Pools (100% Unique Photos per Domain)
- * Guaranteed no duplicate photos across cards unless an image genuinely comes from the real resource.
+ * Resolves an image for a card ONLY if it genuinely came from the article's source blog/resource.
+ * Never returns a random, stock, or fallback image. If no genuine image exists, returns null so a clean text card is rendered.
  */
-const DOMAIN_IMAGE_POOLS: Record<string, string[]> = {
-  beauty: [
-    "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1596462502278-27bfdc403348?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1608248597359-2b027d729c78?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1515377905703-c4788e51af15?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1503236823255-94609f598e71?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1526947425960-945c6e72858f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=800&auto=format&fit=crop",
-  ],
-  fashion: [
-    "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1445205170230-053b83016050?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1492707892479-7bc8d5a4ee93?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1508427953056-b00b8d78ebf5?q=80&w=800&auto=format&fit=crop",
-  ],
-  finance: [
-    "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1450133064473-71024230f91b?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1554224154-26032ffc0d07?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1579532537598-459ecdaf39cc?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1563986768609-322da13575f3?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=800&auto=format&fit=crop",
-  ],
-  retail: [
-    "https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1556742049-0a67e557224f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1567401893414-76b7b1e5a7a5?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1578916171728-46686eac8d58?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1555529771-835f59fc5efe?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1528698827591-e19ccd7bc23d?q=80&w=800&auto=format&fit=crop",
-  ],
-  food: [
-    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1556910103-1c02745aae4d?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1498837167922-ddd27525d352?q=80&w=800&auto=format&fit=crop",
-  ],
-  health: [
-    "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?q=80&w=800&auto=format&fit=crop",
-  ],
-  tech: [
-    "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1531403009284-440f080d1e12?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?q=80&w=800&auto=format&fit=crop",
-  ],
-  general: [
-    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop",
-  ],
-};
-
-function getCardDomainKey(card: BriefingCard): string {
-  const text = ((card.target_stack || []).join(" ") + " " + (card.title || "")).toLowerCase();
-  if (text.includes("beauty") || text.includes("hair") || text.includes("nail") || text.includes("skin") || text.includes("cosmetic") || text.includes("curler") || text.includes("manicure") || text.includes("salon") || text.includes("spa")) {
-    return "beauty";
-  }
-  if (text.includes("fashion") || text.includes("hoodie") || text.includes("dress") || text.includes("apparel") || text.includes("clothing") || text.includes("style") || text.includes("shoes") || text.includes("wear") || text.includes("runway")) {
-    return "fashion";
-  }
-  if (text.includes("tax") || text.includes("accounting") || text.includes("audit") || text.includes("gst") || text.includes("bookkeeping") || text.includes("ledger") || text.includes("invoice") || text.includes("finance") || text.includes("banking") || text.includes("fintech") || text.includes("stock") || text.includes("invest") || text.includes("cash")) {
-    return "finance";
-  }
-  if (text.includes("retail") || text.includes("shop") || text.includes("store") || text.includes("pos") || text.includes("inventory") || text.includes("merchandising") || text.includes("ecommerce") || text.includes("e-commerce")) {
-    return "retail";
-  }
-  if (text.includes("food") || text.includes("restaurant") || text.includes("dining") || text.includes("cafe") || text.includes("culinary") || text.includes("coffee") || text.includes("bakery")) {
-    return "food";
-  }
-  if (text.includes("health") || text.includes("medical") || text.includes("doctor") || text.includes("wellness") || text.includes("clinic") || text.includes("fitness")) {
-    return "health";
-  }
-  if (text.includes("ai") || text.includes("gemini") || text.includes("model") || text.includes("learning") || text.includes("cloud") || text.includes("azure") || text.includes("aws") || text.includes("security") || text.includes("cyber") || text.includes("code") || text.includes("software") || text.includes("programming") || text.includes("react") || text.includes("angular") || text.includes("python") || text.includes("rust") || text.includes(".net") || text.includes("c#")) {
-    return "tech";
-  }
-  return "general";
-}
-
-/**
- * Resolves a completely unique image for a card.
- * Rule: We cannot use the same image twice UNLESS that exact image came from its real resource.
- */
-function resolveUniqueCardImage(card: BriefingCard, usedFallbackImages: Set<string>): string | null {
-  // 1. Real Resource Image: ALWAYS allowed (even if shared by related source articles)
+function resolveUniqueCardImage(card: BriefingCard | null | undefined): string | null {
+  if (!card) return null;
   if (card.is_real_image && card.image_url && card.image_url.trim().length > 0) {
-    return card.image_url.trim();
-  }
-
-  // 2. If card has an existing fallback image_url that has NOT been used anywhere on the page yet:
-  if (card.image_url && card.image_url.trim().length > 0) {
-    const trimmed = card.image_url.trim();
-    if (!usedFallbackImages.has(trimmed)) {
-      usedFallbackImages.add(trimmed);
-      return trimmed;
-    }
-  }
-
-  // 3. Find next unused image from the matching domain pool
-  const domainKey = getCardDomainKey(card);
-  const primaryPool = DOMAIN_IMAGE_POOLS[domainKey] || [];
-  for (const url of primaryPool) {
-    if (!usedFallbackImages.has(url)) {
-      usedFallbackImages.add(url);
+    const url = card.image_url.trim();
+    if (url.startsWith("http://") || url.startsWith("https://")) {
       return url;
     }
   }
-
-  // 4. Try general pool
-  const generalPool = DOMAIN_IMAGE_POOLS.general || [];
-  for (const url of generalPool) {
-    if (!usedFallbackImages.has(url)) {
-      usedFallbackImages.add(url);
-      return url;
-    }
-  }
-
-  // 5. If all pools are exhausted, NEVER repeat an image!
   return null;
-}
-
-/**
- * Ensures that at least ONE news card with an image is rendered out of every 5 news updates,
- * prioritizing cards that have genuine real resource images.
- */
-function computeImageVisibility(stories: BriefingCard[], spans: number[]): boolean[] {
-  const result: boolean[] = new Array(stories.length).fill(false);
-  const CHUNK_SIZE = 5;
-
-  for (let start = 0; start < stories.length; start += CHUNK_SIZE) {
-    const end = Math.min(start + CHUNK_SIZE, stories.length);
-    const indices: number[] = [];
-    for (let i = start; i < end; i++) {
-      indices.push(i);
-    }
-
-    // Check if any cards in this 5-card chunk have a genuine real resource image
-    const withRealImages = indices.filter((i) => {
-      const card = stories[i];
-      return Boolean(card?.is_real_image && card?.image_url && card.image_url.trim().length > 0);
-    });
-
-    if (withRealImages.length > 0) {
-      // Prioritize the card with a real feed image. Prefer rectangle cards (span >= 2) if available
-      const preferred = withRealImages.find((i) => (spans[i] ?? 1) >= 2) ?? withRealImages[0];
-      result[preferred] = true;
-    } else {
-      // Out of every 5 news updates, at least one news card with an image is rendered
-      // Pick a rectangle card if present in this 5-pack, otherwise the first card
-      const preferred = indices.find((i) => (spans[i] ?? 1) >= 2) ?? indices[0];
-      result[preferred] = true;
-    }
-  }
-
-  return result;
 }
 
 // Curated Rotating Daily Themes for Becon Intelligence (automatically updates every single day)
@@ -499,7 +308,6 @@ export default function Home() {
               id: `search-${topicSlug}-ed${nextPage}-1`,
               title: `${currentSearchTopic.toUpperCase()}: Market Developments & Strategic Shifts (Edition ${nextPage})`,
               source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
-              image_url: "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=800&auto=format&fit=crop",
               target_role: activeRole,
               target_stack: [currentSearchTopic.toUpperCase(), "ANALYSIS"],
               priority: "major",
@@ -520,7 +328,6 @@ export default function Home() {
               id: `search-${topicSlug}-ed${nextPage}-2`,
               title: `Global Infrastructure & Supply Modernization in ${currentSearchTopic.toUpperCase()}`,
               source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
-              image_url: "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?q=80&w=800&auto=format&fit=crop",
               target_role: activeRole,
               target_stack: [currentSearchTopic.toUpperCase(), "INNOVATION"],
               priority: "major",
@@ -541,7 +348,6 @@ export default function Home() {
               id: `search-${topicSlug}-ed${nextPage}-3`,
               title: `Regulatory Compliance, Risk Mitigation & Governance in ${currentSearchTopic.toUpperCase()}`,
               source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
-              image_url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800&auto=format&fit=crop",
               target_role: activeRole,
               target_stack: [currentSearchTopic.toUpperCase(), "SECURITY"],
               priority: "major",
@@ -990,30 +796,16 @@ export default function Home() {
   const bentoStories = otherStories.filter((b) => !topWireIds.has(b.id));
   const displayedBentoStories = searchedStories !== null ? searchedStories : bentoStories;
 
-  // Memoized unique image mapping for the Lead story
+  // Real image mapping for the Lead story: ONLY rendered if the article genuinely has an image
   const leadImageUrl = useMemo(() => {
-    if (!leadStory) return null;
-    const singleSet = new Set<string>();
-    return resolveUniqueCardImage(leadStory, singleSet);
+    return resolveUniqueCardImage(leadStory);
   }, [leadStory]);
 
-  // Memoized unique image mapping for all Bento deck stories
-  // Ensures 100% distinct, non-repeating images across all cards on the page!
+  // Real image mapping for all Bento deck stories:
+  // ONLY render the genuine article image if it exists from the blog/resource, otherwise null
   const bentoCardImages = useMemo(() => {
-    const usedFallbackImages = new Set<string>();
-    // Pre-seed with the Lead Story's fallback image so no Bento card ever re-uses it!
-    if (leadImageUrl && !leadStory?.is_real_image) {
-      usedFallbackImages.add(leadImageUrl);
-    }
-
-    const bentoSpans = computeBentoSpans(displayedBentoStories.length);
-    const visibility = computeImageVisibility(displayedBentoStories, bentoSpans);
-
-    return displayedBentoStories.map((card, idx) => {
-      if (!visibility[idx]) return null;
-      return resolveUniqueCardImage(card, usedFallbackImages);
-    });
-  }, [displayedBentoStories, leadImageUrl, leadStory]);
+    return displayedBentoStories.map((card) => resolveUniqueCardImage(card));
+  }, [displayedBentoStories]);
 
   return (
     <div className="relative min-h-screen bg-[#FAF8F5] overflow-x-clip">
@@ -1310,7 +1102,7 @@ export default function Home() {
         <div className="space-y-6 sm:space-y-8">
           
           {/* TOP BALANCED SHOWCASE: #1 CRITICAL UPDATE (LEFT) + THE QUICK WIRE (RIGHT) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 pb-8 sm:pb-10 border-b-2 border-slate-900 dark:border-slate-800">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 items-start pb-8 sm:pb-10 border-b-2 border-slate-900 dark:border-slate-800">
             
             {/* TOP MOST IMPORTANT UPDATE (LEFT 5 COLS) */}
             <div className="lg:col-span-5 flex flex-col">
@@ -1328,8 +1120,8 @@ export default function Home() {
             </div>
 
             {/* DAILY DISPATCHES / QUICK WIRE + TELEMETRY (RIGHT 7 COLS) */}
-            <div className="lg:col-span-7 flex flex-col justify-between">
-              <div className="flex flex-col flex-1">
+            <div className="lg:col-span-7 flex flex-col">
+              <div className="flex flex-col">
                 <div className="border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 flex items-center justify-between font-mono">
                   <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
                     <Radio className="w-4 h-4 text-rose-500" /> THE QUICK WIRE • RAPID SIGNALS
@@ -1338,7 +1130,7 @@ export default function Home() {
                     DISPATCHES
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 gap-3.5 flex-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
                   {loading || topWireStories.length === 0
                     ? [2, 3, 4, 5].map((rank) => renderBriefSkeleton(rank))
                     : topWireStories.map((card, idx) =>
@@ -1605,32 +1397,6 @@ export default function Home() {
   );
 }
 
-/* CLASSIC EDITORIAL STATUS BADGE RENDERER */
-function renderActionBadge(actionType: string) {
-  const type = (actionType || "prepare").toLowerCase().trim();
-
-  let textColor = "text-amber-600 dark:text-amber-400";
-  let label = "PREPARE";
-
-  if (type === "apply") {
-    textColor = "text-emerald-600 dark:text-emerald-400";
-    label = "APPLY";
-  } else if (type === "learn") {
-    textColor = "text-sky-600 dark:text-sky-400";
-    label = "LEARN";
-  } else if (type === "avoid") {
-    textColor = "text-rose-600 dark:text-rose-400";
-    label = "AVOID";
-  }
-
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold uppercase tracking-wider bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs select-none ${textColor}`}
-    >
-      {label}
-    </span>
-  );
-}
 
 /* CLASSIC EDITORIAL STACK / TOPIC TAG RENDERER */
 function renderStackTag(tag: string) {
@@ -1649,7 +1415,7 @@ function renderStackTag(tag: string) {
 /* SKELETON RENDERER 1: #1 CRITICAL LEAD STORY SKELETON CARD */
 function renderLeadSkeleton() {
   return (
-    <article className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between flex-1 h-full select-none">
+    <article className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col select-none">
       <div>
         {/* Top Badges & Inner Loader Indicator */}
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -1689,22 +1455,17 @@ function renderLeadSkeleton() {
           </div>
         </div>
 
-        {/* Key Signals Skeleton Box */}
-        <div className="mb-3.5 p-3 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 space-y-2">
-          <div className="flex items-center gap-1 text-[10px] font-mono font-extrabold text-slate-500 dark:text-slate-400">
+        {/* Key Article Highlights Skeleton */}
+        <div className="mb-4 p-3.5 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 space-y-2">
+          <div className="flex items-center gap-1.5 text-[10px] font-mono font-extrabold text-slate-500 dark:text-slate-400">
             <Pin className="w-3.5 h-3.5 text-rose-500" />
-            <span>EXTRACTING KEY SIGNALS:</span>
+            <span>ARTICLE HIGHLIGHTS:</span>
           </div>
           <div className="space-y-2 pl-1">
             <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-full animate-pulse"></div>
-            <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-5/6 animate-pulse"></div>
+            <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-11/12 animate-pulse"></div>
+            <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-4/5 animate-pulse"></div>
           </div>
-        </div>
-
-        {/* Impact Summary Skeleton */}
-        <div className="space-y-1.5 mb-4">
-          <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-full animate-pulse"></div>
-          <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-4/5 animate-pulse"></div>
         </div>
       </div>
 
@@ -1722,7 +1483,7 @@ function renderBriefSkeleton(rankNumber: number) {
   return (
     <article
       key={`brief-skel-${rankNumber}`}
-      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 md:p-5 shadow-2xs flex flex-col justify-between h-full select-none"
+      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs flex flex-col select-none"
     >
       <div>
         <div className="flex items-center justify-between gap-2 mb-2.5">
@@ -1777,7 +1538,6 @@ function renderBriefSkeleton(rankNumber: number) {
 
       <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between mt-3">
         <div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
-        <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded-full animate-pulse"></div>
       </div>
     </article>
   );
@@ -1865,8 +1625,7 @@ function renderBentoSkeletonCard(span: number, keyIndex: number) {
       </div>
 
       {/* Footer */}
-      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between mt-4">
-        <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded-full animate-pulse"></div>
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end mt-4">
         <div className="h-6 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
       </div>
     </article>
@@ -1882,7 +1641,7 @@ function renderLeadSidebarCard(
   return (
     <article
       key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between flex-1 h-full"
+      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col"
     >
       <div>
         {/* Top Badges & Actions */}
@@ -1897,7 +1656,6 @@ function renderLeadSidebarCard(
               <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
           </div>
-          {renderActionBadge(card.card_content.what_to_do_next.action_type)}
         </div>
 
         {/* Headline */}
@@ -1912,7 +1670,7 @@ function renderLeadSidebarCard(
           </a>
         </h3>
 
-        {/* Compact Hero Image (Spot 1 - Always high quality and compact) */}
+        {/* Compact Hero Image (Spot 1 - Only rendered if a genuine resource image exists) */}
         {leadImageUrl ? (
           <div className="relative w-full h-36 sm:h-44 rounded-lg overflow-hidden my-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1921,31 +1679,29 @@ function renderLeadSidebarCard(
               alt={card.title}
               className="w-full h-full object-cover"
               loading="lazy"
+              onError={(e) => {
+                const target = e.currentTarget.parentElement;
+                if (target) target.style.display = "none";
+              }}
             />
           </div>
         ) : null}
 
-        {/* 2 Key Takeaway Bullets */}
-        <div className="mb-3.5 p-3 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
-          <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-950 dark:text-slate-100 flex items-center gap-1">
+        {/* Key Article Highlights */}
+        <div className="mb-4 p-3.5 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-2">
+          <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
             <Pin className="w-3.5 h-3.5 text-rose-600" />
-            <span>KEY SIGNALS:</span>
+            <span>ARTICLE HIGHLIGHTS:</span>
           </div>
-          <ul className="space-y-1 pl-1 text-[11px] sm:text-xs">
-            {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-              <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                <span className="text-rose-600 font-bold shrink-0">•</span>
-                <span className="line-clamp-2">{bullet}</span>
+          <ul className="space-y-2 pl-1 text-[11.5px] sm:text-xs">
+            {card.card_content.what_happened.map((bullet, idx) => (
+              <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                <span className="text-rose-600 font-bold shrink-0 mt-0.5">•</span>
+                <span className="text-slate-800 dark:text-slate-200 leading-normal">{bullet}</span>
               </li>
             ))}
           </ul>
         </div>
-
-        {/* Why It Matters */}
-        <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed mb-4 font-normal line-clamp-3">
-          <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[11px]">IMPACT: </strong>
-          {card.card_content.why_it_matters}
-        </p>
       </div>
 
       {/* Action Bar with Resource Link */}
@@ -1991,7 +1747,6 @@ function renderRectangleCard(
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex flex-wrap items-center gap-1.5">
             {card.target_stack.slice(0, 2).map((tag) => renderStackTag(tag))}
-            {renderActionBadge(card.card_content.what_to_do_next.action_type)}
             <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
               <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
               <span>{card.published_at || "Oct 23, 2026"}</span>
@@ -2022,6 +1777,10 @@ function renderRectangleCard(
                 alt={card.title}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                onError={(e) => {
+                  const target = e.currentTarget.parentElement;
+                  if (target) target.style.display = "none";
+                }}
               />
             </div>
 
@@ -2136,7 +1895,7 @@ function renderSquareCard(
           </a>
         </div>
 
-        {/* Optional Image Thumbnail when showImage is true */}
+        {/* Optional Image Thumbnail when real image exists */}
         {hasValidImage && (
           <div className="relative w-full h-32 sm:h-36 rounded-lg overflow-hidden mb-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2145,6 +1904,10 @@ function renderSquareCard(
               alt={card.title}
               className="w-full h-full object-cover"
               loading="lazy"
+              onError={(e) => {
+                const target = e.currentTarget.parentElement;
+                if (target) target.style.display = "none";
+              }}
             />
           </div>
         )}
@@ -2176,9 +1939,7 @@ function renderSquareCard(
       </div>
 
       {/* Footer */}
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 mt-auto">
-        {renderActionBadge(card.card_content.what_to_do_next.action_type)}
-
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2 mt-auto">
         <a
           href={card.source_url}
           target="_blank"
@@ -2203,10 +1964,10 @@ function renderBriefCard(
   return (
     <article
       key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 md:p-5 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col justify-between h-full"
+      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col"
     >
       <div>
-        <div className="flex items-center justify-between gap-2 mb-2.5">
+        <div className="flex items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-1.5 truncate">
             {rankNumber !== undefined && rankNumber <= 5 && (
               <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 dark:bg-slate-800 text-amber-300 border border-slate-800 dark:border-slate-700 shrink-0">
@@ -2235,24 +1996,22 @@ function renderBriefCard(
           </a>
         </h4>
 
-        <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed line-clamp-3">
-          {card.card_content.what_happened[0] || card.card_content.why_it_matters}
-        </p>
-
-        {card.card_content.why_it_matters && card.card_content.what_happened[0] && (
-          <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed line-clamp-2 font-mono pt-2 mt-2 border-t border-dashed border-slate-100 dark:border-slate-800">
-            <span className="font-bold text-slate-700 dark:text-slate-300">IMPACT: </span>
-            {card.card_content.why_it_matters}
-          </p>
-        )}
+        {/* Authentic Highlights / Key Summary Lines */}
+        <div className="space-y-1.5 mb-1">
+          {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
+            <p key={idx} className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed flex items-start gap-1.5">
+              <span className="text-rose-500 font-bold shrink-0 mt-0.5">•</span>
+              <span className="line-clamp-2">{bullet}</span>
+            </p>
+          ))}
+        </div>
       </div>
 
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-3">
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-2.5">
         <span className="truncate flex items-center gap-1">
           <Calendar className="w-2.5 h-2.5 text-slate-400" />
           <span>{card.published_at || "Oct 23, 2026"}</span>
         </span>
-        {renderActionBadge(card.card_content.what_to_do_next.action_type)}
       </div>
     </article>
   );

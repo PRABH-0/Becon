@@ -204,7 +204,16 @@ def resolve_feed_for_topic(topic: str) -> Tuple[str, str]:
 def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str, str]:
     title = entry.get("title", "No Title")
     link = entry.get("link", fallback_url)
+    content_raw = ""
+    if entry.get("content") and isinstance(entry["content"], list) and len(entry["content"]) > 0:
+        c0 = entry["content"][0]
+        content_raw = c0.get("value", "") if isinstance(c0, dict) else str(c0)
+
     summary_raw = entry.get("summary", entry.get("description", ""))
+    if not summary_raw or len(summary_raw) < 120:
+        if content_raw:
+            summary_raw = content_raw
+
     summary = clean_html_tags(summary_raw)
     if not summary:
         summary = f"Latest production updates regarding {tag_name}."
@@ -260,14 +269,25 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
     if not published_at:
         published_at = datetime.now().strftime("%b %d, %Y")
 
-    is_real = bool(image_url and image_url.strip())
+    # Strictly validate genuine article images: must be http(s) and not tracking pixels or tiny icons
+    is_real = False
+    clean_image_url = None
+    if image_url and isinstance(image_url, str):
+        candidate = image_url.strip()
+        if candidate.startswith("//"):
+            candidate = "https:" + candidate
+        if candidate.startswith("http://") or candidate.startswith("https://"):
+            lower = candidate.lower()
+            if not any(bad in lower for bad in ["1x1", "pixel", "spacer", "tracking", "feedburner", "favicon.ico", "transparent.gif"]):
+                is_real = True
+                clean_image_url = candidate
 
     return {
         "title": title,
         "link": link,
         "summary": summary,
         "tag": tag_name,
-        "image_url": image_url if is_real else None,
+        "image_url": clean_image_url,
         "is_real_image": is_real,
         "published_at": published_at
     }

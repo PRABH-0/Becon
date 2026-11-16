@@ -1,10 +1,14 @@
 # Python / Virtual Environment
 backend/venv/
+backend/.venv/
+.venv/
 venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.db
+*.sqlite3
 
 # Environment Secrets
 .env
