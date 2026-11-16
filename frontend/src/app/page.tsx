@@ -1102,10 +1102,10 @@ export default function Home() {
         <div className="space-y-6 sm:space-y-8">
           
           {/* TOP BALANCED SHOWCASE: #1 CRITICAL UPDATE (LEFT) + THE QUICK WIRE (RIGHT) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 items-start pb-8 sm:pb-10 border-b-2 border-slate-900 dark:border-slate-800">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 items-stretch pb-8 sm:pb-10 border-b-2 border-slate-900 dark:border-slate-800">
             
             {/* TOP MOST IMPORTANT UPDATE (LEFT 5 COLS) */}
-            <div className="lg:col-span-5 flex flex-col">
+            <div className="lg:col-span-5 flex flex-col h-full">
               <div className="flex items-center justify-between border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 font-mono">
                 <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase bg-rose-600 text-white shadow-xs">
                   <Flame className="w-3.5 h-3.5" /> #1 CRITICAL UPDATE
@@ -1114,14 +1114,16 @@ export default function Home() {
                   • TOP SIGNAL
                 </span>
               </div>
-              {loading || !leadStory
-                ? renderLeadSkeleton()
-                : renderLeadSidebarCard(leadStory, getActionBadgeColor, leadImageUrl)}
+              <div className="flex-1 flex flex-col">
+                {loading || !leadStory
+                  ? renderLeadSkeleton()
+                  : renderLeadSidebarCard(leadStory, getActionBadgeColor, leadImageUrl)}
+              </div>
             </div>
 
-            {/* DAILY DISPATCHES / QUICK WIRE + TELEMETRY (RIGHT 7 COLS) */}
-            <div className="lg:col-span-7 flex flex-col">
-              <div className="flex flex-col">
+            {/* DAILY DISPATCHES / QUICK WIRE (RIGHT 7 COLS) */}
+            <div className="lg:col-span-7 flex flex-col h-full">
+              <div className="flex flex-col h-full flex-1">
                 <div className="border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 flex items-center justify-between font-mono">
                   <span className="text-xs font-extrabold uppercase tracking-widest text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
                     <Radio className="w-4 h-4 text-rose-500" /> THE QUICK WIRE • RAPID SIGNALS
@@ -1130,7 +1132,7 @@ export default function Home() {
                     DISPATCHES
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 gap-3.5 flex-1">
                   {loading || topWireStories.length === 0
                     ? [2, 3, 4, 5].map((rank) => renderBriefSkeleton(rank))
                     : topWireStories.map((card, idx) =>
@@ -1415,7 +1417,7 @@ function renderStackTag(tag: string) {
 /* SKELETON RENDERER 1: #1 CRITICAL LEAD STORY SKELETON CARD */
 function renderLeadSkeleton() {
   return (
-    <article className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col select-none">
+    <article className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between h-full select-none">
       <div>
         {/* Top Badges & Inner Loader Indicator */}
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -1470,7 +1472,7 @@ function renderLeadSkeleton() {
       </div>
 
       {/* Footer Skeleton */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2.5">
+      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2.5 mt-auto">
         <div className="h-4 w-28 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
         <div className="h-7 w-24 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse"></div>
       </div>
@@ -1483,7 +1485,7 @@ function renderBriefSkeleton(rankNumber: number) {
   return (
     <article
       key={`brief-skel-${rankNumber}`}
-      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs flex flex-col select-none"
+      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between h-full select-none"
     >
       <div>
         <div className="flex items-center justify-between gap-2 mb-2.5">
@@ -1536,7 +1538,7 @@ function renderBriefSkeleton(rankNumber: number) {
         </div>
       </div>
 
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between mt-3">
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between mt-auto">
         <div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
       </div>
     </article>
@@ -1641,7 +1643,7 @@ function renderLeadSidebarCard(
   return (
     <article
       key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col"
+      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between h-full"
     >
       <div>
         {/* Top Badges & Actions */}
@@ -1688,7 +1690,7 @@ function renderLeadSidebarCard(
         ) : null}
 
         {/* Key Article Highlights */}
-        <div className="mb-4 p-3.5 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-2">
+        <div className="mb-3.5 p-3.5 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-2">
           <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
             <Pin className="w-3.5 h-3.5 text-rose-600" />
             <span>ARTICLE HIGHLIGHTS:</span>
@@ -1702,10 +1704,18 @@ function renderLeadSidebarCard(
             ))}
           </ul>
         </div>
+
+        {/* Broadsheet Context & Significance: Fills text-only Lead card so it never leaves an empty void */}
+        {!leadImageUrl && card.card_content.why_it_matters && (
+          <p className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed mb-3 line-clamp-3">
+            <strong className="text-slate-900 dark:text-slate-100 font-mono text-[11px] uppercase mr-1">Context:</strong>
+            {card.card_content.why_it_matters}
+          </p>
+        )}
       </div>
 
       {/* Action Bar with Resource Link */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 font-mono">
+      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 font-mono mt-auto">
         <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
           Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
         </span>
@@ -1964,7 +1974,7 @@ function renderBriefCard(
   return (
     <article
       key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col"
+      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col justify-between h-full"
     >
       <div>
         <div className="flex items-center justify-between gap-2 mb-2">
@@ -1997,7 +2007,7 @@ function renderBriefCard(
         </h4>
 
         {/* Authentic Highlights / Key Summary Lines */}
-        <div className="space-y-1.5 mb-1">
+        <div className="space-y-1.5 mb-2">
           {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
             <p key={idx} className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed flex items-start gap-1.5">
               <span className="text-rose-500 font-bold shrink-0 mt-0.5">•</span>
@@ -2005,9 +2015,17 @@ function renderBriefCard(
             </p>
           ))}
         </div>
+
+        {/* Technical Impact Context Snippet */}
+        {card.card_content.why_it_matters && (
+          <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed line-clamp-2 font-mono pt-2 border-t border-dashed border-slate-100 dark:border-slate-800">
+            <span className="font-bold text-slate-700 dark:text-slate-300">IMPACT: </span>
+            {card.card_content.why_it_matters}
+          </p>
+        )}
       </div>
 
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-2.5">
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-auto">
         <span className="truncate flex items-center gap-1">
           <Calendar className="w-2.5 h-2.5 text-slate-400" />
           <span>{card.published_at || "Oct 23, 2026"}</span>
