@@ -3,16 +3,30 @@ import time
 import uuid
 from collections import defaultdict
 from threading import Lock
-from typing import Dict, List
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, status
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app.ai_service import ai_match_topics
-from app.auth import ALGORITHM, SECRET_KEY, create_access_token, get_password_hash, verify_password
+from app.auth import (
+    ALGORITHM,
+    SECRET_KEY,
+    create_access_token,
+    get_password_hash,
+    verify_password,
+)
 from app.config import settings
 from app.database import get_db
 from app.feed_service import get_live_briefings, search_topic_briefings
@@ -130,7 +144,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_guest_ip_log: Dict[str, List[float]] = defaultdict(list)
+_guest_ip_log: dict[str, list[float]] = defaultdict(list)
 _guest_lock = Lock()
 
 
@@ -164,7 +178,7 @@ def read_root():
     "/api/briefings",
     tags=["Briefings"],
     summary="Fetch personalized intelligence cards",
-    response_model=List[BriefingCard],
+    response_model=list[BriefingCard],
 )
 def get_briefings(
     stack: str = Query(
@@ -235,7 +249,7 @@ def get_briefings(
     "/api/search-topic",
     tags=["Briefings"],
     summary="Synthesize live cards for a custom topic",
-    response_model=List[BriefingCard],
+    response_model=list[BriefingCard],
 )
 def get_search_topic_briefings(
     query: str = Query(

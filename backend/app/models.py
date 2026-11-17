@@ -1,5 +1,7 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, DateTime, Text
+from datetime import UTC, datetime
+
+from sqlalchemy import Column, DateTime, Integer, String, Text
+
 from app.database import Base
 
 
@@ -17,7 +19,7 @@ class UserProfile(Base):
     password_hash = Column(String(500), nullable=True)
     picture_url = Column(String(1000), nullable=True)  # Gmail/Google Avatar URL
     auth_provider = Column(String(50), default="local")  # "local", "google", "guest"
-    lastUpdated = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    lastUpdated = Column(DateTime, default=lambda: datetime.now(UTC))
 
 
 class SavedBriefing(Base):
@@ -33,4 +35,4 @@ class SavedBriefing(Base):
     # Action card content as JSON string
     card_content_json = Column(Text)
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))

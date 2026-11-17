@@ -1,5 +1,6 @@
 import os
-from typing import List, Optional, Literal
+from typing import Literal
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -30,12 +31,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(default="sqlite:///./becon.db")
     ALLOWED_ORIGINS: str = Field(default="http://localhost:3000,http://127.0.0.1:3000")
     ENABLE_DOCS: bool = Field(default=True)
-    GEMINI_API_KEY: Optional[str] = Field(default=None)
-    INGEST_API_TOKEN: Optional[str] = Field(default=None)
+    GEMINI_API_KEY: str | None = Field(default=None)
+    INGEST_API_TOKEN: str | None = Field(default=None)
     GUEST_RATE_LIMIT_PER_HOUR: int = Field(default=5)
 
     @property
-    def allowed_origins_list(self) -> List[str]:
+    def allowed_origins_list(self) -> list[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     @model_validator(mode="after")
