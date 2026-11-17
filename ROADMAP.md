@@ -165,4 +165,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | Date | Task | Result | Notes |
 | :--- | :--- | :--- | :--- |
 | 2026-11-17 | 0.1, 0.2, 0.3 | Done | Audit, UI audit and repo CLAUDE.md created |
-| 2026-11-17 | 1.1 | In Progress (`c63c209`) | Personal data redacted from audit reports, remote checked; 1.1 pre-step complete |
+| 2026-11-17 | 1.1 | Awaiting Review (`442f7ef`) | Hygiene & security guardrails implemented: .gitignore updated, obsolete DB scripts removed, settings centralized, ingest endpoint protected, guest rate-limited, token expiry fixed, personal defaults removed, prompt sanitized, test suite passing |
