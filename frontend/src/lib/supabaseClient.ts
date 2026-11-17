@@ -12,7 +12,13 @@ function getClient(): SupabaseClient {
     );
   }
   if (!clientInstance) {
-    clientInstance = createClient(supabaseUrl, supabaseAnonKey);
+    clientInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
   }
   return clientInstance;
 }
