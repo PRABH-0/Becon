@@ -16,14 +16,15 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 
 ## 3. Architecture Overview
 - **Backend ([backend/app](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app)):** FastAPI service exposing REST endpoints for briefings, user profiles, authentication, onboarding chat, and ingestion triggers.
-  - `main.py`: App routing, OAuth2 dependencies, CORS middleware, safe user get-or-create handlers.
+  - `main.py`: App routing, CORS middleware, request ID tracking, `/health`, `/api/me`, `/api/account`.
+  - `supabase_auth.py`: Token verification via PyJWT using Supabase JWKS (ES256/RS256) or legacy HS256 secret.
+  - `deps.py`: User mapping (`get_current_user`, `get_optional_user`, `map_token_to_user`).
   - `feed_service.py`: RSS/Atom feed fetching (`feedparser`), image resolution, multi-tenant in-memory cache.
   - `ai_service.py`: Google Gemini integration (`google-genai`), Pydantic schema-constrained JSON extraction.
   - `database.py`: SQLAlchemy session and engine management with naming conventions for SQLite and PostgreSQL.
   - `models.py`: Declarative ORM models (20 tables; see [docs/DATA_MODEL.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/DATA_MODEL.md)).
   - `seed/`: Idempotent data seeder loading professions and focus topics from JSON files in `seed/data/`.
-  - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `UserProfileBase`, `Token`, `HealthResponse`).
-  - `auth.py`: Password hashing (`bcrypt`) and HS256 JWT encoding.
+  - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `UserProfileBase`, `UserMeResponse`, `HealthResponse`).
 - **Frontend ([frontend/src](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src)):** Next.js 16 App Router broadsheet web app using Tailwind CSS v4 and Lucide icons.
   - `app/page.tsx`: Broadsheet layout containing Top Showcase (Lead + Quick Wire) and Bento Grid deck.
   - `app/profile/page.tsx`: Form to configure profession, experience, focus topics, custom prompts, and AI tone.
@@ -56,7 +57,10 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `LOG_LEVEL`: Logging verbosity level (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
   - `GEMINI_API_KEY`: Google Gemini API key used for structured 4-part Action Card synthesis.
   - `DATABASE_URL`: SQLAlchemy connection string (`sqlite:///./becon.db` or PostgreSQL URL).
-  - `SECRET_KEY`: Secret HMAC key for signing JWT access tokens (16+ chars in production).
+  - `SUPABASE_URL`: Supabase project URL (e.g. `https://xyz.supabase.co`; required in production).
+  - `SUPABASE_JWT_AUDIENCE`: Expected token audience (default: `authenticated`).
+  - `SUPABASE_JWT_SECRET`: Optional legacy secret for HS256 token verification.
+  - `SUPABASE_SERVICE_ROLE_KEY`: Service role secret for Supabase Admin API (`DELETE /api/account`).
   - `INGEST_API_TOKEN`: Secret authorization token for `POST /api/ingest`.
   - `ALLOWED_ORIGINS`: Comma-separated CORS allowed domains (e.g. `http://localhost:3000`).
   - `ENABLE_DOCS`: Toggle for `/docs` and `/redoc` Swagger documentation endpoints (`"true"`/`"false"`).
@@ -74,7 +78,8 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 Full specification and ER diagram documented in [docs/DATA_MODEL.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/DATA_MODEL.md).
 - **20 Tables:** `user_profiles` (migrated, unique email), `saved_briefings` (legacy, DEPRECATED), `professions`, `focus_topics`, `topic_aliases`, `profession_topics`, `user_focus_topics`, `sources`, `source_topics`, `user_follows`, `raw_items`, `events`, `event_topics`, `cards`, `card_variants`, `saved_cards`, `card_feedback`, `error_reports`, `deliveries`, `metrics_events`.
 - **Design Rules:** UUID PKs (`sa.Uuid`), UTC timestamps, portable JSON (`JSONB` on Postgres), check constraints for fixed vocabularies, lowercase email and alias indexing, safe get-or-create handling on races.
-- **Migrations:** Alembic baseline `0001` (stamps existing DB) and `0002_full_schema` (creates tables, deduplicates emails).
+- **Migrations:** Alembic baseline `0001` (stamps existing DB), `0002_full_schema` (creates tables, deduplicates emails), and `0003_supabase_auth_rls` (nullable email, PostgreSQL RLS enabled on all 21 tables).
+- **Identity & Auth:** Full specification in [docs/AUTH.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/AUTH.md). Supabase Auth is single identity provider; custom JWT and local credentials retired. Protected routes require Supabase Bearer token.
 - **Database Selection:** Handled in [`backend/app/database.py`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/database.py). Defaults to SQLite locally; normalizes `postgres://` to `postgresql+psycopg2://` for Postgres/Supabase.
 
 ## 8. Rules for Any AI Agent Working in this Repo

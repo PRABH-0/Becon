@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-17  
 Current phase: 1 (Foundation)  
-Current task: 1.3 Alembic and full data model  
+Current task: 1.4 Auth consolidated on Supabase Auth (1.4a backend complete, 1.4b frontend pending)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -51,8 +51,8 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 ## PHASE 1: Foundation
 - [x] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
 - [x] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
-- [~] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
-- [ ] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages
+- [x] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
+- [~] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages (1.4a backend done, 1.4b frontend pending)
 - [ ] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
 
 *Exit: one-command local run, CI green, schema migrated, auth works end to end, data survives restart.*
@@ -108,13 +108,14 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 - [ ] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles)
 - [ ] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive
 - [ ] 6.6 Typography (load editorial serif), token cleanup, accessibility fixes (focus, Escape, contrast, aria)
+- [ ] 6.7 Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow
 
 *Exit: full user flow works against real data.*
 
 ---
 
 ## PHASE 7: Email digest and metrics
-- [ ] 7.1 Resend with verified domain (SPF/DKIM/DMARC)
+- [ ] 7.1 Resend with verified domain (SPF/DKIM/DMARC) (also configure custom SMTP in Supabase Auth dashboard to overcome default 30 emails/hr rate limit)
 - [ ] 7.2 Digest template, per-timezone scheduling, unsubscribe, bounces
 - [ ] 7.3 Event tracking and metrics view (open rate, useful ratio, cards read, retention)
 
@@ -123,7 +124,7 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 ---
 
 ## PHASE 8: Production and beta
-- [ ] 8.1 Deploy staging and production (Vercel, backend host, Supabase), secrets, backups
+- [ ] 8.1 Deploy staging and production (Vercel, backend host, separate Supabase production project with Cloudflare Turnstile CAPTCHA for anonymous sign-ins), secrets, backups
 - [ ] 8.2 Monitoring (Sentry, uptime), security review, free-tier worker check
 - [ ] 8.3 Terms, privacy policy, attribution policy
 - [ ] 8.4 Landing page and waitlist
@@ -168,4 +169,5 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-17 | 1.1 | Done (`af04d7b`) | Hygiene & security guardrails implemented: .gitignore updated, obsolete DB scripts removed, settings centralized, ingest endpoint protected, guest rate-limited, token expiry fixed, personal defaults removed, prompt sanitized, test suite passing |
 | 2026-11-17 | 1.1b | Done (`0e9831d`) | Remote secrets scan, SECRET_KEY verified, local history safely rewritten to remove unredacted report commits, smoke tests passed |
 | 2026-11-17 | 1.2 | Done (`5da2a57`) | Approved by lead: Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
-| 2026-11-17 | 1.3 | In Progress (`95efc44`) | Alembic migrations setup (0001 baseline + 0002 full schema), 20 declarative ORM tables with UUID PKs and CHECK constraints, email deduplication on user_profiles, safe get-or-create user handling, idempotent seed data (54 topics, 2 professions), docs/DATA_MODEL.md, comprehensive test suite |
+| 2026-11-17 | 1.3 | Done (`56d11d4`) | Approved by lead: Alembic migrations setup (0001 baseline + 0002 full schema), 20 declarative ORM tables with UUID PKs and CHECK constraints, email deduplication on user_profiles, safe get-or-create user handling, idempotent seed data (54 topics, 2 professions), docs/DATA_MODEL.md, comprehensive test suite |
+| 2026-11-17 | 1.4a | In Progress (`de4952d`) | Supabase Auth backend: PyJWT JWKS (ES256/RS256) and HS256 verification with 10m cache and kid rate limiter, user mapping by sub / lowercase email / anonymous NULL, migration 0003 for nullable email and PostgreSQL RLS on all 21 tables, retired custom JWT and local credentials, added GET /api/me and DELETE /api/account (with cascades and Admin API call), docs/AUTH.md, 35 passing tests |

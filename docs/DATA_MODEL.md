@@ -182,6 +182,14 @@ Legacy table `saved_briefings`:
 
 Alembic manages all schema lifecycle events across SQLite (local development) and PostgreSQL / Supabase (production).
 
+### Migration History
+1. `0001_baseline`: Stamped baseline representing initial schema.
+2. `0002_full_schema`: Full schema expansion (20 tables), email deduplication, and check constraints.
+3. `0003_supabase_auth_rls`:
+   - Makes `user_profiles.email` nullable (`VARCHAR(255) NULL`).
+   - Cleanses existing empty strings (`''`) and synthetic guest emails (`@guest.becon.local`) to `NULL`.
+   - Enables Row Level Security (RLS) on all 21 tables in PostgreSQL with zero policies (blocking direct PostgREST Data API queries via anon/authenticated roles, while allowing backend service role/owner connections).
+
 ### Adoption of Existing Local Database (`becon.db`)
 Existing local databases containing the initial unversioned schema must be stamped with baseline `0001` before upgrading:
 ```powershell
