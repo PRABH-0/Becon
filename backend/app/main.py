@@ -1,9 +1,7 @@
 import logging
-import secrets
+import re
 import time
 import uuid
-from collections import defaultdict
-from threading import Lock
 
 from fastapi import (
     BackgroundTasks,
@@ -16,22 +14,12 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ai_service import ai_match_topics
-from app.auth import (
-    ALGORITHM,
-    SECRET_KEY,
-    create_access_token,
-    get_password_hash,
-    verify_password,
-)
 from app.config import settings
 from app.database import get_db
+from app.deps import get_current_user, get_optional_user
 from app.feed_service import get_live_briefings, search_topic_briefings
 from app.logging_config import request_id_ctx_var, setup_logging
 from app.models import UserProfile
@@ -41,79 +29,70 @@ from app.schemas import (
     ChatResponse,
     HealthResponse,
     IngestResponse,
-    SupabaseAuthSync,
-    Token,
     TopicSearchResponse,
+    UserMeResponse,
     UserProfileCreate,
     UserProfileResponse,
-    UserRegister,
+)
+from app.supabase_auth import (
+    SupabaseAuthNotConfiguredError,
+    delete_supabase_user_admin,
+    log_verification_modes,
 )
 
 setup_logging(environment=settings.ENVIRONMENT, log_level=settings.LOG_LEVEL)
+log_verification_modes()
 logger = logging.getLogger("becon.api")
 
+REQUEST_ID_REGEX = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
 AVAILABLE_TOPICS = [
-    "Tax Regulations & GST Compliance",
-    "Retail & Shop Inventory Management",
-    "Small Business Growth & Finance",
-    "E-Commerce & Digital Sales",
-    "Corporate Accounting & Audit Standards",
-    "Artificial Intelligence & Productivity Tools",
-    "Customer Retention & Retail POS",
-    "Financial Forecasting & Cash Flow",
-    "Digital Marketing & Social Selling",
-    "Software Engineering & Web Apps",
-    "Python, Data & Analytics",
-    "Cloud Tools & Cyber Security",
-    "Supply Chain & Vendor Management",
-    "Banking, Payments & Fintech",
-    "Business Law & Regulatory Filings",
-    "Modern Cloud & Systems Architecture",
-    ".NET Core & Minimal APIs",
-    "C# Architecture & Microservices",
-    "Angular & Web Frameworks",
-    "React & Next.js Systems",
-    "Python & FastAPI Setup",
-    "Rust Programming Language",
-    "Go & High-Performance Services",
-    "Docker & Containerization",
-    "Google Gemini & Generative AI",
-    "Kubernetes & DevOps Pipelines",
-    "Cloud Infrastructure & Azure",
-    "TypeScript & Modern Tooling",
-    "SQL & Vector Databases",
-    "Micro-Frontends & Module Federation",
-    "Zero-Trust Cloud Security",
-    "eBPF & System Observability",
+    "AI & Generative Models",
+    "Cloud Architecture & AWS",
+    "Kubernetes & Containers",
+    "Full-Stack Development (React, Next.js, Node)",
+    "Systems Programming (Rust, Go)",
+    "Backend & Distributed Systems (.NET, Java, Python)",
+    "DevOps & Platform Engineering",
+    "Security & Vulnerabilities (CVE, OWASP)",
+    "Data Engineering & Databases",
+    "System Design & Scalability",
 ]
 
 API_DESCRIPTION = """
-## Overview
-**Becon AI** delivers hyper-personalized, executive-density intelligence briefings tailored to the reader's exact professional role, focus stacks, and industry sectors.
+### Becon AI Intelligence Briefing Engine (API v1.0)
+Becon is an editorial-first, newspaper-style intelligence briefing web application for engineers.
+It aggregates, clusters, deduplicates, and synthesizes developer news into high-signal,
+action-oriented cards with four consistent dimensions:
+1. **What Happened** (concise summary bullets)
+2. **Why It Matters** (macro industry & professional impact)
+3. **How It Affects You** (hyper-personalized relevance based on role & stack)
+4. **What To Do Next** (specific tactical guidance categorized as *learn*, *apply*, *avoid*, or *prepare*)
 
-## Authentication Workflow
-1. **Register**: Create an account via [`POST /api/register`](#/Auth/register_api_register_post) with your email and password.
-2. **Authorize**: Click the green **Authorize** button at the top right of this Swagger UI page.
-3. **Login Credentials**: Enter your registered email into the **username** field and your password into the **password** field, then click **Authorize**.
-4. **Access Protected Endpoints**: Endpoints under the **Profile** and **Onboarding** tags will now automatically send your Bearer JWT access token.
+---
+### Authentication Model
+Authentication is delegated entirely to **Supabase Auth**.
+- The browser authenticates via Supabase Auth (email/password, OAuth, or anonymous exploration).
+- Pass the issued Supabase JWT as `Authorization: Bearer <token>` to protected endpoints.
+- The backend verifies tokens asymmetrically using Supabase JWKS (ES256/RS256) or via legacy HS256 secret.
 """
 
 OPENAPI_TAGS = [
     {
         "name": "Health",
-        "description": "System health and operational telemetry status endpoints.",
+        "description": "System health, readiness probes, and core operational metrics.",
     },
     {
         "name": "Briefings",
-        "description": "Real-time AI briefings, customized subject search, and broadsheet feed generation.",
+        "description": "Personalized 4-part intelligence cards derived from live official tech feeds.",
     },
     {
         "name": "Auth",
-        "description": "User registration and OAuth2 password-bearer authentication.",
+        "description": "Supabase identity verification, user account management, and profile state.",
     },
     {
         "name": "Profile",
-        "description": "Authenticated user profile management and personalized intelligence preferences.",
+        "description": "User profile settings, engineering stack, custom prompt directives, and tone preference.",
     },
     {
         "name": "Onboarding",
@@ -154,7 +133,12 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
-    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    incoming_id = request.headers.get("x-request-id")
+    if incoming_id and REQUEST_ID_REGEX.match(incoming_id):
+        request_id = incoming_id
+    else:
+        request_id = uuid.uuid4().hex
+
     token = request_id_ctx_var.set(request_id)
     start_time = time.perf_counter()
     try:
@@ -188,24 +172,11 @@ async def request_logging_middleware(request: Request, call_next):
         request_id_ctx_var.reset(token)
 
 
-_guest_ip_log: dict[str, list[float]] = defaultdict(list)
-_guest_lock = Lock()
-
-
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "127.0.0.1"
-
-
 @app.get(
     "/health",
     tags=["Health"],
-    summary="Liveness and container health check",
-    response_model=dict[str, str],
+    summary="Liveness and health check endpoint",
+    response_model=dict,
 )
 def health_check():
     """
@@ -286,16 +257,31 @@ def get_briefings(
         description="Direct card offset for continuous infinite scroll pagination",
         examples=[0, 6, 12],
     ),
+    current_user: UserProfile | None = Depends(get_optional_user),
 ):
     """
     Returns real-time intelligence cards tailored to the user's specific profession, interests, and preferences.
     Supports progressive loading (scope='top' then scope='remaining') and direct offset infinite scroll.
+    Accepts optional Bearer token to personalize based on authenticated user preferences.
     """
+    # Use authenticated profile preferences as defaults if available and not overridden
+    effective_role = role
+    effective_interests = interests
+    effective_prompt = custom_prompt
+
+    if current_user:
+        if effective_role in ("Professional", "Developer") and current_user.role:
+            effective_role = current_user.role
+        if not effective_interests and current_user.interests:
+            effective_interests = current_user.interests
+        if not effective_prompt and current_user.customPrompt:
+            effective_prompt = current_user.customPrompt
+
     return get_live_briefings(
         force_refresh=refresh,
-        user_role=role,
-        user_interests=interests,
-        custom_prompt=custom_prompt,
+        user_role=effective_role,
+        user_interests=effective_interests,
+        custom_prompt=effective_prompt,
         page=page,
         limit=limit,
         scope=scope,
@@ -304,96 +290,77 @@ def get_briefings(
 
 
 @app.get(
-    "/api/search-topic",
+    "/api/briefings/search",
     tags=["Briefings"],
-    summary="Synthesize live cards for a custom topic",
-    response_model=list[BriefingCard],
-)
-def get_search_topic_briefings(
-    query: str = Query(
-        ...,
-        min_length=1,
-        description="Topic or favorite subject to search and synthesize into briefing cards",
-        examples=["punjabi", "generative ai", "retail inventory", "rust programming"],
-    ),
-    role: str = Query(
-        default="Professional",
-        description="Target professional role of reading user",
-        examples=["Professional", "Data Engineer", "Founder"],
-    ),
-    limit: int = Query(
-        default=6,
-        ge=1,
-        le=12,
-        description="Number of synthesized cards to return",
-        examples=[6],
-    ),
-    offset: int = Query(
-        default=0,
-        ge=0,
-        description="Offset for infinite scroll pagination across search results",
-        examples=[0, 6, 12],
-    ),
-    page: int = Query(
-        default=1,
-        ge=1,
-        description="Page number for pagination tracking",
-        examples=[1, 2],
-    ),
-):
-    """
-    Synthesizes real-time intelligence cards tailored to any specific favorite subject or topic using Gemini AI.
-    Paginates dynamically across live RSS items.
-    """
-    return search_topic_briefings(topic=query, user_role=role, limit=limit, offset=offset, page=page)
-
-
-@app.get(
-    "/api/topic-search",
-    tags=["Briefings"],
-    summary="Semantic topic search & catalog autocomplete",
+    summary="Semantic topic search across briefing feeds",
     response_model=TopicSearchResponse,
 )
-def search_topics(
+def search_briefings_endpoint(
     q: str = Query(
         ...,
-        min_length=1,
-        description="Search query to match against predefined topics",
-        examples=["python", "cloud", "taxes", "angular"],
+        min_length=2,
+        description="Search query string or specific topic name",
+        examples=["Docker", "Rust memory safety", "PostgreSQL indexes"],
     ),
+    role: str = Query(
+        default="Software Engineer",
+        description="Target professional role for relevance evaluation",
+        examples=["Senior Backend Engineer"],
+    ),
+    current_user: UserProfile | None = Depends(get_optional_user),
 ):
     """
-    Uses Gemini AI to semantically match a search query against available topics.
-    Returns up to 3 related topics from the predefined catalog.
+    Searches the live intelligence cache using fuzzy match algorithms and Gemini semantic reranking.
     """
-    matched = ai_match_topics(query=q, available_topics=AVAILABLE_TOPICS, max_results=3)
-    return {"query": q, "matches": matched}
+    effective_role = current_user.role if (current_user and current_user.role) else role
+    result = search_topic_briefings(query=q, user_role=effective_role)
+    return TopicSearchResponse(**result)
+
+
+@app.post(
+    "/api/ai/match-topics",
+    tags=["Onboarding"],
+    summary="Semantic topic recommendation from user description",
+    response_model=dict,
+)
+def match_topics_endpoint(payload: dict):
+    """
+    Extracts relevant developer topics from free-form natural language text using Gemini.
+    """
+    description = payload.get("description", "")
+    if not description:
+        return {"matched_topics": []}
+    matched = ai_match_topics(description, AVAILABLE_TOPICS)
+    return {"matched_topics": matched}
 
 
 @app.post(
     "/api/ingest",
     tags=["Ingestion"],
-    summary="Trigger background feed ingestion",
+    summary="Trigger immediate background feed fetch & synthesis",
     response_model=IngestResponse,
     responses={
-        401: {"description": "Unauthorized - Missing or invalid X-Ingest-Token header"},
-        503: {"description": "Service Unavailable - Ingestion token is not configured on server"},
+        401: {"description": "Unauthorized - Missing or invalid X-Ingest-Token"},
+        503: {"description": "Service Unavailable - INGEST_API_TOKEN is not configured"},
     },
 )
-def trigger_ingestion(
+def trigger_ingest(
     background_tasks: BackgroundTasks,
     x_ingest_token: str | None = Header(default=None, alias="X-Ingest-Token"),
 ):
     """
-    Triggers asynchronous polling and synthesis across all configured RSS feeds in the background.
-    Protected by X-Ingest-Token header matching INGEST_API_TOKEN.
+    Forces immediate fetching of all RSS sources and regeneration of AI briefings in the background.
+    Protected by a dedicated secret token header (`X-Ingest-Token`).
     """
-    if not settings.INGEST_API_TOKEN:
+    if not settings.INGEST_API_TOKEN or not settings.INGEST_API_TOKEN.strip():
+        logger.error("Ingest triggered but INGEST_API_TOKEN is not configured on this server")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Ingest API token is not configured on server (INGEST_API_TOKEN unset).",
+            detail="Ingestion endpoint is disabled because INGEST_API_TOKEN is not configured.",
         )
-    if not x_ingest_token or not secrets.compare_digest(x_ingest_token, settings.INGEST_API_TOKEN):
+
+    if not x_ingest_token or x_ingest_token.strip() != settings.INGEST_API_TOKEN.strip():
+        logger.warning("Unauthorized ingestion trigger attempt with invalid or missing token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-Ingest-Token header.",
@@ -406,27 +373,88 @@ def trigger_ingestion(
     }
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+# =============================================================================
+# User Identity & Account Endpoints (Supabase Auth)
+# =============================================================================
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+@app.get(
+    "/api/me",
+    tags=["Auth"],
+    summary="Get current user identity and profile state",
+    response_model=UserMeResponse,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+        503: {"description": "Service Unavailable - Supabase authentication not configured"},
+    },
+)
+def get_me(current_user: UserProfile = Depends(get_current_user)):
+    """
+    Returns the authenticated user's profile, authentication metadata, and setup completion status.
+    """
+    has_completed_setup = bool((current_user.role and current_user.interests) or current_user.profession_id is not None)
+    profession_slug = current_user.profession.slug if current_user.profession else None
+
+    return UserMeResponse(
+        id=current_user.id,
+        email=current_user.email,
+        name=current_user.name or "",
+        picture_url=current_user.picture_url,
+        is_anonymous=current_user.is_anonymous,
+        profession=profession_slug,
+        timezone=current_user.timezone or "UTC",
+        delivery_time=current_user.delivery_time or "07:00",
+        email_digest_enabled=current_user.email_digest_enabled,
+        has_completed_setup=has_completed_setup,
     )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
 
-    user = db.query(UserProfile).filter(func.lower(UserProfile.email) == email.lower()).first()
-    if user is None:
-        raise credentials_exception
-    return user
+
+@app.delete(
+    "/api/account",
+    tags=["Auth"],
+    summary="Permanently delete user account and all personal data",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        204: {"description": "Account successfully deleted"},
+        401: {"description": "Unauthorized - Missing or invalid Bearer token"},
+        502: {"description": "Bad Gateway - Identity provider deletion failed"},
+        503: {"description": "Service Unavailable - Admin deletion key not configured"},
+    },
+)
+async def delete_account(
+    current_user: UserProfile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Permanently deletes the user's account from Supabase Auth and the local Becon database.
+    Cascades remove all follows, bookmarks, and feedback.
+    """
+    if not settings.SUPABASE_SERVICE_ROLE_KEY or not settings.SUPABASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account deletion is not available: Supabase service role key is not configured.",
+        )
+
+    # 1. Delete user from Supabase Auth via Admin API
+    if current_user.external_auth_id:
+        try:
+            await delete_supabase_user_admin(current_user.external_auth_id)
+        except SupabaseAuthNotConfiguredError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            ) from e
+        except Exception as e:
+            logger.error(f"Supabase Admin API account deletion failed: {type(e).__name__}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to delete account from identity provider.",
+            ) from e
+
+    # 2. Delete local user_profiles row in one transaction
+    db.delete(current_user)
+    db.commit()
+    return None
 
 
 @app.get(
@@ -463,204 +491,12 @@ def update_profile(
     """
     Updates the authenticated user's profile settings and preferences in the database.
     """
-    for key, value in profile_data.model_dump().items():
-        setattr(current_user, key, value)
+    for key, value in profile_data.model_dump(exclude_unset=True).items():
+        if key != "id":
+            setattr(current_user, key, value)
     db.commit()
     db.refresh(current_user)
     return current_user
-
-
-@app.post(
-    "/api/register",
-    tags=["Auth"],
-    summary="Register a new user account",
-    response_model=Token,
-    responses={
-        400: {"description": "Email already registered"},
-        422: {"description": "Validation Error - Invalid registration data"},
-    },
-)
-def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    """
-    Registers a new user account with bcrypt password hashing and returns an initial access token.
-    Uses case-insensitive get-or-create and handles IntegrityError race conditions gracefully.
-    """
-    clean_email = user_data.email.strip().lower()
-    existing_user = db.query(UserProfile).filter(func.lower(UserProfile.email) == clean_email).first()
-    if existing_user:
-        access_token = create_access_token(data={"sub": existing_user.email})
-        return {"access_token": access_token, "token_type": "bearer"}
-
-    hashed_password = get_password_hash(user_data.password)
-
-    new_user = UserProfile(
-        name=user_data.name if user_data.name else "User",
-        email=clean_email,
-        password_hash=hashed_password,
-        role="",
-        experience="",
-        interests="",
-    )
-    try:
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        user = new_user
-    except IntegrityError:
-        db.rollback()
-        user = db.query(UserProfile).filter(func.lower(UserProfile.email) == clean_email).first()
-
-    access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-
-@app.post(
-    "/api/login",
-    tags=["Auth"],
-    summary="OAuth2 password login & token generation",
-    response_model=Token,
-    responses={
-        401: {"description": "Incorrect email or password"},
-        422: {"description": "Validation Error - Invalid login form data"},
-    },
-)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """
-    Authenticates user credentials (email entered in username field) and returns an OAuth2 Bearer JWT.
-    """
-    user = (
-        db.query(UserProfile)
-        .filter(func.lower(UserProfile.email) == form_data.username.strip().lower())
-        .first()
-    )
-    if not user or not user.password_hash or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-
-@app.post(
-    "/api/auth/supabase-sync",
-    tags=["Auth"],
-    summary="Sync Supabase OAuth (Google) user with Becon backend",
-    response_model=Token,
-    responses={
-        400: {"description": "Invalid sync payload"},
-        422: {"description": "Validation Error"},
-    },
-)
-def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db)):
-    """
-    Syncs user authenticated via Supabase Google OAuth into the Becon database.
-    Stores/updates their real Gmail profile picture (picture_url), name, and issues a Becon JWT.
-    Uses case-insensitive get-or-create and handles IntegrityError race conditions gracefully.
-    """
-    email = payload.email.strip().lower()
-    user = db.query(UserProfile).filter(func.lower(UserProfile.email) == email).first()
-
-    clean_name = payload.name.strip() if payload.name else email.split("@")[0].capitalize()
-
-    if not user:
-        new_user = UserProfile(
-            name=clean_name,
-            email=email,
-            picture_url=payload.picture_url,
-            auth_provider=payload.provider or "google",
-            role="",
-            interests="",
-            experience="",
-            customPrompt="",
-            aiTone="",
-        )
-        try:
-            db.add(new_user)
-            db.commit()
-            db.refresh(new_user)
-            user = new_user
-        except IntegrityError:
-            db.rollback()
-            user = db.query(UserProfile).filter(func.lower(UserProfile.email) == email).first()
-    else:
-        updated = False
-        if payload.picture_url and user.picture_url != payload.picture_url:
-            user.picture_url = payload.picture_url
-            updated = True
-        if payload.name and user.name in ("User", "", None):
-            user.name = clean_name
-            updated = True
-        if payload.provider and user.auth_provider != payload.provider:
-            user.auth_provider = payload.provider
-            updated = True
-        if updated:
-            try:
-                db.commit()
-                db.refresh(user)
-            except IntegrityError:
-                db.rollback()
-                user = db.query(UserProfile).filter(func.lower(UserProfile.email) == email).first()
-
-    access_token = create_access_token(data={"sub": user.email, "provider": user.auth_provider or "google"})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-
-@app.post(
-    "/api/auth/guest",
-    tags=["Auth"],
-    summary="Instant guest exploration mode",
-    response_model=Token,
-    responses={
-        422: {"description": "Validation Error"},
-        429: {"description": "Too Many Requests - Rate limit exceeded for guest accounts"},
-    },
-)
-def guest_auth(request: Request, db: Session = Depends(get_db)):
-    """
-    Creates an instant guest session with default engineering intelligence preferences.
-    Requires zero credentials or personal data. Rate-limited per client IP.
-    Uses get-or-create and handles IntegrityError gracefully.
-    """
-    client_ip = get_client_ip(request)
-    now = time.time()
-    cutoff = now - 3600.0  # 1 hour window
-
-    with _guest_lock:
-        valid_timestamps = [t for t in _guest_ip_log[client_ip] if t > cutoff]
-        if len(valid_timestamps) >= settings.GUEST_RATE_LIMIT_PER_HOUR:
-            _guest_ip_log[client_ip] = valid_timestamps
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many guest accounts created from this IP. Limit is {settings.GUEST_RATE_LIMIT_PER_HOUR} per hour.",
-            )
-        valid_timestamps.append(now)
-        _guest_ip_log[client_ip] = valid_timestamps
-
-    guest_uuid = uuid.uuid4().hex[:8]
-    guest_email = f"guest_{guest_uuid}@guest.becon.local"
-
-    guest_user = UserProfile(
-        name="Guest Reader",
-        email=guest_email,
-        role="Technology Explorer",
-        interests="AI & Generative Models, Cloud Architecture, Full-Stack Development",
-        experience="Curious",
-        auth_provider="guest",
-        is_anonymous=True,
-        picture_url=None,
-    )
-    try:
-        db.add(guest_user)
-        db.commit()
-        db.refresh(guest_user)
-    except IntegrityError:
-        db.rollback()
-        guest_user = db.query(UserProfile).filter(func.lower(UserProfile.email) == guest_email).first()
-
-    access_token = create_access_token(data={"sub": guest_user.email, "provider": "guest"})
-    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.post(
