@@ -30,8 +30,11 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `app/profile/page.tsx`: Form to configure profession, experience, focus topics, custom prompts, and AI tone.
   - `app/onboarding/page.tsx`: Interactive chat wizard extracting profile attributes via Becon AI.
   - `app/about/page.tsx`: Manifesto and interactive 4-part Action Card role demonstration.
-  - `app/login/page.tsx` & `app/register/page.tsx`: Google OAuth (via Supabase) and Guest exploration mode.
-  - `context/`: `ThemeContext` (dark/light mode) and `LoadingContext` (top progress bar).
+  - `app/login/page.tsx` & `app/register/page.tsx`: Unified editorial `<AuthForm />` with email/password, Google OAuth, and Guest exploration.
+  - `context/AuthContext.tsx`: Supabase session manager with `onAuthStateChange`, guest upgrade, and cache hygiene.
+  - `lib/api.ts`: Central `apiFetch` wrapper injecting Bearer token, single 401 session refresh retry, typed `getMe()`, `deleteAccount()`.
+  - `components/RequireAuth.tsx`: Route protection wrapper and `useRequireAuth` hook.
+  - `context/`: `ThemeContext` (dark/light mode), `LoadingContext` (top progress bar), and `AuthContext`.
 - **Data Pipeline:**
   `Sources` -> `raw_items` -> `events` (deduplicated) -> `cards` (1 per event) -> `card_variants` (personalized) -> `deliveries / user feed`.
 
@@ -47,7 +50,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 | **Typecheck**| `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A | Verified |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` | Verified |
 | **Build** | `cd frontend && npm run build` | N/A | N/A | Verified |
-| **Test** | `cd frontend && npm test` *(no unit tests yet)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
+| **Test** | `cd frontend && npm test` *(25 unit tests via Vitest)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
 | **Docker** | `docker compose build && docker compose up -d` | `docker compose build && docker compose up -d` | N/A | Config Verified |
 
 ## 5. Environment Variables
@@ -79,7 +82,7 @@ Full specification and ER diagram documented in [docs/DATA_MODEL.md](file:///d:/
 - **20 Tables:** `user_profiles` (migrated, unique email), `saved_briefings` (legacy, DEPRECATED), `professions`, `focus_topics`, `topic_aliases`, `profession_topics`, `user_focus_topics`, `sources`, `source_topics`, `user_follows`, `raw_items`, `events`, `event_topics`, `cards`, `card_variants`, `saved_cards`, `card_feedback`, `error_reports`, `deliveries`, `metrics_events`.
 - **Design Rules:** UUID PKs (`sa.Uuid`), UTC timestamps, portable JSON (`JSONB` on Postgres), check constraints for fixed vocabularies, lowercase email and alias indexing, safe get-or-create handling on races.
 - **Migrations:** Alembic baseline `0001` (stamps existing DB), `0002_full_schema` (creates tables, deduplicates emails), and `0003_supabase_auth_rls` (nullable email, PostgreSQL RLS enabled on all 21 tables).
-- **Identity & Auth:** Full specification in [docs/AUTH.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/AUTH.md). Supabase Auth is single identity provider; custom JWT and local credentials retired. Protected routes require Supabase Bearer token.
+- **Identity & Auth:** Full specification in [docs/AUTH.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/AUTH.md). Supabase Auth is single identity provider; custom JWT and local credentials retired. Protected routes require Supabase Bearer token; frontend client uses `AuthContext` and `apiFetch` with silent session refresh.
 - **Database Selection:** Handled in [`backend/app/database.py`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/database.py). Defaults to SQLite locally; normalizes `postgres://` to `postgresql+psycopg2://` for Postgres/Supabase.
 
 ## 8. Rules for Any AI Agent Working in this Repo

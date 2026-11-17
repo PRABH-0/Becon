@@ -140,20 +140,92 @@ The Supabase project exposes a PostgREST Data API on `/rest/v1`. Because the Sup
 
 ---
 
-## 6. Manual QA Checklist for Phase 1.4b (Frontend)
+## 6. Frontend Authentication Architecture (Phase 1.4b)
 
-When integrating the frontend in Phase 1.4b, verify:
-- [ ] Guest exploration: clicking "Continue as Guest" calls `supabase.auth.signInAnonymously()` and receives a session with `is_anonymous: true`.
-- [ ] Email registration: registering with email sends verification email; user cannot login until email confirmed.
-- [ ] Password login: logging in with correct credentials attaches `access_token` to `/api/me`.
-- [ ] Google OAuth: clicking "Sign in with Google" redirects to Google consent screen and returns to `/auth/callback`.
-- [ ] Profile access: `/api/profile` loads and updates settings for the authenticated user.
-- [ ] Delete account: clicking "Delete Account" deletes both the Supabase user and local database records.
-- [ ] Expired tokens: frontend automatically refreshes access tokens using `supabase.auth.onAuthStateChange`.
+The frontend client application uses a layered auth architecture:
+
+```mermaid
+flowchart TD
+    subgraph Browser ["Next.js App Router Client"]
+        SC["supabaseClient.ts\n(Lazy Singleton)"]
+        AC["AuthContext.tsx\n(onAuthStateChange)"]
+        AF["apiFetch (lib/api.ts)\nBearer Token Injection & 401 Refresh"]
+        RA["RequireAuth.tsx\nRoute Protection"]
+        UI["Pages & Views\n(/, /profile, /onboarding)"]
+    end
+
+    subgraph Supabase ["Supabase Auth Service"]
+        SAuth["Auth Endpoints\n(PKCE, Email, OAuth, Anon)"]
+        JWKS["JWKS Public Keys\n(/.well-known/jwks.json)"]
+    end
+
+    subgraph FastAPI ["Becon FastAPI Backend"]
+        Verify["Token Verifier\n(verify_supabase_token)"]
+        Deps["app.deps.get_current_user\n(User Profile Resolution)"]
+        Endpoints["Protected Endpoints\n(/api/me, /api/profile, /api/account)"]
+    end
+
+    UI --> RA
+    RA --> AC
+    AC --> SC
+    SC <--> SAuth
+    UI --> AF
+    AF --> SC
+    AF -- "Authorization: Bearer <JWT>" --> FastAPI
+    FastAPI --> Verify
+    Verify <--> JWKS
+    Verify --> Deps
+    Deps --> Endpoints
+```
+
+### Core Components
+1. **Lazy Supabase Client (`lib/supabaseClient.ts`)**: Initializes `@supabase/supabase-js` with `persistSession: true`, `autoRefreshToken: true`, and `detectSessionInUrl: true`. Fails gracefully during build time if environment variables are missing.
+2. **`AuthContext` (`context/AuthContext.tsx`)**: Global provider that listens to `onAuthStateChange` events (`SIGNED_IN`, `SIGNED_OUT`, `TOKEN_REFRESHED`, `USER_UPDATED`). Exposes session state, anonymous flag, user metadata, and methods (`signInWithPassword`, `signUpWithPassword`, `signInWithGoogle`, `signInAsGuest`, `signOut`, `sendPasswordReset`, `updatePassword`, `upgradeGuestWithEmail`). Synchronizes cache with `syncUserCache(userId)`.
+3. **`apiFetch` (`lib/api.ts`)**: Central fetch wrapper that resolves the latest Supabase access token, attaches `Authorization: Bearer <token>`, handles 401 with a single session refresh retry, and triggers local sign-out and redirect to `/login` if authentication cannot be renewed.
+4. **`RequireAuth` (`components/RequireAuth.tsx`)**: Higher-order route wrapper and `useRequireAuth` hook that redirects unauthenticated users to `/login?next=<encodedPath>` while rendering a calm loader during credential checks.
+5. **Cache Hygiene (`lib/cache.ts`)**: Ensures all user preferences and briefings caches (`becon_cached_briefings_*`, `becon_user_name`, `becon_user_avatar`) are purged upon sign-out, account deletion, or account switching, while strictly preserving `becon_theme`.
 
 ---
 
-## 7. Known Limitations & Follow-Up Tasks
+## 7. Manual QA Checklist for Project Lead
+
+Run this checklist against a live Supabase project to verify end-to-end functionality:
+
+- [ ] **1. Email/password sign-up**:
+  - Navigate to `/register`.
+  - Enter valid email and password (>= 8 chars).
+  - Submit: Verify calm confirmation message appears ("Check your email").
+  - Click confirmation link in email: Redirects to `/profile?setup=true` (or `/auth/callback`).
+- [ ] **2. Email/password sign-in**:
+  - Navigate to `/login`.
+  - Sign in with verified credentials: Redirects to `/` (or destination specified in `?next=`).
+- [ ] **3. Google OAuth sign-in**:
+  - Click "Continue with Google" on `/login` or `/register`.
+  - Complete Google consent: Redirects through `/auth/callback` to `/profile?setup=true` (first time) or `/`.
+- [ ] **4. Anonymous Guest exploration**:
+  - On `/login`, click "Continue as Guest".
+  - Redirected to `/`: Verify `<GuestBanner />` displays with upgrade prompt.
+- [ ] **5. Guest account upgrade**:
+  - Click upgrade button on `<GuestBanner />` or navigate to `/register?mode=upgrade`.
+  - Enter email and password: Confirm session upgrades to permanent account without losing reading history.
+- [ ] **6. Password reset**:
+  - Navigate to `/forgot-password`, enter registered email, and submit.
+  - Open email link: Redirected to `/auth/reset-password`.
+  - Enter new password (>= 8 chars) and save: Verify successful login with new password.
+- [ ] **7. Danger zone account deletion**:
+  - Navigate to `/profile`, scroll to "Danger Zone".
+  - Type `DELETE` into the confirmation field and click "Permanently Delete Account".
+  - Verify `DELETE /api/account` returns 204, Supabase user and local database rows are purged, and user is redirected to `/login?deleted=1`.
+- [ ] **8. Silent token refresh**:
+  - Wait until the Supabase access token expires (or manually test with an expired token).
+  - Verify `apiFetch` calls `refreshSession()` and transparently completes the API request without user interruption.
+- [ ] **9. Theme preservation on sign-out**:
+  - Switch theme to Dark Mode via top theme toggle.
+  - Sign out: Verify `/login` remains in Dark Mode (`becon_theme` preserved, all other caches cleared).
+
+---
+
+## 8. Known Limitations & Follow-Up Tasks
 
 - **Task 6.7 (Anonymous User Cleanup):** Anonymous guest accounts accumulate over time. A periodic cleanup job will purge anonymous users older than 30 days that have no saved cards or follows, and support converting anonymous sessions to permanent email accounts.
 - **Task 7.1 (Custom SMTP):** Default Supabase email service is rate-limited to 30 emails per hour. Production deployment will configure Resend SMTP in the Supabase Dashboard.

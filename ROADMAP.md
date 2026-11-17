@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-17  
 Current phase: 1 (Foundation)  
-Current task: 1.4 Auth consolidated on Supabase Auth (1.4a backend complete, 1.4b frontend pending)  
+Current task: 1.4 Auth consolidated on Supabase Auth (1.4a and 1.4b implemented, awaiting lead approval and manual QA)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -52,7 +52,7 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 - [x] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
 - [x] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
 - [x] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
-- [~] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages (1.4a backend done, 1.4b frontend pending)
+- [~] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages (1.4a and 1.4b implemented, awaiting approval and manual QA)
 - [ ] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
 
 *Exit: one-command local run, CI green, schema migrated, auth works end to end, data survives restart.*
@@ -171,3 +171,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-17 | 1.2 | Done (`5da2a57`) | Approved by lead: Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
 | 2026-11-17 | 1.3 | Done (`56d11d4`) | Approved by lead: Alembic migrations setup (0001 baseline + 0002 full schema), 20 declarative ORM tables with UUID PKs and CHECK constraints, email deduplication on user_profiles, safe get-or-create user handling, idempotent seed data (54 topics, 2 professions), docs/DATA_MODEL.md, comprehensive test suite |
 | 2026-11-17 | 1.4a | In Progress (`de4952d`) | Supabase Auth backend: PyJWT JWKS (ES256/RS256) and HS256 verification with 10m cache and kid rate limiter, user mapping by sub / lowercase email / anonymous NULL, migration 0003 for nullable email and PostgreSQL RLS on all 21 tables, retired custom JWT and local credentials, added GET /api/me and DELETE /api/account (with cascades and Admin API call), docs/AUTH.md, 35 passing tests |
+| 2026-11-17 | 1.4b | In Progress (`903f769`) | Supabase Auth frontend: lazy client with PKCE, AuthContext (onAuthStateChange), apiFetch (auto Bearer token & 401 refresh retry), unified AuthForm (login/signup/upgrade), RequireAuth, GuestBanner, danger zone account deletion, forgot/reset-password, cache hygiene, 25 passing Vitest tests, CI updated |
