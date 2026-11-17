@@ -50,7 +50,7 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 
 ## PHASE 1: Foundation
 - [x] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
-- [ ] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
+- [~] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
 - [ ] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
 - [ ] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages
 - [ ] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
@@ -167,3 +167,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-17 | 0.1, 0.2, 0.3 | Done | Audit, UI audit and repo CLAUDE.md created |
 | 2026-11-17 | 1.1 | Done (`af04d7b`) | Hygiene & security guardrails implemented: .gitignore updated, obsolete DB scripts removed, settings centralized, ingest endpoint protected, guest rate-limited, token expiry fixed, personal defaults removed, prompt sanitized, test suite passing |
 | 2026-11-17 | 1.1b | Done (`0e9831d`) | Remote secrets scan, SECRET_KEY verified, local history safely rewritten to remove unredacted report commits, smoke tests passed |
+| 2026-11-17 | 1.2 | In Progress (`727e693`) | Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
