@@ -51,28 +51,24 @@ class UserProfile(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str | None] = mapped_column(String(100), default="", nullable=True)
-    email: Mapped[str | None] = mapped_column(String(200), default="", unique=True, index=True, nullable=True)
+    email: Mapped[str | None] = mapped_column(String(200), default=None, unique=True, index=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(500), nullable=True)
     picture_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     auth_provider: Mapped[str | None] = mapped_column(String(50), default="local", nullable=True)
-    lastUpdated: Mapped[datetime | None] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC), nullable=True
-    )
+    lastUpdated: Mapped[datetime | None] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=True)
 
     # Phase 1.3 additions
-    external_auth_id: Mapped[str | None] = mapped_column(
-        String(100), unique=True, index=True, nullable=True
-    )
+    external_auth_id: Mapped[str | None] = mapped_column(String(100), unique=True, index=True, nullable=True)
     profession_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("professions.id", ondelete="SET NULL"), nullable=True, index=True
     )
     timezone: Mapped[str] = mapped_column(String(50), default="UTC", server_default="UTC", nullable=False)
     delivery_time: Mapped[str] = mapped_column(String(10), default="07:00", server_default="07:00", nullable=False)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
-    email_digest_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC), nullable=True
+    email_digest_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
     )
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Legacy fields - DEPRECATED
@@ -96,18 +92,14 @@ class UserProfile(Base):
     feedback: Mapped[List["CardFeedback"]] = relationship(
         "CardFeedback", back_populates="user", cascade="all, delete-orphan"
     )
-    error_reports: Mapped[List["ErrorReport"]] = relationship(
-        "ErrorReport", back_populates="user"
-    )
-    deliveries: Mapped[List["Delivery"]] = relationship(
-        "Delivery", back_populates="user", cascade="all, delete-orphan"
-    )
+    error_reports: Mapped[List["ErrorReport"]] = relationship("ErrorReport", back_populates="user")
+    deliveries: Mapped[List["Delivery"]] = relationship("Delivery", back_populates="user", cascade="all, delete-orphan")
 
     @validates("email")
     def validate_email(self, key, address):
         if address:
             return address.strip().lower()
-        return address
+        return None
 
 
 class SavedBriefing(Base):
@@ -189,9 +181,7 @@ class FocusTopic(Base):
     )
 
     # Relationships
-    parent: Mapped[Optional["FocusTopic"]] = relationship(
-        "FocusTopic", remote_side=[id], back_populates="children"
-    )
+    parent: Mapped[Optional["FocusTopic"]] = relationship("FocusTopic", remote_side=[id], back_populates="children")
     children: Mapped[List["FocusTopic"]] = relationship("FocusTopic", back_populates="parent")
     aliases: Mapped[List["TopicAlias"]] = relationship(
         "TopicAlias", back_populates="topic", cascade="all, delete-orphan"
@@ -262,9 +252,7 @@ class UserFocusTopic(Base):
     """Topics explicitly chosen by a user to personalize their briefings."""
 
     __tablename__ = "user_focus_topics"
-    __table_args__ = (
-        UniqueConstraint("user_id", "topic_id", name="uq_user_focus_topics_user_id_topic_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "topic_id", name="uq_user_focus_topics_user_id_topic_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[int] = mapped_column(
@@ -328,18 +316,14 @@ class Source(Base):
     follows: Mapped[List["UserFollow"]] = relationship(
         "UserFollow", back_populates="source", cascade="all, delete-orphan"
     )
-    raw_items: Mapped[List["RawItem"]] = relationship(
-        "RawItem", back_populates="source", cascade="all, delete-orphan"
-    )
+    raw_items: Mapped[List["RawItem"]] = relationship("RawItem", back_populates="source", cascade="all, delete-orphan")
 
 
 class SourceTopic(Base):
     """Topics covered by a source."""
 
     __tablename__ = "source_topics"
-    __table_args__ = (
-        UniqueConstraint("source_id", "topic_id", name="uq_source_topics_source_id_topic_id"),
-    )
+    __table_args__ = (UniqueConstraint("source_id", "topic_id", name="uq_source_topics_source_id_topic_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     source_id: Mapped[uuid.UUID] = mapped_column(
@@ -361,9 +345,7 @@ class UserFollow(Base):
     """User follows for sources / creators (prepares Phase 9)."""
 
     __tablename__ = "user_follows"
-    __table_args__ = (
-        UniqueConstraint("user_id", "source_id", name="uq_user_follows_user_id_source_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "source_id", name="uq_user_follows_user_id_source_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[int] = mapped_column(
@@ -471,9 +453,7 @@ class EventTopic(Base):
     """Topics linked to a canonical event with confidence."""
 
     __tablename__ = "event_topics"
-    __table_args__ = (
-        UniqueConstraint("event_id", "topic_id", name="uq_event_topics_event_id_topic_id"),
-    )
+    __table_args__ = (UniqueConstraint("event_id", "topic_id", name="uq_event_topics_event_id_topic_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     event_id: Mapped[uuid.UUID] = mapped_column(
@@ -521,7 +501,9 @@ class Card(Base):
     source_text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    validation_status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", nullable=False)
+    validation_status: Mapped[str] = mapped_column(
+        String(20), default="pending", server_default="pending", nullable=False
+    )
     validation_notes: Mapped[dict | None] = mapped_column(PortableJSON, nullable=True)
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
@@ -543,9 +525,7 @@ class Card(Base):
     variants: Mapped[List["CardVariant"]] = relationship(
         "CardVariant", back_populates="card", cascade="all, delete-orphan"
     )
-    saved_by: Mapped[List["SavedCard"]] = relationship(
-        "SavedCard", back_populates="card", cascade="all, delete-orphan"
-    )
+    saved_by: Mapped[List["SavedCard"]] = relationship("SavedCard", back_populates="card", cascade="all, delete-orphan")
     feedback: Mapped[List["CardFeedback"]] = relationship(
         "CardFeedback", back_populates="card", cascade="all, delete-orphan"
     )
@@ -603,9 +583,7 @@ class SavedCard(Base):
     """User personal bookmarks of Action Cards."""
 
     __tablename__ = "saved_cards"
-    __table_args__ = (
-        UniqueConstraint("user_id", "card_id", name="uq_saved_cards_user_id_card_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "card_id", name="uq_saved_cards_user_id_card_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[int] = mapped_column(
@@ -698,9 +676,7 @@ class Delivery(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("user_profiles.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("user_profiles.id", ondelete="CASCADE"), nullable=False)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
