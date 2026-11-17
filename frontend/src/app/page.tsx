@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar, LogOut, LogIn } from "lucide-react";
+import { User, Layers, Radio, Flame, Pin, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, X, Search, Loader2, Sparkles, Calendar, LogOut, LogIn } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,8 @@ import { apiFetch } from "@/lib/api";
 import { getBriefingsCacheKey } from "@/lib/cache";
 import { GuestBanner } from "@/components/GuestBanner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { LeadCard, RectangleCard, SquareCard, BriefCard } from "@/components/cards";
+import { CardDrawer } from "@/components/CardDrawer";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -143,6 +145,7 @@ export default function Home() {
   const { user, me, isAnonymous, signOut } = useAuth();
   const [dailyHeading, setDailyHeading] = useState<string>("Personalized Intelligence Gazette");
   const [briefings, setBriefings] = useState<BriefingCard[]>([]);
+  const [drawerCard, setDrawerCard] = useState<BriefingCard | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingRemaining, setLoadingRemaining] = useState<boolean>(false);
 
@@ -740,20 +743,6 @@ export default function Home() {
     }
   };
 
-  const getActionBadgeColor = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "apply":
-        return "bg-slate-100/90 dark:bg-slate-800/80 text-emerald-600 dark:text-emerald-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
-      case "learn":
-        return "bg-slate-100/90 dark:bg-slate-800/80 text-sky-600 dark:text-sky-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
-      case "avoid":
-        return "bg-slate-100/90 dark:bg-slate-800/80 text-rose-600 dark:text-rose-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
-      case "prepare":
-      default:
-        return "bg-slate-100/90 dark:bg-slate-800/80 text-amber-600 dark:text-amber-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
-    }
-  };
-
   const todayDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -1100,9 +1089,16 @@ export default function Home() {
                 </span>
               </div>
               <div className="flex-1 flex flex-col">
-                {loading || !leadStory
-                  ? renderLeadSkeleton()
-                  : renderLeadSidebarCard(leadStory, getActionBadgeColor, leadImageUrl)}
+                {loading || !leadStory ? (
+                  renderLeadSkeleton()
+                ) : (
+                  <LeadCard
+                    card={leadStory}
+                    leadImageUrl={leadImageUrl}
+                    onOpenDrawer={setDrawerCard}
+                    renderStackTag={renderStackTag}
+                  />
+                )}
               </div>
             </div>
 
@@ -1120,13 +1116,15 @@ export default function Home() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 gap-3.5 flex-1">
                   {loading || topWireStories.length === 0
                     ? [2, 3, 4, 5].map((rank) => renderBriefSkeleton(rank))
-                    : topWireStories.map((card, idx) =>
-                        renderBriefCard(
-                          card,
-                          getActionBadgeColor,
-                          idx < 4 ? idx + 2 : undefined
-                        )
-                      )}
+                    : topWireStories.map((card, idx) => (
+                        <BriefCard
+                          key={card.id}
+                          card={card}
+                          rankNumber={idx < 4 ? idx + 2 : undefined}
+                          onOpenDrawer={setDrawerCard}
+                          renderStackTag={renderStackTag}
+                        />
+                      ))}
                 </div>
               </div>
             </div>
@@ -1280,10 +1278,29 @@ export default function Home() {
                         const showImageOnCard = Boolean(resolvedImg);
 
                         if (span === 1) {
-                          return renderSquareCard(card, getActionBadgeColor, showImageOnCard, resolvedImg);
+                          return (
+                            <SquareCard
+                              key={card.id}
+                              card={card}
+                              showImage={showImageOnCard}
+                              resolvedImageUrl={resolvedImg}
+                              onOpenDrawer={setDrawerCard}
+                              renderStackTag={renderStackTag}
+                            />
+                          );
                         }
                         const isFullWidth = span === 3;
-                        return renderRectangleCard(card, getActionBadgeColor, showImageOnCard, isFullWidth, resolvedImg);
+                        return (
+                          <RectangleCard
+                            key={card.id}
+                            card={card}
+                            showImage={showImageOnCard}
+                            isFullWidth={isFullWidth}
+                            resolvedImageUrl={resolvedImg}
+                            onOpenDrawer={setDrawerCard}
+                            renderStackTag={renderStackTag}
+                          />
+                        );
                       });
                     })()}
                     {loadingRemaining && (
@@ -1380,6 +1397,13 @@ export default function Home() {
           <span className="sr-only">Back to top</span>
         </button>
       )}
+
+      {/* CARD DETAIL DRAWER */}
+      <CardDrawer
+        card={drawerCard}
+        isOpen={Boolean(drawerCard)}
+        onClose={() => setDrawerCard(null)}
+      />
       </div>
     </RequireAuth>
   );
@@ -1620,406 +1644,9 @@ function renderBentoSkeletonCard(span: number, keyIndex: number) {
   );
 }
 
-/* RENDER HELPER 1: TOP MOST IMPORTANT UPDATE (COMPACT EDITORIAL LEAD BOX ON LEFT) */
-function renderLeadSidebarCard(
-  card: BriefingCard,
-  getBadgeColor: (type: string) => string,
-  leadImageUrl?: string | null
-) {
-  return (
-    <article
-      key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between h-full"
-    >
-      <div>
-        {/* Top Badges & Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border border-slate-800 dark:border-amber-400 uppercase tracking-wider shadow-xs">
-              LEAD // 01
-            </span>
-            {card.target_stack.slice(0, 2).map((tag) => renderStackTag(tag))}
-            <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
-              <span>{card.published_at || "Oct 23, 2026"}</span>
-            </span>
-          </div>
-        </div>
 
-        {/* Headline */}
-        <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-950 dark:text-slate-50 font-serif tracking-tight leading-tight mb-3">
-          <a
-            href={card.source_url}
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors"
-          >
-            {card.title}
-          </a>
-        </h3>
 
-        {/* Compact Hero Image (Spot 1 - Only rendered if a genuine resource image exists) */}
-        {leadImageUrl ? (
-          <div className="relative w-full h-36 sm:h-44 rounded-lg overflow-hidden my-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={leadImageUrl}
-              alt={card.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                const target = e.currentTarget.parentElement;
-                if (target) target.style.display = "none";
-              }}
-            />
-          </div>
-        ) : null}
 
-        {/* Key Article Highlights */}
-        <div className="mb-3.5 p-3.5 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-2">
-          <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
-            <Pin className="w-3.5 h-3.5 text-rose-600" />
-            <span>ARTICLE HIGHLIGHTS:</span>
-          </div>
-          <ul className="space-y-2 pl-1 text-[11.5px] sm:text-xs">
-            {card.card_content.what_happened.map((bullet, idx) => (
-              <li key={idx} className="flex items-start gap-2 leading-relaxed">
-                <span className="text-rose-600 font-bold shrink-0 mt-0.5">•</span>
-                <span className="text-slate-800 dark:text-slate-200 leading-normal">{bullet}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Broadsheet Context & Significance: Fills text-only Lead card so it never leaves an empty void */}
-        {!leadImageUrl && card.card_content.why_it_matters && (
-          <p className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed mb-3 line-clamp-3">
-            <strong className="text-slate-900 dark:text-slate-100 font-mono text-[11px] uppercase mr-1">Context:</strong>
-            {card.card_content.why_it_matters}
-          </p>
-        )}
-      </div>
-
-      {/* Action Bar with Resource Link */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 font-mono mt-auto">
-        <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
-          Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
-        </span>
-        <a
-          href={card.source_url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 hover:text-amber-200 font-bold text-xs transition-all shadow-xs shrink-0 cursor-pointer border border-transparent dark:border-slate-700"
-          title="Open original resource documentation"
-        >
-          <span>Resource</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      </div>
-    </article>
-  );
-}
-
-/* RENDER HELPER 2: WIDE RECTANGLE CARD (FOR MAJOR ARCHITECTURAL UPDATES IN BENTO DECK) */
-function renderRectangleCard(
-  card: BriefingCard,
-  getBadgeColor: (type: string) => string,
-  showImage?: boolean,
-  isFullWidth?: boolean,
-  resolvedImageUrl?: string | null
-) {
-  const hasValidImage = Boolean(showImage && resolvedImageUrl);
-  return (
-    <article
-      key={card.id}
-      className={`${
-        isFullWidth
-          ? "col-span-1 md:col-span-2 xl:col-span-3"
-          : "col-span-1 md:col-span-2 xl:col-span-2"
-      } rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-4 sm:p-5 md:p-6 shadow-xs hover:shadow-md flex flex-col justify-between`}
-    >
-      <div>
-        {/* Top Header Row */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {card.target_stack.slice(0, 2).map((tag) => renderStackTag(tag))}
-            <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
-              <span>{card.published_at || "Oct 23, 2026"}</span>
-            </span>
-          </div>
-
-          {/* Direct Resource Link */}
-          <a
-            href={card.source_url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono text-[11px] font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0"
-            title="Open original resource documentation"
-          >
-            <span>Resource</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
-
-        {/* Content Body: Horizontal Media Split if showImage is true, else clean editorial layout */}
-        {hasValidImage ? (
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start">
-            {/* Left Image Thumbnail */}
-            <div className="relative w-full sm:w-48 md:w-56 h-36 sm:h-44 shrink-0 rounded-lg overflow-hidden border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={resolvedImageUrl!}
-                alt={card.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                onError={(e) => {
-                  const target = e.currentTarget.parentElement;
-                  if (target) target.style.display = "none";
-                }}
-              />
-            </div>
-
-            {/* Right Text Content */}
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base sm:text-lg font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug mb-2">
-                <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
-                  {card.title}
-                </a>
-              </h3>
-
-              {/* 2 Key Takeaway Bullets */}
-              <div className="mb-2 space-y-1">
-                <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
-                  {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-                    <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                      <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
-                      <span className="line-clamp-2">{bullet}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Why It Matters */}
-              <p className="text-slate-600 dark:text-slate-400 text-[11px] sm:text-xs leading-relaxed font-normal line-clamp-2">
-                <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[10px]">IMPACT: </strong>
-                {card.card_content.why_it_matters}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <h3 className="text-lg sm:text-xl font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug my-2">
-              <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
-                {card.title}
-              </a>
-            </h3>
-
-            {/* 2 Key Takeaway Bullets */}
-            <div className="mb-2.5 space-y-1">
-              <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
-                {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-                  <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                    <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
-                    <span className="line-clamp-2">{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Why It Matters */}
-            <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm leading-relaxed mb-3 font-normal line-clamp-2">
-              <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[11px]">IMPACT: </strong>
-              {card.card_content.why_it_matters}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 text-xs mt-3 font-mono">
-        <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
-          Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
-        </span>
-        <a
-          href={card.source_url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-[11px] px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-bold flex items-center gap-1.5 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer shrink-0 font-mono"
-          title="Open original resource documentation"
-        >
-          <span>Resource</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      </div>
-    </article>
-  );
-}
-
-/* RENDER HELPER 3: NEAT SQUARE CARD (FOR SYSTEM WATCH & SPOTLIGHTS IN BENTO DECK) */
-function renderSquareCard(
-  card: BriefingCard,
-  getBadgeColor: (type: string) => string,
-  showImage?: boolean,
-  resolvedImageUrl?: string | null
-) {
-  const hasValidImage = Boolean(showImage && resolvedImageUrl);
-  return (
-    <article
-      key={card.id}
-      className="col-span-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-4 sm:p-5 shadow-xs hover:shadow-md flex flex-col justify-between"
-    >
-      <div>
-        {/* Top Row with Tag and Direct Resource Icon Link */}
-        <div className="flex items-center justify-between gap-1.5 mb-2.5">
-          <div className="flex items-center gap-1.5 truncate">
-            {renderStackTag(card.target_stack[0])}
-            <span className="text-[9.5px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 shrink-0">
-              <Calendar className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500" />
-              <span>{card.published_at || "Oct 23, 2026"}</span>
-            </span>
-          </div>
-
-          <a
-            href={card.source_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-950 dark:hover:text-amber-300 transition-colors p-1"
-            title="Open original resource documentation"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
-
-        {/* Optional Image Thumbnail when real image exists */}
-        {hasValidImage && (
-          <div className="relative w-full h-32 sm:h-36 rounded-lg overflow-hidden mb-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={resolvedImageUrl!}
-              alt={card.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                const target = e.currentTarget.parentElement;
-                if (target) target.style.display = "none";
-              }}
-            />
-          </div>
-        )}
-
-        {/* Headline */}
-        <h3 className="text-base font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug line-clamp-2 mb-2">
-          <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
-            {card.title}
-          </a>
-        </h3>
-
-        {/* 2 Key Signal Bullets */}
-        <div className="mb-2 space-y-1">
-          <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
-            {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-              <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
-                <span className="line-clamp-2">{bullet}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Why It Matters / Impact Snippet */}
-        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed font-normal line-clamp-2 mb-2">
-          <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[10px]">IMPACT: </strong>
-          {card.card_content.why_it_matters}
-        </p>
-      </div>
-
-      {/* Footer */}
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2 mt-auto">
-        <a
-          href={card.source_url}
-          target="_blank"
-          rel="noreferrer"
-          className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono text-[10px] font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0 flex items-center gap-1 shadow-2xs"
-          title="Open original resource documentation"
-        >
-          <span>Resource</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      </div>
-    </article>
-  );
-}
-
-/* RENDER HELPER 4: BRIEF WIRE CARDS (SIDEBAR DISPATCHES) */
-function renderBriefCard(
-  card: BriefingCard,
-  getBadgeColor: (type: string) => string,
-  rankNumber?: number
-) {
-  return (
-    <article
-      key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col justify-between h-full"
-    >
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-1.5 truncate">
-            {rankNumber !== undefined && rankNumber <= 5 && (
-              <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 dark:bg-slate-800 text-amber-300 border border-slate-800 dark:border-slate-700 shrink-0">
-                #{String(rankNumber).padStart(2, "0")}
-              </span>
-            )}
-            {renderStackTag(card.target_stack[0])}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={card.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono transition-all border border-slate-200 dark:border-slate-700 shrink-0"
-              title="Open original resource documentation"
-            >
-              <span>Resource</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          </div>
-        </div>
-
-        <h4 className="text-sm sm:text-base font-bold font-serif text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 mb-2">
-          <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
-            {card.title}
-          </a>
-        </h4>
-
-        {/* Authentic Highlights / Key Summary Lines */}
-        <div className="space-y-1.5 mb-2">
-          {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-            <p key={idx} className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed flex items-start gap-1.5">
-              <span className="text-rose-500 font-bold shrink-0 mt-0.5">•</span>
-              <span className="line-clamp-2">{bullet}</span>
-            </p>
-          ))}
-        </div>
-
-        {/* Technical Impact Context Snippet */}
-        {card.card_content.why_it_matters && (
-          <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed line-clamp-2 font-mono pt-2 border-t border-dashed border-slate-100 dark:border-slate-800">
-            <span className="font-bold text-slate-700 dark:text-slate-300">IMPACT: </span>
-            {card.card_content.why_it_matters}
-          </p>
-        )}
-      </div>
-
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-auto">
-        <span className="truncate flex items-center gap-1">
-          <Calendar className="w-2.5 h-2.5 text-slate-400" />
-          <span>{card.published_at || "Oct 23, 2026"}</span>
-        </span>
-      </div>
-    </article>
-  );
-}
 
 /* TOPIC CLASSIFIER FOR EDITORIAL CARDS */
 function detectTopicCategory(interests: string, role: string): "beauty_fashion" | "accounting_tax" | "retail_store" | "business_growth" | "tech_software" | "general" {
