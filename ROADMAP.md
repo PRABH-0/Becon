@@ -49,7 +49,7 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 ---
 
 ## PHASE 1: Foundation
-- [ ] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
+- [~] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
 - [ ] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
 - [ ] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
 - [ ] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages
@@ -165,3 +165,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | Date | Task | Result | Notes |
 | :--- | :--- | :--- | :--- |
 | 2026-11-17 | 0.1, 0.2, 0.3 | Done | Audit, UI audit and repo CLAUDE.md created |
+| 2026-11-17 | 1.1 | In Progress (`c63c209`) | Personal data redacted from audit reports, remote checked; 1.1 pre-step complete |
