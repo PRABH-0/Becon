@@ -1,0 +1,16 @@
+[
+  {
+    "slug": "software-development",
+    "name": "Software Development",
+    "description": "Software engineers, systems architects, web/mobile developers, and DevOps professionals.",
+    "sort_order": 1,
+    "is_active": true
+  },
+  {
+    "slug": "accounting",
+    "name": "Accounting and Finance",
+    "description": "Certified public accountants, chartered accountants, auditors, and corporate finance specialists.",
+    "sort_order": 2,
+    "is_active": true
+  }
+]
