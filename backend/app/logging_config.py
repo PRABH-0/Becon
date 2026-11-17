@@ -86,4 +86,3 @@ def setup_logging(environment: str = "development", log_level: str = "INFO") -> 
 
     # Silence overly verbose external libraries
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("passlib").setLevel(logging.WARNING)

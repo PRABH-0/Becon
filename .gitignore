@@ -17,6 +17,9 @@ __pycache__/
 *.env
 !.env.example
 
+# Scratch & temporary workspace
+scratch/
+
 # Node / Next.js
 node_modules/
 .next/
