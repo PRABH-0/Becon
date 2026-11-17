@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-17  
 Current phase: 1 (Foundation)  
-Current task: 1.5 Persist cards and events in the database; replace in-memory _USER_CACHES (implemented, awaiting lead approval)  
+Current task: Phase 1 closed; next: 6.1 and 6.2 (render all 4 Action Card parts, remove infinite scroll)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -52,8 +52,12 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 - [x] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
 - [x] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
 - [x] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
-- [~] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages (1.4a and 1.4b implemented, awaiting approval and manual QA)
-- [ ] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
+- [x] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages
+- [x] 1.4c Post-auth cleanup and docs drift: docker-compose cleanup, .env.example matching CLAUDE.md, UI_DESIGN.md and README.md updated, CI PostgreSQL service container job added
+- [x] 1.4d Viewport fitting: auth pages fit within one viewport without scrollbars via AuthShell and responsive height queries
+- [x] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
+
+*Pending manual QA (to be done post-push): email signup + verification, Google OAuth, guest upgrade, forgot/reset password, account deletion, token refresh, and `alembic upgrade head` against the Supabase dev project (RLS role check).*
 
 *Exit: one-command local run, CI green, schema migrated, auth works end to end, data survives restart.*
 
@@ -170,7 +174,7 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-17 | 1.1b | Done (`0e9831d`) | Remote secrets scan, SECRET_KEY verified, local history safely rewritten to remove unredacted report commits, smoke tests passed |
 | 2026-11-17 | 1.2 | Done (`5da2a57`) | Approved by lead: Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
 | 2026-11-17 | 1.3 | Done (`56d11d4`) | Approved by lead: Alembic migrations setup (0001 baseline + 0002 full schema), 20 declarative ORM tables with UUID PKs and CHECK constraints, email deduplication on user_profiles, safe get-or-create user handling, idempotent seed data (54 topics, 2 professions), docs/DATA_MODEL.md, comprehensive test suite |
-| 2026-11-17 | 1.4a | In Progress (`de4952d`) | Supabase Auth backend: PyJWT JWKS (ES256/RS256) and HS256 verification with 10m cache and kid rate limiter, user mapping by sub / lowercase email / anonymous NULL, migration 0003 for nullable email and PostgreSQL RLS on all 21 tables, retired custom JWT and local credentials, added GET /api/me and DELETE /api/account (with cascades and Admin API call), docs/AUTH.md, 35 passing tests |
-| 2026-11-17 | 1.4b | In Progress (`903f769`) | Supabase Auth frontend: lazy client with PKCE, AuthContext (onAuthStateChange), apiFetch (auto Bearer token & 401 refresh retry), unified AuthForm (login/signup/upgrade), RequireAuth, GuestBanner, danger zone account deletion, forgot/reset-password, cache hygiene, 25 passing Vitest tests, CI updated |
-| 2026-11-17 | 1.4c | In Progress (`ad6b6b7`) | Post-auth cleanup and docs drift: docker-compose retired SECRET_KEY removed and Supabase variables passed through, .env.example matching CLAUDE.md Section 5, UI_DESIGN.md updated, AUDIT_REPORT.md historical baseline note added, README.md Supabase setup section added, CI PostgreSQL service container job added |
-| 2026-11-17 | 1.5 | In Progress | Feed ingestion pipeline (backend/app/ingestion.py), exact deduplication (URL and title), durable DB persistence across sources/raw_items/events/cards/card_variants, lazy variant caching, stale-while-revalidate serving, in-memory _USER_CACHES retired, 44 passing backend tests |
+| 2026-11-17 | 1.4a/b | Done (`de4952d`, `903f769`) | Supabase Auth end-to-end: PyJWT JWKS (ES256/RS256) and HS256 fallback, user mapping, migration 0003 for nullable email and PostgreSQL RLS on all 21 tables, retired custom JWT, added GET /api/me & DELETE /api/account, frontend AuthContext, apiFetch refresh retry, unified AuthForm, danger zone deletion, 25 Vitest tests. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
+| 2026-11-17 | 1.4c | Done (`ad6b6b7`) | Post-auth cleanup and docs drift: docker-compose retired SECRET_KEY removed and Supabase variables passed through, .env.example matching CLAUDE.md Section 5, UI_DESIGN.md updated, AUDIT_REPORT.md historical baseline note added, README.md Supabase setup section added, CI PostgreSQL service container job added. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
+| 2026-11-17 | 1.4d | Done (`7a6c521`) | Viewport fitting: created shared AuthShell, set h-dvh min-h-dvh, compacted vertical rhythm, added responsive height queries ([@media(max-height:760px)]:hidden on subtitles) so all auth pages fit within one viewport without scrollbars at 680px and 600px. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
+| 2026-11-17 | 1.5 | Done (`72d873c`) | Feed ingestion pipeline (backend/app/ingestion.py), exact deduplication (URL and title), durable DB persistence across sources/raw_items/events/cards/card_variants, lazy variant caching, stale-while-revalidate serving, in-memory _USER_CACHES retired, 44 passing backend tests. Approved by lead; manual browser QA of auth flows pending, to be done post-push |

@@ -35,6 +35,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `context/AuthContext.tsx`: Supabase session manager with `onAuthStateChange`, guest upgrade, and cache hygiene.
   - `lib/api.ts`: Central `apiFetch` wrapper injecting Bearer token, single 401 session refresh retry, typed `getMe()`, `deleteAccount()`.
   - `components/RequireAuth.tsx`: Route protection wrapper and `useRequireAuth` hook.
+  - `components/AuthShell.tsx`: Shared height-responsive viewport shell (`h-dvh`, compact vertical rhythm) fitting all auth flows above the fold.
   - `context/`: `ThemeContext` (dark/light mode), `LoadingContext` (top progress bar), and `AuthContext`.
 - **Data Pipeline:**
   `Sources` -> `raw_items` -> `events` (deduplicated) -> `cards` (1 per event) -> `card_variants` (personalized) -> `deliveries / user feed`.
