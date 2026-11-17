@@ -167,4 +167,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-17 | 0.1, 0.2, 0.3 | Done | Audit, UI audit and repo CLAUDE.md created |
 | 2026-11-17 | 1.1 | Done (`af04d7b`) | Hygiene & security guardrails implemented: .gitignore updated, obsolete DB scripts removed, settings centralized, ingest endpoint protected, guest rate-limited, token expiry fixed, personal defaults removed, prompt sanitized, test suite passing |
 | 2026-11-17 | 1.1b | Done (`0e9831d`) | Remote secrets scan, SECRET_KEY verified, local history safely rewritten to remove unredacted report commits, smoke tests passed |
-| 2026-11-17 | 1.2 | In Progress (`727e693`) | Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
+| 2026-11-17 | 1.2 | In Progress (`0222575`) | Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
