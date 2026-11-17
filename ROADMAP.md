@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-17  
 Current phase: 1 (Foundation)  
-Current task: 1.4 Auth consolidated on Supabase Auth (1.4a and 1.4b implemented, awaiting lead approval and manual QA)  
+Current task: 1.4 Auth consolidated on Supabase Auth (1.4a, 1.4b, and 1.4c cleanup implemented, awaiting lead approval and manual QA)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -172,3 +172,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-17 | 1.3 | Done (`56d11d4`) | Approved by lead: Alembic migrations setup (0001 baseline + 0002 full schema), 20 declarative ORM tables with UUID PKs and CHECK constraints, email deduplication on user_profiles, safe get-or-create user handling, idempotent seed data (54 topics, 2 professions), docs/DATA_MODEL.md, comprehensive test suite |
 | 2026-11-17 | 1.4a | In Progress (`de4952d`) | Supabase Auth backend: PyJWT JWKS (ES256/RS256) and HS256 verification with 10m cache and kid rate limiter, user mapping by sub / lowercase email / anonymous NULL, migration 0003 for nullable email and PostgreSQL RLS on all 21 tables, retired custom JWT and local credentials, added GET /api/me and DELETE /api/account (with cascades and Admin API call), docs/AUTH.md, 35 passing tests |
 | 2026-11-17 | 1.4b | In Progress (`903f769`) | Supabase Auth frontend: lazy client with PKCE, AuthContext (onAuthStateChange), apiFetch (auto Bearer token & 401 refresh retry), unified AuthForm (login/signup/upgrade), RequireAuth, GuestBanner, danger zone account deletion, forgot/reset-password, cache hygiene, 25 passing Vitest tests, CI updated |
+| 2026-11-17 | 1.4c | In Progress | Post-auth cleanup and docs drift: docker-compose retired SECRET_KEY removed and Supabase variables passed through, .env.example matching CLAUDE.md Section 5, UI_DESIGN.md updated, AUDIT_REPORT.md historical baseline note added, README.md Supabase setup section added, CI PostgreSQL service container job added |

@@ -7,9 +7,12 @@
 # Variables required for full functionality:
 # - GEMINI_API_KEY: Google Gemini API key (from https://aistudio.google.com/)
 # - INGEST_API_TOKEN: Secret token for triggering POST /api/ingest
-# - SECRET_KEY: JWT secret key (must be strong 16+ chars in production)
-# - NEXT_PUBLIC_SUPABASE_URL: Supabase Project URL (optional for guest mode)
-# - NEXT_PUBLIC_SUPABASE_ANON_KEY: Supabase Anon/Public Key (optional for guest mode)
+# - SUPABASE_URL: Supabase Project URL (required for registered users and anonymous guest sign-ins)
+# - SUPABASE_JWT_AUDIENCE: Expected JWT audience claim (defaults to "authenticated")
+# - SUPABASE_JWT_SECRET: Legacy secret for projects using symmetric HS256 signing (optional)
+# - SUPABASE_SERVICE_ROLE_KEY: Service role secret for Supabase Admin API / account deletion (optional)
+# - NEXT_PUBLIC_SUPABASE_URL: Supabase Project URL (required for frontend auth and guest mode)
+# - NEXT_PUBLIC_SUPABASE_ANON_KEY: Supabase Anon/Public Key (required for frontend auth and guest mode)
 
 services:
   postgres:
@@ -41,12 +44,15 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/becon}
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       ENABLE_DOCS: ${ENABLE_DOCS:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       INGEST_API_TOKEN: ${INGEST_API_TOKEN:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_JWT_AUDIENCE: ${SUPABASE_JWT_AUDIENCE:-authenticated}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     depends_on:
       postgres:
@@ -61,6 +67,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
     container_name: becon-frontend
     restart: unless-stopped
     ports:

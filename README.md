@@ -36,6 +36,32 @@ Run tests and linters with:
 .\scripts\dev.ps1 lint
 ```
 
+## Supabase Authentication Setup
+
+Becon uses [Supabase Auth](docs/AUTH.md) as its single identity provider for email/password authentication, Google OAuth, and anonymous guest exploration.
+
+### 1. Environment Variables
+- **Frontend (`frontend/.env.local`):**
+  - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL (`https://<project-id>.supabase.co`).
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase `anon` public API key.
+  - `NEXT_PUBLIC_API_URL`: Backend API base URL (`http://127.0.0.1:8000`).
+- **Backend (`backend/.env`):**
+  - `SUPABASE_URL`: Supabase project URL for JWKS token verification and Admin API.
+  - `SUPABASE_JWT_AUDIENCE`: Expected token audience (default: `authenticated`).
+  - `SUPABASE_SERVICE_ROLE_KEY`: Supabase `service_role` secret (required for `DELETE /api/account`).
+  - `SUPABASE_JWT_SECRET`: Optional legacy secret if project uses HS256 symmetric signing.
+
+### 2. Supabase Dashboard Settings
+In your Supabase project dashboard:
+- **Authentication $\rightarrow$ Providers $\rightarrow$ Email**: Turn **ON**; enable **Confirm email**.
+- **Authentication $\rightarrow$ Providers $\rightarrow$ Anonymous Sign-Ins**: Turn **ON** (allows instant guest mode).
+- **Authentication $\rightarrow$ URL Configuration**:
+  - Set Site URL to `http://localhost:3000` (or your production domain).
+  - Add Redirect URLs: `http://localhost:3000/auth/callback` and `http://localhost:3000/auth/reset-password`.
+- **Authentication $\rightarrow$ Providers $\rightarrow$ Google** (Optional): Add Google Client ID and Secret if enabling OAuth.
+
+For full architectural details, sequence diagrams, and RLS policies, see [docs/AUTH.md](docs/AUTH.md).
+
 ## Running with Docker Compose
 
 To run the entire stack (FastAPI backend, Next.js frontend, and PostgreSQL):

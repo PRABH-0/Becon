@@ -11,10 +11,14 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Dummy build-time variables for SSG validation
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000 \
-    NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co \
-    NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-anon-key \
+# Build-time arguments with fallbacks for SSG validation
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-anon-key
+
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
     NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build

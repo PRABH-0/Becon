@@ -1,5 +1,8 @@
 # Comprehensive Technical Audit Report: Project Becon
 
+> [!NOTE]
+> **Historical Baseline Document**: This audit reflects the repository state on November 17, 2026 prior to the execution of Phase 1 Foundation tasks (Tasks 1.1 to 1.4). Gaps and vulnerabilities noted here regarding authentication (custom JWT, lack of UI password fields, unauthenticated `/api/auth/guest` endpoint), database migrations, and CI tooling have since been addressed in Tasks 1.1 through 1.4. For the current architecture and state, consult [ROADMAP.md](ROADMAP.md), [CLAUDE.md](CLAUDE.md), and [docs/AUTH.md](docs/AUTH.md).
+
 > **Audit Date:** November 17, 2026  
 > **Auditor:** Senior Full-Stack Engineer & Technical Auditor  
 > **Repository Root:** `d:\Prabhjot Private\Personal-Projects\Becon`  
