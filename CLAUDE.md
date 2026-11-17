@@ -35,28 +35,31 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 
 ## 4. Verified Commands
 
-| Action | Frontend (Node 24 / npm 11) | Backend (Python 3.12 / venv) | Status |
-| :--- | :--- | :--- | :--- |
-| **Install** | `cd frontend && npm install` | `cd backend && python -m venv .venv && .\.venv\Scripts\pip install -r requirements.txt` | Verified |
-| **Run** | `cd frontend && npm run dev` | `cd backend && $env:PYTHONPATH="." && .\.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000 --reload` | Verified |
-| **Typecheck**| `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python.exe -c "import app.main; print('OK')"` | Verified |
-| **Lint** | `cd frontend && npm run lint` | `cd backend && ruff check .` *(UNVERIFIED — linter not installed)* | Checked |
-| **Build** | `cd frontend && npm run build` | N/A | Verified config |
-| **Test** | `cd frontend && npm test` *(UNVERIFIED — no tests)* | `cd backend && pytest` *(UNVERIFIED — no tests)* | Unverified |
-| **DB Setup** | N/A | `cd backend && $env:PYTHONPATH="." && .\.venv\Scripts\python.exe init_db.py` | Verified |
+| Action | Frontend (Node 24 / npm 11) | Backend (Python 3.12 / venv) | Unified Helper (scripts/dev.ps1) | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Install** | `cd frontend && npm install` | `cd backend && .\.venv\Scripts\pip install -r requirements.lock -r requirements-dev.txt` | `.\scripts\dev.ps1 install` | Verified |
+| **Run** | `cd frontend && npm run dev` | `cd backend && .\.venv\Scripts\uvicorn app.main:app --port 8000 --reload` | `.\scripts\dev.ps1 dev-backend` / `dev-frontend` | Verified |
+| **Typecheck**| `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A | Verified |
+| **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` | Verified |
+| **Build** | `cd frontend && npm run build` | N/A | N/A | Verified |
+| **Test** | `cd frontend && npm test` *(no unit tests yet)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
+| **Docker** | `docker compose build && docker compose up -d` | `docker compose build && docker compose up -d` | N/A | Config Verified |
 
 ## 5. Environment Variables
 *Never print or commit secret values. List variable names and purpose only.*
 - **Backend (`backend/.env`):**
+  - `ENVIRONMENT`: Runtime environment mode (`development`, `production`, `test`).
+  - `LOG_LEVEL`: Logging verbosity level (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
   - `GEMINI_API_KEY`: Google Gemini API key used for structured 4-part Action Card synthesis.
   - `DATABASE_URL`: SQLAlchemy connection string (`sqlite:///./becon.db` or PostgreSQL URL).
-  - `SECRET_KEY`: Secret HMAC key for signing JWT access tokens.
+  - `SECRET_KEY`: Secret HMAC key for signing JWT access tokens (16+ chars in production).
+  - `INGEST_API_TOKEN`: Secret authorization token for `POST /api/ingest`.
   - `ALLOWED_ORIGINS`: Comma-separated CORS allowed domains (e.g. `http://localhost:3000`).
   - `ENABLE_DOCS`: Toggle for `/docs` and `/redoc` Swagger documentation endpoints (`"true"`/`"false"`).
 - **Frontend (`frontend/.env.local`):**
   - `NEXT_PUBLIC_API_URL`: Base URL of the backend FastAPI service (e.g. `http://127.0.0.1:8000`).
   - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for Google OAuth handling.
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: Supabase client anon public key.
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase client anon public key.
 
 ## 6. Code Conventions
 - **Backend:** Python 3.11+ type hints; Pydantic v2 schemas for all inputs/outputs with field descriptions and examples; async route handlers where feasible; snake_case variables and functions; PascalCase schemas/models.
