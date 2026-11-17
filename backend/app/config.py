@@ -44,9 +44,7 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT.lower() == "production":
             url = (self.SUPABASE_URL or "").strip()
             if not url:
-                raise ValueError(
-                    "Production safety violation: SUPABASE_URL must be configured in production."
-                )
+                raise ValueError("Production safety violation: SUPABASE_URL must be configured in production.")
         return self
 
 
