@@ -1,12 +1,33 @@
 "use client";
 
-import { User, RefreshCcw, Zap, Target, Search, MessageSquare, Shield, Save, Sparkles, ArrowLeft, ArrowRight, AlertCircle } from "lucide-react";
+import {
+  User,
+  RefreshCcw,
+  Zap,
+  Target,
+  Search,
+  MessageSquare,
+  Shield,
+  Save,
+  Sparkles,
+  ArrowLeft,
+  ArrowRight,
+  AlertCircle,
+  AlertTriangle,
+  Trash2,
+} from "lucide-react";
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch, deleteAccount } from "@/lib/api";
+import { clearBeconCaches } from "@/lib/cache";
+import { supabase } from "@/lib/supabaseClient";
+import { GuestBanner } from "@/components/GuestBanner";
+import { RequireAuth } from "@/components/RequireAuth";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -78,6 +99,12 @@ export default function ProfilePage() {
   const [validationError, setValidationError] = useState("");
   const router = useRouter();
   const { showLoader, hideLoader } = useLoader();
+  const { isAnonymous, signOut } = useAuth();
+
+  // Danger zone delete account state
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   // Autocomplete search state
   const [topicSearch, setTopicSearch] = useState("");
@@ -137,16 +164,13 @@ export default function ProfilePage() {
     setIsAiSearching(true);
     debounceTimerRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `${API}/api/topic-search?q=${encodeURIComponent(query)}`
+        const data = await apiFetch<{ matches?: string[] }>(
+          `/api/topic-search?q=${encodeURIComponent(query)}`
         );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.matches && data.matches.length > 0) {
-            setAiSuggestions(data.matches);
-            setIsAiResult(true);
-            setShowSuggestions(true);
-          }
+        if (data.matches && data.matches.length > 0) {
+          setAiSuggestions(data.matches);
+          setIsAiResult(true);
+          setShowSuggestions(true);
         }
       } catch (err) {
         console.log("AI topic search unavailable:", err);
@@ -196,33 +220,23 @@ export default function ProfilePage() {
 
     // Load saved profile from backend API
     const fetchProfile = async () => {
-      const token = localStorage.getItem("becon_token");
-      if (!token) {
-        router.push("/login");
-        return;
-      }
       showLoader("Loading User Profile...", "Retrieving your profile & topic interests from database...");
       try {
-        const res = await fetch(`${API}/api/profile`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const parsed = await res.json();
-          if (parsed.name && parsed.name !== "Developer" && parsed.name !== "User") {
-            setName(parsed.name);
-          } else if (parsed.email) {
-            const prefix = parsed.email.split("@")[0];
-            setName(prefix.charAt(0).toUpperCase() + prefix.slice(1));
-          }
-          if (parsed.role) setRole(parsed.role);
-          if (parsed.email) setEmail(parsed.email);
-          if (parsed.experience) setExperience(parsed.experience);
-          if (parsed.interests && parsed.interests.trim().length > 0) {
-            setInterests(parsed.interests.split(",").map((i: string) => i.trim()).filter(Boolean));
-          }
-          if (parsed.customPrompt) setCustomPrompt(parsed.customPrompt);
-          if (parsed.aiTone) setAiTone(parsed.aiTone);
+        const parsed = await apiFetch<any>("/api/profile");
+        if (parsed.name && parsed.name !== "Developer" && parsed.name !== "User") {
+          setName(parsed.name);
+        } else if (parsed.email) {
+          const prefix = parsed.email.split("@")[0];
+          setName(prefix.charAt(0).toUpperCase() + prefix.slice(1));
         }
+        if (parsed.role) setRole(parsed.role);
+        if (parsed.email) setEmail(parsed.email);
+        if (parsed.experience) setExperience(parsed.experience);
+        if (parsed.interests && parsed.interests.trim().length > 0) {
+          setInterests(parsed.interests.split(",").map((i: string) => i.trim()).filter(Boolean));
+        }
+        if (parsed.customPrompt) setCustomPrompt(parsed.customPrompt);
+        if (parsed.aiTone) setAiTone(parsed.aiTone);
       } catch (err) {
         console.error("Failed to load profile from backend", err);
       } finally {
@@ -230,7 +244,7 @@ export default function ProfilePage() {
       }
     };
     fetchProfile();
-  }, [router]);
+  }, [hideLoader, showLoader]);
 
   const toggleInterest = (topic: string) => {
     setValidationError("");
@@ -260,36 +274,29 @@ export default function ProfilePage() {
       experience,
       interests: interests.join(", "),
       customPrompt,
-      aiTone
+      aiTone,
     };
-    
-    const token = localStorage.getItem("becon_token");
-    if (finalName && finalName !== "User") {
-      localStorage.setItem("becon_user_name", finalName);
-    }
+
     showLoader(
       "Personalizing Your Daily Gazette...",
       `Configuring AI news pipeline for ${finalRole} & ${interests.length} focus topics...`
     );
     try {
-      await fetch(`${API}/api/profile`, {
+      await apiFetch("/api/profile", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify(profileData)
+        body: JSON.stringify(profileData),
       });
       // Pre-warm and regenerate personalized briefing cards with the new focus areas
       const params = new URLSearchParams({
         role: finalRole,
         interests: interests.join(", "),
         custom_prompt: customPrompt,
-        refresh: "true"
+        refresh: "true",
       });
-      fetch(`${API}/api/briefings?${params.toString()}`, {
-        method: "GET"
-      }).catch(() => {});
+      apiFetch(`/api/briefings?${params.toString()}`).catch(() => {});
 
       // Launch home page so AI delivers the customized content!
       setTimeout(() => {
@@ -306,8 +313,29 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE" || isDeleting) return;
+    setDeleteError("");
+    setIsDeleting(true);
+    try {
+      await deleteAccount();
+      await supabase.auth.signOut({ scope: "local" });
+      clearBeconCaches();
+      router.replace("/login?deleted=1");
+    } catch (err: any) {
+      if (err?.status === 503) {
+        setDeleteError("Account deletion is not available right now, please try again later.");
+      } else {
+        setDeleteError("Account could not be deleted at this time. Please check your connection and try again.");
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-20 transition-colors duration-200">
+    <RequireAuth>
+      <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-20 transition-colors duration-200">
       {/* 1. HEADER BAR */}
       <header className="bg-slate-950 text-slate-200 py-3.5 px-4 sm:px-6 border-b border-slate-800 shadow-sm sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-4">
@@ -322,6 +350,11 @@ export default function ProfilePage() {
             </span>
           </div>
           <div className="flex items-center gap-3 sm:gap-4 font-mono">
+            {isAnonymous && (
+              <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline">
+                Guest Reader
+              </span>
+            )}
             <Link
               href="/"
               className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 font-bold px-3 sm:px-4 py-1.5 rounded-lg text-xs tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 shadow-xs cursor-pointer"
@@ -331,9 +364,8 @@ export default function ProfilePage() {
             <ThemeToggle size="sm" />
             <button
               type="button"
-              onClick={() => {
-                localStorage.removeItem("becon_token");
-                localStorage.removeItem("becon_user_name");
+              onClick={async () => {
+                await signOut();
                 router.push("/login");
               }}
               className="bg-rose-900/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 border border-transparent hover:border-rose-900/50 font-bold px-4 py-1.5 rounded-lg text-xs tracking-wider transition-all cursor-pointer shadow-xs"
@@ -343,6 +375,9 @@ export default function ProfilePage() {
           </div>
         </div>
       </header>
+
+      {/* Guest Banner */}
+      <GuestBanner />
 
       {/* 2. SUCCESS NOTIFICATION TOAST */}
       {saveSuccess && (
@@ -804,7 +839,61 @@ export default function ProfilePage() {
           </section>
 
         </form>
+
+        {/* 4. DANGER ZONE: ACCOUNT DELETION */}
+        <section className="mt-12 p-6 sm:p-8 rounded-2xl bg-white dark:bg-slate-900 border-2 border-rose-300 dark:border-rose-950/80 shadow-md">
+          <div className="flex items-start gap-3.5 mb-4">
+            <div className="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-serif text-lg font-bold text-slate-900 dark:text-slate-100">
+                Danger Zone: Delete Account
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-mono mt-1 leading-relaxed">
+                Permanently delete your Becon account and all associated data, including saved cards, reading history, follows, and AI profile preferences. This action cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          {deleteError && (
+            <div className="mb-4 bg-rose-50 dark:bg-rose-950/40 border-l-4 border-rose-500 p-3 rounded-r-lg">
+              <p className="text-xs font-mono font-bold text-rose-700 dark:text-rose-300">{deleteError}</p>
+            </div>
+          )}
+
+          <div className="space-y-3 pt-2">
+            <label htmlFor="confirm-delete-input" className="block text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">
+              To confirm deletion, type <span className="font-bold text-rose-600 select-all">DELETE</span> below:
+            </label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <input
+                id="confirm-delete-input"
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                disabled={isDeleting}
+                placeholder="DELETE"
+                className="px-3.5 py-2 rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50/30 dark:bg-rose-950/20 text-sm font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== "DELETE" || isDeleting}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white font-mono text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              >
+                {isDeleting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>Permanently Delete Account</span>
+              </button>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
+    </RequireAuth>
   );
 }

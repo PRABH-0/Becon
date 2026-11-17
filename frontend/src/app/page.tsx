@@ -8,6 +8,11 @@ import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
+import { getBriefingsCacheKey } from "@/lib/cache";
+import { GuestBanner } from "@/components/GuestBanner";
+import { RequireAuth } from "@/components/RequireAuth";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -135,6 +140,7 @@ function getDailyBeconHeading(interests?: string[], role?: string): string {
 }
 
 export default function Home() {
+  const { user, me, isAnonymous, signOut } = useAuth();
   const [dailyHeading, setDailyHeading] = useState<string>("Personalized Intelligence Gazette");
   const [briefings, setBriefings] = useState<BriefingCard[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -235,7 +241,7 @@ export default function Home() {
     setDailyHeading(getDailyBeconHeading());
     const cachedName = localStorage.getItem("becon_user_name");
     if (cachedName) setUserName(cachedName);
-    const cachedCards = localStorage.getItem("becon_cached_briefings");
+    const cachedCards = localStorage.getItem(getBriefingsCacheKey(user?.id));
     if (cachedCards) {
       try {
         const parsed = JSON.parse(cachedCards);
@@ -245,7 +251,7 @@ export default function Home() {
         }
       } catch {}
     }
-  }, [hideLoader]);
+  }, [hideLoader, user?.id]);
 
   const router = useRouter();
 
@@ -283,18 +289,18 @@ export default function Home() {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 9000);
-          const res = await fetch(`${API}/api/search-topic?${searchParams.toString()}`, {
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          if (res.ok) {
-            const data: BriefingCard[] = await res.json();
+          try {
+            const data = await apiFetch<BriefingCard[]>(`/api/search-topic?${searchParams.toString()}`, {
+              signal: controller.signal,
+            });
             if (Array.isArray(data) && data.length > 0) {
               incomingCards = data.map((c) => ({
                 ...c,
                 rank: undefined,
               }));
             }
+          } finally {
+            clearTimeout(timeoutId);
           }
         } catch (fetchErr) {
           console.error("Backend error fetching next search edition:", fetchErr);
@@ -401,15 +407,15 @@ export default function Home() {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 9000);
-          const res = await fetch(`${API}/api/briefings?${params.toString()}`, {
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-          if (res.ok) {
-            const data: BriefingCard[] = await res.json();
+          try {
+            const data = await apiFetch<BriefingCard[]>(`/api/briefings?${params.toString()}`, {
+              signal: controller.signal
+            });
             if (Array.isArray(data) && data.length > 0) {
               incomingCards = data;
             }
+          } finally {
+            clearTimeout(timeoutId);
           }
         } catch {
           // Backend offline, timed out or error; fallback smoothly below
@@ -470,35 +476,25 @@ export default function Home() {
         offset: "0",
         page: "1",
       });
-      const res = await fetch(`${API}/api/search-topic?${params.toString()}`);
-      if (res.ok) {
-        const data: BriefingCard[] = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setSearchedStories(
-            data.map((c) => ({
-              ...c,
-              rank: undefined,
-            }))
-          );
-        } else {
-          // Fallback keyword filter on current briefings
-          const local = briefings.filter(
-            (b) =>
-              b.title.toLowerCase().includes(query.toLowerCase()) ||
-              b.target_stack.some((s) => s.toLowerCase().includes(query.toLowerCase()))
-          );
-          setSearchedStories(local);
-          if (local.length === 0) {
-            setSearchError(`No live updates found for "${query}". Try another tech subject.`);
-          }
-        }
+      const data = await apiFetch<BriefingCard[]>(`/api/search-topic?${params.toString()}`);
+      if (Array.isArray(data) && data.length > 0) {
+        setSearchedStories(
+          data.map((c) => ({
+            ...c,
+            rank: undefined,
+          }))
+        );
       } else {
+        // Fallback keyword filter on current briefings
         const local = briefings.filter(
           (b) =>
             b.title.toLowerCase().includes(query.toLowerCase()) ||
             b.target_stack.some((s) => s.toLowerCase().includes(query.toLowerCase()))
         );
         setSearchedStories(local);
+        if (local.length === 0) {
+          setSearchError(`No live updates found for "${query}". Try another tech subject.`);
+        }
       }
     } catch (err) {
       console.error("Error searching topic:", err);
@@ -605,20 +601,19 @@ export default function Home() {
   }, [showProfileMenu]);
   
   useEffect(() => {
-    const token = localStorage.getItem("becon_token");
-    if (!token) {
-      router.push("/login");
+    if (!user) return;
+
+    if (me && !me.has_completed_setup) {
+      hideLoader();
+      router.push("/profile?setup=true");
       return;
     }
-    
+
     const fetchProfileAndBriefings = async () => {
       hideLoader();
       try {
-        const res = await fetch(`${API}/api/profile`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const profile = await res.json();
+        const profile = await apiFetch<any>("/api/profile");
+        if (profile) {
           if (profile.name) {
             setUserName(profile.name);
             localStorage.setItem("becon_user_name", profile.name);
@@ -636,7 +631,7 @@ export default function Home() {
             const cached = localStorage.getItem("becon_user_avatar");
             if (cached) setUserAvatar(cached);
           }
-          if (profile.auth_provider === "guest" || localStorage.getItem("becon_is_guest") === "true") {
+          if (profile.auth_provider === "guest" || isAnonymous) {
             setIsGuest(true);
           }
           if (profile.interests) {
@@ -659,11 +654,6 @@ export default function Home() {
 
           // Fetch briefings strictly using this user's profile interests & role
           fetchAllBriefings(false, profile);
-        } else {
-          hideLoader();
-          // Token invalid or expired
-          localStorage.removeItem("becon_token");
-          router.push("/login");
         }
       } catch (err) {
         console.error("Error fetching profile", err);
@@ -672,7 +662,7 @@ export default function Home() {
     };
     
     fetchProfileAndBriefings();
-  }, [router]);
+  }, [user, me, isAnonymous, router]);
 
   const fetchAllBriefings = async (forceRefresh = false, profile: any = null) => {
     setLoading(true);
@@ -694,55 +684,49 @@ export default function Home() {
       topParams.set("limit", "5");
       if (forceRefresh) topParams.set("refresh", "true");
 
-      const topRes = await fetch(`${API}/api/briefings?${topParams.toString()}`);
-      if (topRes.ok) {
-        const topData: BriefingCard[] = await topRes.json();
-        if (Array.isArray(topData) && topData.length > 0) {
-          const mappedTop = topData.map((c, index) => ({
-            ...c,
-            rank: c.rank ?? index + 1,
-          }));
-          setBriefings(mappedTop);
-          try {
-            localStorage.setItem("becon_cached_briefings", JSON.stringify(mappedTop));
-          } catch {}
-          // INSTANTLY REVEAL TOP SCREEN TO USER!
-          setLoading(false);
-          hideLoader();
+      const topData = await apiFetch<BriefingCard[]>(`/api/briefings?${topParams.toString()}`);
+      if (Array.isArray(topData) && topData.length > 0) {
+        const mappedTop = topData.map((c, index) => ({
+          ...c,
+          rank: c.rank ?? index + 1,
+        }));
+        setBriefings(mappedTop);
+        try {
+          localStorage.setItem(getBriefingsCacheKey(user?.id), JSON.stringify(mappedTop));
+        } catch {}
+        // INSTANTLY REVEAL TOP SCREEN TO USER!
+        setLoading(false);
+        hideLoader();
 
-          // STEP 2: SIMULTANEOUSLY LAZY-LOAD REMAINING CARDS FOR BENTO DECK IN BACKGROUND
-          setLoadingRemaining(true);
-          const remParams = new URLSearchParams(baseParams);
-          remParams.set("scope", "remaining");
+        // STEP 2: SIMULTANEOUSLY LAZY-LOAD REMAINING CARDS FOR BENTO DECK IN BACKGROUND
+        setLoadingRemaining(true);
+        const remParams = new URLSearchParams(baseParams);
+        remParams.set("scope", "remaining");
 
-          try {
-            const remRes = await fetch(`${API}/api/briefings?${remParams.toString()}`);
-            if (remRes.ok) {
-              const remData: BriefingCard[] = await remRes.json();
-              if (Array.isArray(remData) && remData.length > 0) {
-                setBriefings((prev) => {
-                  const existingIds = new Set(prev.map((c) => c.id));
-                  const newCards = remData
-                    .filter((c) => !existingIds.has(c.id))
-                    .map((c, idx) => ({
-                      ...c,
-                      rank: c.rank ?? prev.length + idx + 1,
-                    }));
-                  const full = [...prev, ...newCards];
-                  try {
-                    localStorage.setItem("becon_cached_briefings", JSON.stringify(full));
-                  } catch {}
-                  return full;
-                });
-              }
-            }
-          } catch (remErr) {
-            console.error("Error lazy-loading remaining briefings:", remErr);
-          } finally {
-            setLoadingRemaining(false);
+        try {
+          const remData = await apiFetch<BriefingCard[]>(`/api/briefings?${remParams.toString()}`);
+          if (Array.isArray(remData) && remData.length > 0) {
+            setBriefings((prev) => {
+              const existingIds = new Set(prev.map((c) => c.id));
+              const newCards = remData
+                .filter((c) => !existingIds.has(c.id))
+                .map((c, idx) => ({
+                  ...c,
+                  rank: c.rank ?? prev.length + idx + 1,
+                }));
+              const full = [...prev, ...newCards];
+              try {
+                localStorage.setItem(getBriefingsCacheKey(user?.id), JSON.stringify(full));
+              } catch {}
+              return full;
+            });
           }
-          return;
+        } catch (remErr) {
+          console.error("Error lazy-loading remaining briefings:", remErr);
+        } finally {
+          setLoadingRemaining(false);
         }
+        return;
       }
 
       // Fallback if top fetch didn't return data
@@ -808,7 +792,8 @@ export default function Home() {
   }, [displayedBentoStories]);
 
   return (
-    <div className="relative min-h-screen bg-[#FAF8F5] overflow-x-clip">
+    <RequireAuth>
+      <div className="relative min-h-screen bg-[#FAF8F5] overflow-x-clip">
       {/* 20% HEIGHT REVEAL SCREEN (LOCATED BEHIND THE PAGE, REVEALED AS PAGE LIFTS UP) */}
       <div
         className="fixed bottom-0 left-0 right-0 h-[20vh] min-h-[140px] z-0 bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-t-2 border-amber-400 flex flex-col items-center justify-center p-4 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)]"
@@ -958,17 +943,14 @@ export default function Home() {
                   {/* LOGOUT */}
                   <button
                     type="button"
-                    onClick={() => {
-                      localStorage.removeItem("becon_token");
-                      localStorage.removeItem("becon_user_name");
-                      localStorage.removeItem("becon_user_avatar");
-                      localStorage.removeItem("becon_is_guest");
+                    onClick={async () => {
+                      await signOut();
                       router.push("/login");
                     }}
                     className="group flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors text-left cursor-pointer"
                   >
                     <LogOut className="w-4 h-4 text-rose-500 dark:text-rose-400" />
-                    <span>{isGuest ? "Exit Guest Mode" : "Logout"}</span>
+                    <span>{isGuest || isAnonymous ? "Exit Guest Mode" : "Logout"}</span>
                   </button>
                 </div>
               )}
@@ -976,6 +958,9 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* GUEST BANNER */}
+      <GuestBanner />
 
       {/* 2. EDITION INDEX RIBBON (ALL SIGNALS IN ONE VIEW WITH PREV/NEXT CONTROLS & THEME SWITCHER) */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-1.5 sm:py-2 shadow-2xs transition-colors duration-200">
@@ -1395,7 +1380,8 @@ export default function Home() {
           <span className="sr-only">Back to top</span>
         </button>
       )}
-    </div>
+      </div>
+    </RequireAuth>
   );
 }
 
