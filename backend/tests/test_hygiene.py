@@ -1,14 +1,10 @@
-from datetime import UTC, datetime
-
 import pytest
 from fastapi.testclient import TestClient
-from jose import jwt
 from pydantic import ValidationError
 
 from app.ai_service import sanitize_custom_prompt
-from app.auth import ALGORITHM, create_access_token
 from app.config import Settings, settings
-from app.main import _guest_ip_log, app
+from app.main import app
 
 
 @pytest.fixture
@@ -16,43 +12,22 @@ def client():
     return TestClient(app)
 
 
-def test_settings_production_fails_without_secure_key():
-    # 1. Missing / empty SECRET_KEY in production
+def test_settings_production_fails_without_supabase_url():
+    # 1. Missing / empty SUPABASE_URL in production
     with pytest.raises(ValidationError):
-        Settings(ENVIRONMENT="production", SECRET_KEY="")
+        Settings(ENVIRONMENT="production", SUPABASE_URL="")
 
-    # 2. Known insecure default dev keys in production
+    # 2. None SUPABASE_URL in production
     with pytest.raises(ValidationError):
-        Settings(ENVIRONMENT="production", SECRET_KEY="dev-secret-key-change-in-production")
+        Settings(ENVIRONMENT="production", SUPABASE_URL=None)
 
-    with pytest.raises(ValidationError):
-        Settings(ENVIRONMENT="production", SECRET_KEY="dev-only-change-me")
-
-    # 3. Short secret key in production (< 16 chars)
-    with pytest.raises(ValidationError):
-        Settings(ENVIRONMENT="production", SECRET_KEY="short-key")
-
-    # 4. Valid secret key in production succeeds
+    # 3. Valid SUPABASE_URL in production succeeds
     prod_settings = Settings(
         ENVIRONMENT="production",
-        SECRET_KEY="a-very-secure-random-production-key-12345",
+        SUPABASE_URL="https://example.supabase.co",
     )
     assert prod_settings.ENVIRONMENT == "production"
-
-
-def test_create_access_token_default_expiry_is_seven_days():
-    token = create_access_token({"sub": "user@example.com"})
-    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-
-    exp = payload.get("exp")
-    assert exp is not None
-
-    now_ts = datetime.now(UTC).timestamp()
-    diff_seconds = exp - now_ts
-
-    # Expected ~ 7 days (60 * 24 * 7 * 60 = 604800 seconds)
-    expected_seconds = 7 * 24 * 3600
-    assert abs(diff_seconds - expected_seconds) < 60
+    assert prod_settings.SUPABASE_URL == "https://example.supabase.co"
 
 
 def test_sanitize_custom_prompt():
@@ -93,26 +68,3 @@ def test_ingest_endpoint_token_protection(client, monkeypatch):
     )
     assert resp_valid.status_code == 200
     assert resp_valid.json()["status"] == "processing"
-
-
-def test_guest_rate_limiting(client, monkeypatch):
-    _guest_ip_log.clear()
-    monkeypatch.setattr(settings, "GUEST_RATE_LIMIT_PER_HOUR", 5)
-
-    headers = {"X-Forwarded-For": "192.168.1.100"}
-
-    # 5 attempts within limit should all succeed
-    for i in range(5):
-        resp = client.post("/api/auth/guest", headers=headers)
-        assert resp.status_code == 200, f"Attempt {i + 1} failed"
-        assert "access_token" in resp.json()
-
-    # 6th attempt should be blocked with 429
-    resp_blocked = client.post("/api/auth/guest", headers=headers)
-    assert resp_blocked.status_code == 429
-    assert "Too many guest accounts" in resp_blocked.json()["detail"]
-
-    # Different IP should succeed
-    diff_ip_headers = {"X-Forwarded-For": "192.168.1.200"}
-    resp_diff_ip = client.post("/api/auth/guest", headers=diff_ip_headers)
-    assert resp_diff_ip.status_code == 200

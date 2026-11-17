@@ -21,11 +21,11 @@ def test_health_endpoint(client):
 
 
 def test_request_id_middleware(client):
-    # 1. Custom incoming X-Request-ID header should be preserved
-    custom_id = "test-custom-request-id-12345"
-    resp = client.get("/health", headers={"X-Request-ID": custom_id})
+    # 1. Custom incoming valid X-Request-ID header should be preserved
+    valid_custom_id = "test-custom-request-id-12345.v1_alpha"
+    resp = client.get("/health", headers={"X-Request-ID": valid_custom_id})
     assert resp.status_code == 200
-    assert resp.headers.get("X-Request-ID") == custom_id
+    assert resp.headers.get("X-Request-ID") == valid_custom_id
 
     # 2. When no X-Request-ID is sent, one is generated and returned
     resp_gen = client.get("/health")
@@ -33,6 +33,20 @@ def test_request_id_middleware(client):
     generated_id = resp_gen.headers.get("X-Request-ID")
     assert generated_id is not None
     assert len(generated_id) > 10
+
+    # 3. Invalid characters in X-Request-ID (e.g. spaces, special chars) are replaced
+    invalid_id = "bad id with spaces & symbols!"
+    resp_invalid = client.get("/health", headers={"X-Request-ID": invalid_id})
+    assert resp_invalid.status_code == 200
+    returned_id = resp_invalid.headers.get("X-Request-ID")
+    assert returned_id != invalid_id
+    assert len(returned_id) > 10
+
+    # 4. Oversized X-Request-ID (>64 chars) is replaced
+    oversized_id = "a" * 65
+    resp_oversized = client.get("/health", headers={"X-Request-ID": oversized_id})
+    assert resp_oversized.status_code == 200
+    assert resp_oversized.headers.get("X-Request-ID") != oversized_id
 
 
 def test_logging_formatters():

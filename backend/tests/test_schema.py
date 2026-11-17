@@ -6,14 +6,12 @@ from pathlib import Path
 
 import pytest
 from alembic.config import Config
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from alembic import command
-from app.database import get_db
-from app.main import app
+from app.deps import map_token_to_user
 from app.models import (
     Card,
     CardFeedback,
@@ -293,22 +291,26 @@ def test_duplicate_email_migration():
         with engine.begin() as conn:
             # Insert duplicate emails with different cases
             conn.execute(
-                text("INSERT INTO user_profiles (id, name, email, auth_provider) VALUES (1, 'User One', 'User@Example.Com', 'local')")
+                text(
+                    "INSERT INTO user_profiles (id, name, email, auth_provider) VALUES (1, 'User One', 'User@Example.Com', 'local')"
+                )
             )
             conn.execute(
-                text("INSERT INTO user_profiles (id, name, email, auth_provider) VALUES (2, 'User Two', 'user@example.com', 'google')")
+                text(
+                    "INSERT INTO user_profiles (id, name, email, auth_provider) VALUES (2, 'User Two', 'user@example.com', 'google')"
+                )
             )
             conn.execute(
-                text("INSERT INTO user_profiles (id, name, email, auth_provider) VALUES (3, 'Guest User', 'guest_123@guest.local', 'guest')")
+                text(
+                    "INSERT INTO user_profiles (id, name, email, auth_provider) VALUES (3, 'Guest User', 'guest_123@guest.local', 'guest')"
+                )
             )
 
         # 2. Run 0002 migration
         command.upgrade(cfg, "head")
 
         with engine.connect() as conn:
-            rows = conn.execute(
-                text("SELECT id, name, email, is_anonymous FROM user_profiles ORDER BY id")
-            ).fetchall()
+            rows = conn.execute(text("SELECT id, name, email, is_anonymous FROM user_profiles ORDER BY id")).fetchall()
 
             # Must have merged 1 duplicate, leaving exactly 2 rows
             assert len(rows) == 2, f"Expected 2 rows after dedup, got {len(rows)}"
@@ -356,63 +358,75 @@ def test_seed_idempotency_and_alias_resolution(sqlite_engine):
 
 
 def test_safe_user_creation_paths_and_races(sqlite_engine):
-    """Acceptance criterion 6: register, sync, and guest never create dupes or 500 on races."""
+    """Verify safe user creation, legacy account linking, and anonymous user handling via map_token_to_user."""
     engine, _ = sqlite_engine
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    client = TestClient(app)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
 
     try:
-        # 1. Register: case-insensitive get-or-create
-        reg_payload = {"email": "DevUser@Example.Com", "password": "password123!", "name": "Dev User"}
-        res1 = client.post("/api/register", json=reg_payload)
-        assert res1.status_code == 200, res1.text
-        assert "access_token" in res1.json()
-
-        # Re-registering with different case returns existing user without error
-        res2 = client.post("/api/register", json={"email": "devuser@example.com", "password": "differentpassword"})
-        assert res2.status_code == 200, res2.text
-        assert "access_token" in res2.json()
-
-        # 2. Supabase sync: get-or-create
-        sync_payload = {
-            "email": "SYNCUSER@example.COM",
-            "name": "Sync User",
-            "picture_url": "https://example.com/avatar.jpg",
-            "provider": "google",
+        # 1. New user via claims: case-insensitive email normalization
+        claims1 = {
+            "sub": "11111111-1111-1111-1111-111111111111",
+            "email": "DevUser@Example.Com",
+            "user_metadata": {"full_name": "Dev User"},
+            "app_metadata": {"provider": "email"},
         }
-        res3 = client.post("/api/auth/supabase-sync", json=sync_payload)
-        assert res3.status_code == 200, res3.text
+        u1 = map_token_to_user(claims1, db)
+        assert u1.external_auth_id == "11111111-1111-1111-1111-111111111111"
+        assert u1.email == "devuser@example.com"
+        assert u1.name == "Dev User"
 
-        # Calling sync again with same email in lowercase
-        res4 = client.post("/api/auth/supabase-sync", json={"email": "syncuser@example.com", "name": "Updated Name"})
-        assert res4.status_code == 200, res4.text
+        # Calling again with same sub returns same user
+        u1_again = map_token_to_user(claims1, db)
+        assert u1_again.id == u1.id
 
-        # 3. Guest auth
-        res5 = client.post("/api/auth/guest")
-        assert res5.status_code == 200, res5.text
-        assert "access_token" in res5.json()
+        # 2. Legacy user linking: existing user without external_auth_id
+        legacy_user = UserProfile(
+            name="Legacy User",
+            email="legacy@example.com",
+            auth_provider="local",
+        )
+        db.add(legacy_user)
+        db.commit()
 
-        # 4. Verify user counts in DB
-        db = TestingSessionLocal()
+        claims_legacy = {
+            "sub": "22222222-2222-2222-2222-222222222222",
+            "email": "LEGACY@Example.COM",
+            "user_metadata": {"full_name": "Legacy Linked"},
+        }
+        u_linked = map_token_to_user(claims_legacy, db)
+        assert u_linked.id == legacy_user.id
+        assert u_linked.external_auth_id == "22222222-2222-2222-2222-222222222222"
+
+        # 3. Anonymous user (email is None)
+        claims_anon1 = {
+            "sub": "33333333-3333-3333-3333-333333333333",
+            "is_anonymous": True,
+        }
+        u_anon1 = map_token_to_user(claims_anon1, db)
+        assert u_anon1.is_anonymous is True
+        assert u_anon1.email is None
+
+        # 4. Second anonymous user (also email is None) - multiple NULL emails allowed
+        claims_anon2 = {
+            "sub": "44444444-4444-4444-4444-444444444444",
+            "is_anonymous": True,
+        }
+        u_anon2 = map_token_to_user(claims_anon2, db)
+        assert u_anon2.is_anonymous is True
+        assert u_anon2.email is None
+        assert u_anon1.id != u_anon2.id
+
+        # 5. Verify user counts and integrity
         users = db.query(UserProfile).all()
-        user_emails = [u.email for u in users]
-        # Should have exactly 1 devuser, 1 syncuser, 1 guestuser
-        assert "devuser@example.com" in user_emails
-        assert "syncuser@example.com" in user_emails
-        assert len(user_emails) == len(set(user_emails)), "Duplicate emails found in database!"
-        db.close()
+        assert len(users) == 4
+        non_null_emails = [u.email for u in users if u.email is not None]
+        assert len(non_null_emails) == len(set(non_null_emails)), "Duplicate non-null emails found!"
+        assert "devuser@example.com" in non_null_emails
+        assert "legacy@example.com" in non_null_emails
 
     finally:
-        app.dependency_overrides.pop(get_db, None)
+        db.close()
 
 
 @pytest.mark.skipif("TEST_DATABASE_URL" not in os.environ, reason="PostgreSQL not available")

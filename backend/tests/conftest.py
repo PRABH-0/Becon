@@ -14,7 +14,7 @@ from alembic import command
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.database import get_db
-from app.main import app
+from app.main import app as fastapi_app
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -46,6 +46,13 @@ def setup_test_db_and_app():
 
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+    import app.database as app_db
+
+    orig_engine = app_db.engine
+    orig_session = app_db.SessionLocal
+    app_db.engine = engine
+    app_db.SessionLocal = TestingSessionLocal
+
     def override_get_db():
         db = TestingSessionLocal()
         try:
@@ -53,11 +60,13 @@ def setup_test_db_and_app():
         finally:
             db.close()
 
-    app.dependency_overrides[get_db] = override_get_db
+    fastapi_app.dependency_overrides[get_db] = override_get_db
 
     yield
 
-    app.dependency_overrides.pop(get_db, None)
+    fastapi_app.dependency_overrides.pop(get_db, None)
+    app_db.engine = orig_engine
+    app_db.SessionLocal = orig_session
     engine.dispose()
     if temp_file and os.path.exists(temp_file.name):
         try:
