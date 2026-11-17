@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-17  
 Current phase: 1 (Foundation)  
-Current task: 1.2 Tooling (pytest, ruff, CI, Docker, logging)  
+Current task: 1.3 Alembic and full data model  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -50,8 +50,8 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 
 ## PHASE 1: Foundation
 - [x] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
-- [~] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
-- [ ] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
+- [x] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
+- [~] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
 - [ ] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages
 - [ ] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
 
@@ -167,4 +167,5 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-17 | 0.1, 0.2, 0.3 | Done | Audit, UI audit and repo CLAUDE.md created |
 | 2026-11-17 | 1.1 | Done (`af04d7b`) | Hygiene & security guardrails implemented: .gitignore updated, obsolete DB scripts removed, settings centralized, ingest endpoint protected, guest rate-limited, token expiry fixed, personal defaults removed, prompt sanitized, test suite passing |
 | 2026-11-17 | 1.1b | Done (`0e9831d`) | Remote secrets scan, SECRET_KEY verified, local history safely rewritten to remove unredacted report commits, smoke tests passed |
-| 2026-11-17 | 1.2 | In Progress (`0222575`) | Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
+| 2026-11-17 | 1.2 | Done (`5da2a57`) | Approved by lead: Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
+| 2026-11-17 | 1.3 | In Progress (`95efc44`) | Alembic migrations setup (0001 baseline + 0002 full schema), 20 declarative ORM tables with UUID PKs and CHECK constraints, email deduplication on user_profiles, safe get-or-create user handling, idempotent seed data (54 topics, 2 professions), docs/DATA_MODEL.md, comprehensive test suite |

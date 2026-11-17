@@ -1,0 +1,233 @@
+# Becon Data Model & Schema Architecture
+
+## 1. Overview & Pipeline Architecture
+
+Becon is a career update companion that delivers a 3–5 minute daily briefing of source-grounded **Action Cards** (What happened, Why it matters, How it affects you, What to do next).
+
+The data model is profession-agnostic: professions, focus topics, and sources are data rows in tables rather than hardcoded enums or static types.
+
+### Content Pipeline Flow
+
+```
+[Sources (Feeds, Releases, Advisories)]
+                 │
+                 ▼ (Fetch)
+           [Raw Items] (URLs, content hashes, external IDs)
+                 │
+                 ▼ (Normalize & Deduplicate)
+              [Events] (Canonical career occurrences, severity 0-100)
+                 │
+                 ▼ (AI Synthesis & Fact-check)
+              [Cards] (1 shared card per event, grounded in source text)
+                 │
+                 ▼ (Personalization)
+          [Card Variants] (Per-profession / per-topic tailored implications)
+                 │
+                 ▼ (User Delivery & Ranking)
+    [User Deliveries / Feed / Bookmarks]
+```
+
+---
+
+## 2. Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    professions ||--o{ profession_topics : "suggests"
+    focus_topics ||--o{ profession_topics : "included_in"
+    focus_topics ||--o{ topic_aliases : "has"
+    focus_topics ||--o{ focus_topics : "parent_of"
+    
+    user_profiles ||--o{ user_focus_topics : "tracks"
+    focus_topics ||--o{ user_focus_topics : "tracked_by"
+    
+    professions ||--o{ user_profiles : "categorizes"
+    
+    sources ||--o{ source_topics : "covers"
+    focus_topics ||--o{ source_topics : "covered_by"
+    
+    user_profiles ||--o{ user_follows : "follows"
+    sources ||--o{ user_follows : "followed_by"
+    
+    sources ||--o{ raw_items : "produces"
+    events ||--o{ raw_items : "groups"
+    
+    events ||--o{ event_topics : "tagged_with"
+    focus_topics ||--o{ event_topics : "associated_with"
+    
+    events ||--|| cards : "synthesized_into"
+    
+    cards ||--o{ card_variants : "has_variants"
+    professions ||--o{ card_variants : "tailors_for"
+    focus_topics ||--o{ card_variants : "tailors_for_topic"
+    
+    user_profiles ||--o{ saved_cards : "bookmarks"
+    cards ||--o{ saved_cards : "bookmarked_in"
+    
+    user_profiles ||--o{ card_feedback : "rates"
+    cards ||--o{ card_feedback : "rated_by"
+    
+    user_profiles ||--o{ error_reports : "submits"
+    cards ||--o{ error_reports : "reported_on"
+    
+    user_profiles ||--o{ deliveries : "receives"
+    user_profiles ||--o{ metrics_events : "generates"
+```
+
+---
+
+## 3. Table Catalog & Purposes
+
+### 1. `professions`
+Represents professional domains (e.g., Software Development, Accounting and Finance). Serves as the root grouping for onboarding topic suggestions and card variant personalization.
+
+### 2. `focus_topics`
+Canonical tools, technologies, platforms, languages, regulations, and standards that users follow (e.g., Next.js, Docker, IFRS). Supports hierarchical parent-child relationships (e.g., `.NET` $\rightarrow$ `C#`).
+
+### 3. `topic_aliases`
+Stores alternative names, abbreviations, and common misspellings (lowercase) mapping to a canonical focus topic (e.g., `next`, `nextjs`, and `next.js` resolve to `Next.js`).
+
+### 4. `profession_topics`
+Many-to-many relationship linking professions to suggested focus topics displayed during user onboarding and topic exploration.
+
+### 5. `user_focus_topics`
+Explicit topic preferences selected by users with optional version constraints (e.g., Python 3.12, Next.js 15) to drive personal briefing ranking.
+
+### 6. `sources`
+Authoritative external feeds (RSS, Atom, GitHub releases, security advisories). Tracks fetch intervals, ETag/Last-Modified HTTP caching headers, health state, and trust tiers.
+
+### 7. `source_topics`
+Mapping of external content sources to the focus topics they reliably cover.
+
+### 8. `user_follows`
+Prepares creator and specific source following functionality (Phase 9), enabling users to subscribe to trusted individual publishers.
+
+### 9. `raw_items`
+Unprocessed items retrieved by background ingesters from external sources. Enforces unique URL hashes per source and records raw content, processing status, and linked event.
+
+### 10. `events`
+Canonical, deduplicated career occurrences distilled from one or more raw items. Captures event category, breaking change flags, and severity scores ($0$–$100$).
+
+### 11. `event_topics`
+Connects events to relevant focus topics along with version metadata and topic-matching confidence scores ($0.0$–$1.0$).
+
+### 12. `cards`
+The core briefing artifact: exactly one shared canonical Action Card per event. Grounded exclusively in source text with strict structure (`what_happened` JSON list, `why_it_matters`, `how_it_affects_you`, and `action_guidance`).
+
+### 13. `card_variants`
+Role- and topic-specific adaptations of the personalized sections (`how_it_affects_you` and `action_guidance`) tailored to specific professions or sub-specializations.
+
+### 14. `saved_cards`
+User bookmarks for archiving important Action Cards for long-term reference.
+
+### 15. `card_feedback`
+User quality feedback (+1 helpful / -1 not helpful) used to calibrate ranking and AI prompt quality.
+
+### 16. `error_reports`
+User reports flagging factual inaccuracies or hallucinations in Action Cards for review and prompt iteration.
+
+### 17. `deliveries`
+Schedules and logs outbound notifications and digest briefings via email or Telegram.
+
+### 18. `metrics_events`
+Product telemetry and interaction logs. **Rule**: Strict privacy boundary — absolutely no personal data (emails, passwords, tokens) allowed in properties JSON.
+
+### 19. `user_profiles` (Existing Table, Migrated)
+Stores user identity, authentication provider, delivery preferences, timezone, and profession link.
+
+### 20. `saved_briefings` (Legacy Table, Retained)
+Retained for backwards compatibility; marked `DEPRECATED`. No longer created by modern pipeline and will be dropped in Phase 1.5.
+
+---
+
+## 4. Vocabularies & Constraints
+
+All vocabularies are stored as short strings governed by database `CHECK` constraints (rather than DB enum types) to ensure portable cross-database support and frictionless schema evolution:
+
+| Vocabulary | Table & Column | Permitted Values |
+| :--- | :--- | :--- |
+| **Topic Kind** | `focus_topics.kind` | `'technology'`, `'tool'`, `'language'`, `'platform'`, `'domain'`, `'regulation'`, `'standard'`, `'topic'` |
+| **Source Type** | `sources.type` | `'rss'`, `'atom'`, `'github_release'`, `'advisory'`, `'youtube_channel'`, `'x_account'`, `'instagram_account'` |
+| **Trust Tier** | `sources.trust_tier` | `1` (Official), `2` (Reputable), `3` (Community) |
+| **Raw Item Status** | `raw_items.status` | `'new'`, `'processed'`, `'skipped'`, `'error'` |
+| **Event Category** | `events.category` | `'release'`, `'deprecation'`, `'security'`, `'eol'`, `'industry'`, `'content'` |
+| **Event Status** | `events.status` | `'open'`, `'ready'`, `'published'`, `'flagged'` |
+| **Severity Score** | `events.severity_score` | Integer $0$ to $100$ |
+| **Action Type** | `cards.action_type`, `card_variants.action_type` | `'learn'`, `'apply'`, `'avoid'`, `'prepare'` |
+| **Card Status** | `cards.status` | `'draft'`, `'published'`, `'retracted'` |
+| **Validation Status** | `cards.validation_status` | `'pending'`, `'passed'`, `'failed'`, `'flagged'` |
+| **Feedback Value** | `card_feedback.value` | `-1`, `1` |
+| **Error Report Status**| `error_reports.status` | `'open'`, `'reviewing'`, `'resolved'`, `'rejected'` |
+| **Delivery Channel** | `deliveries.channel` | `'email'`, `'telegram'` |
+| **Delivery Kind** | `deliveries.kind` | `'digest'`, `'alert'` |
+| **Delivery Status** | `deliveries.status` | `'pending'`, `'sent'`, `'failed'`, `'skipped'` |
+
+---
+
+## 5. Notes on Legacy Fields & Deprecations
+
+In `user_profiles`:
+- `role`: **DEPRECATED**. Replaced by `profession_id` foreign key.
+- `interests`: **DEPRECATED**. Replaced by normalized `user_focus_topics` table.
+- `experience`: **DEPRECATED**.
+- `customPrompt`: **DEPRECATED**.
+- `aiTone`: **DEPRECATED**.
+
+Legacy table `saved_briefings`:
+- **DEPRECATED**. Does not link to users or support four-part Action Cards. Retained during Phase 1 transitions and targeted for deletion in Phase 1.5.
+
+---
+
+## 6. Migration & Database Workflow
+
+Alembic manages all schema lifecycle events across SQLite (local development) and PostgreSQL / Supabase (production).
+
+### Adoption of Existing Local Database (`becon.db`)
+Existing local databases containing the initial unversioned schema must be stamped with baseline `0001` before upgrading:
+```powershell
+# In repository root:
+cd backend
+..\backend\.venv\Scripts\alembic.exe stamp 0001
+..\backend\.venv\Scripts\alembic.exe upgrade head
+```
+During `0002` upgrade, existing duplicate user emails are merged (keeping lowest user ID), emails are normalized to lowercase, and new columns are populated.
+
+### Fresh Database Setup
+For a fresh SQLite or PostgreSQL database:
+```powershell
+cd backend
+..\backend\.venv\Scripts\alembic.exe upgrade head
+```
+Or use the helper script:
+```powershell
+.\scripts\dev.ps1 migrate
+```
+
+### Rolling Back Migrations
+```powershell
+cd backend
+..\backend\.venv\Scripts\alembic.exe downgrade -1    # roll back one revision
+..\backend\.venv\Scripts\alembic.exe downgrade base  # roll back all revisions
+```
+
+### Creating New Migrations
+```powershell
+.\scripts\dev.ps1 makemigration -Message "description_of_change"
+```
+
+---
+
+## 7. Seed Data Management
+
+Professions and focus topics are maintained in version-controlled JSON data files:
+- `backend/app/seed/data/professions.json`
+- `backend/app/seed/data/topics.json`
+
+To add a new profession or topic, update the JSON files directly. To apply seed changes idempotently:
+```powershell
+.\scripts\dev.ps1 seed
+# or
+cd backend
+..\backend\.venv\Scripts\python.exe -m app.seed
+```
+The seeder performs upserts keyed by `slug`, synchronizes aliases, establishes parent-child hierarchies, and maps profession-topic relationships without creating duplicates.

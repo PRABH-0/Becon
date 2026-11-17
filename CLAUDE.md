@@ -16,13 +16,14 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 
 ## 3. Architecture Overview
 - **Backend ([backend/app](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app)):** FastAPI service exposing REST endpoints for briefings, user profiles, authentication, onboarding chat, and ingestion triggers.
-  - `main.py`: App routing, OAuth2 dependencies, CORS middleware, API documentation.
+  - `main.py`: App routing, OAuth2 dependencies, CORS middleware, safe user get-or-create handlers.
   - `feed_service.py`: RSS/Atom feed fetching (`feedparser`), image resolution, multi-tenant in-memory cache.
   - `ai_service.py`: Google Gemini integration (`google-genai`), Pydantic schema-constrained JSON extraction.
-  - `database.py`: SQLAlchemy session and engine management for SQLite and PostgreSQL.
-  - `models.py`: ORM schemas (`UserProfile`, `SavedBriefing`).
-  - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `ActionGuidance`, `UserProfileBase`, `ChatResponse`).
-  - `auth.py`: Password hashing (`passlib`/`bcrypt`) and HS256 JWT encoding.
+  - `database.py`: SQLAlchemy session and engine management with naming conventions for SQLite and PostgreSQL.
+  - `models.py`: Declarative ORM models (20 tables; see [docs/DATA_MODEL.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/DATA_MODEL.md)).
+  - `seed/`: Idempotent data seeder loading professions and focus topics from JSON files in `seed/data/`.
+  - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `UserProfileBase`, `Token`, `HealthResponse`).
+  - `auth.py`: Password hashing (`bcrypt`) and HS256 JWT encoding.
 - **Frontend ([frontend/src](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src)):** Next.js 16 App Router broadsheet web app using Tailwind CSS v4 and Lucide icons.
   - `app/page.tsx`: Broadsheet layout containing Top Showcase (Lead + Quick Wire) and Bento Grid deck.
   - `app/profile/page.tsx`: Form to configure profession, experience, focus topics, custom prompts, and AI tone.
@@ -30,8 +31,8 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `app/about/page.tsx`: Manifesto and interactive 4-part Action Card role demonstration.
   - `app/login/page.tsx` & `app/register/page.tsx`: Google OAuth (via Supabase) and Guest exploration mode.
   - `context/`: `ThemeContext` (dark/light mode) and `LoadingContext` (top progress bar).
-- **Data Flow:**
-  `Official Sources / Feeds` -> `feed_service.py (HTTP fetch)` -> `ai_service.py (Gemini 4-part synthesis)` -> `_USER_CACHES (memory)` -> `FastAPI /api/briefings` -> `Next.js Broadsheet UI (Bento Grid)`.
+- **Data Pipeline:**
+  `Sources` -> `raw_items` -> `events` (deduplicated) -> `cards` (1 per event) -> `card_variants` (personalized) -> `deliveries / user feed`.
 
 ## 4. Verified Commands
 
@@ -39,6 +40,9 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 | :--- | :--- | :--- | :--- | :--- |
 | **Install** | `cd frontend && npm install` | `cd backend && .\.venv\Scripts\pip install -r requirements.lock -r requirements-dev.txt` | `.\scripts\dev.ps1 install` | Verified |
 | **Run** | `cd frontend && npm run dev` | `cd backend && .\.venv\Scripts\uvicorn app.main:app --port 8000 --reload` | `.\scripts\dev.ps1 dev-backend` / `dev-frontend` | Verified |
+| **Migrate** | N/A | `cd backend && .\.venv\Scripts\alembic upgrade head` | `.\scripts\dev.ps1 migrate` | Verified |
+| **Make Migration** | N/A | `cd backend && .\.venv\Scripts\alembic revision --autogenerate -m "..."` | `.\scripts\dev.ps1 makemigration -Message "..."` | Verified |
+| **Seed** | N/A | `cd backend && .\.venv\Scripts\python -m app.seed` | `.\scripts\dev.ps1 seed` | Verified |
 | **Typecheck**| `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A | Verified |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` | Verified |
 | **Build** | `cd frontend && npm run build` | N/A | N/A | Verified |
@@ -62,34 +66,32 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase client anon public key.
 
 ## 6. Code Conventions
-- **Backend:** Python 3.11+ type hints; Pydantic v2 schemas for all inputs/outputs with field descriptions and examples; async route handlers where feasible; snake_case variables and functions; PascalCase schemas/models.
+- **Backend:** Python 3.12 type hints (`X | None` union syntax); Pydantic v2 schemas; async route handlers where feasible; snake_case functions; PascalCase schemas/models.
 - **Frontend:** Next.js App Router; React 19 Client Components (`"use client"`) for stateful views; TypeScript interfaces matching backend schemas; Tailwind CSS v4 styling with semantic state transitions.
 - **Design Tokens:** Editorial serif for headlines (`font-serif`), monospace for metadata pills (`font-mono`), sans-serif for body; status accents (emerald = Apply, amber = Prepare/Learn, rose = Avoid).
 
-## 7. Data Model Summary & Database Selection
-- **`user_profiles` table:** `id` (PK), `name`, `role`, `email`, `experience`, `interests` (comma-separated), `customPrompt`, `aiTone`, `password_hash`, `picture_url`, `auth_provider`, `lastUpdated`.
-- **`saved_briefings` table:** `id` (PK), `title`, `source_url`, `target_role`, `target_stack`, `priority`, `card_content_json`, `created_at`.
-- **Database Selection Mechanism:** Evaluated in [`backend/app/database.py:11-21`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/database.py#L11-L21). If `DATABASE_URL` is unset or empty, it defaults to local SQLite (`sqlite:///./becon.db`). If `DATABASE_URL` contains `postgres://` or `postgresql://`, it normalizes the protocol to `postgresql+psycopg2://` for Supabase/PostgreSQL.
+## 7. Data Model Summary & Migrations
+Full specification and ER diagram documented in [docs/DATA_MODEL.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/DATA_MODEL.md).
+- **20 Tables:** `user_profiles` (migrated, unique email), `saved_briefings` (legacy, DEPRECATED), `professions`, `focus_topics`, `topic_aliases`, `profession_topics`, `user_focus_topics`, `sources`, `source_topics`, `user_follows`, `raw_items`, `events`, `event_topics`, `cards`, `card_variants`, `saved_cards`, `card_feedback`, `error_reports`, `deliveries`, `metrics_events`.
+- **Design Rules:** UUID PKs (`sa.Uuid`), UTC timestamps, portable JSON (`JSONB` on Postgres), check constraints for fixed vocabularies, lowercase email and alias indexing, safe get-or-create handling on races.
+- **Migrations:** Alembic baseline `0001` (stamps existing DB) and `0002_full_schema` (creates tables, deduplicates emails).
+- **Database Selection:** Handled in [`backend/app/database.py`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/database.py). Defaults to SQLite locally; normalizes `postgres://` to `postgresql+psycopg2://` for Postgres/Supabase.
 
 ## 8. Rules for Any AI Agent Working in this Repo
 1. **Read Before Writing:** Inspect existing code and schemas before modifying. Never guess implementation details.
 2. **Small, Scoped Changes:** Work on one task at a time. Do not refactor unrelated files.
 3. **Never Commit Secrets:** Check `.env` files and code. Never hardcode API keys, passwords, or tokens.
 4. **Write or Update Tests:** Include automated verification for any newly introduced endpoints or utilities.
-5. **Never Hardcode Professions or Topics:** Professions, focus areas, and feeds must remain dynamic data.
+5. **Never Hardcode Professions or Topics:** Professions, focus areas, and feeds must remain dynamic data in database tables.
 6. **Strict Source Grounding:** Ensure Gemini summarization prompts use only provided source text with zero hallucination.
 7. **Adhere to Report Format:** Always complete turns with the exact progress report template shown in Section 10.
 
 ## 9. Known Gaps & Tech Debt (Factual)
 - [`frontend/src/app/page.tsx:1638-2035`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1638-L2035): Main feed cards omit *How It Affects You* and *What To Do Next* (tactical guidance).
 - [`frontend/src/app/page.tsx:1723`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1723): No modal or drawer component exists for card deep-dives (code snippets/diagrams).
-- [`backend/app/feed_service.py:150`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L150): Cards are cached only in memory (`_USER_CACHES`); zero card persistence in the database.
-- [`backend/app/feed_service.py:18-138`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L18-L138): Feeds rely on `dev.to` and Google News queries rather than official vendor release notes and advisories.
-- [`backend/app/auth.py:23`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/auth.py#L23): Hardcoded 15-minute fallback overrides the declared 7-day JWT expiration.
-- [`backend/app/models.py:11`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/models.py#L11): `UserProfile.email` lacks a unique constraint, causing duplicate user records in `becon.db`.
-- [`backend/app/models.py:21`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/models.py#L21): `SavedBriefing` has no relation or foreign key to `UserProfile`.
-- [`backend/app/main.py:285,474`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/main.py#L285): `POST /api/ingest` and `POST /api/auth/guest` are unauthenticated and lack rate limiting.
-- Repo Root: Zero automated test files (`pytest`/`vitest`), no CI/CD pipelines, no Docker container configuration.
+- [`backend/app/feed_service.py:150`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L150): Cards are cached only in memory (`_USER_CACHES`); zero card persistence in the database (Phase 1.5).
+- [`backend/app/feed_service.py:18-138`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L18-L138): Feeds rely on `dev.to` and Google News queries rather than official vendor release notes and advisories (Phase 2).
+- Legacy table `saved_briefings` has no user relation; slated for removal in Phase 1.5.
 
 ## 10. Required Progress Report Format
 ```
@@ -100,6 +102,7 @@ Summary (max 8 lines):
 Files created/changed (path + one-line purpose):
 Commands run + key output (tests, lint, build, migrations):
 Acceptance criteria: each number -> PASS/FAIL + evidence
+Design decisions and deviations from the spec (with reasons):
 Assumptions made:
 Known issues / tech debt / risks:
 Env vars or secrets needed (names only):
