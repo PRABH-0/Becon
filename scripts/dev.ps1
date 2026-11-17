@@ -3,7 +3,7 @@
 Becon Developer Helper Script for Windows PowerShell.
 
 .DESCRIPTION
-Provides standard development workflow tasks: install, dev-backend, dev-frontend, test, lint.
+Provides standard development workflow tasks: install, dev-backend, dev-frontend, test, lint, migrate, makemigration, seed.
 
 .EXAMPLE
 .\scripts\dev.ps1 install
@@ -11,12 +11,18 @@ Provides standard development workflow tasks: install, dev-backend, dev-frontend
 .\scripts\dev.ps1 dev-frontend
 .\scripts\dev.ps1 test
 .\scripts\dev.ps1 lint
+.\scripts\dev.ps1 migrate
+.\scripts\dev.ps1 makemigration -Message "add_table"
+.\scripts\dev.ps1 seed
 #>
 
 param (
     [Parameter(Position=0, Mandatory=$true)]
-    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint")]
-    [string]$Command
+    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed")]
+    [string]$Command,
+
+    [Parameter(Position=1, Mandatory=$false)]
+    [string]$Message = "migration"
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,6 +97,36 @@ switch ($Command) {
         try {
             npx tsc --noEmit
             npm run lint
+        } finally {
+            Pop-Location
+        }
+    }
+
+    "migrate" {
+        Write-Host "==> Running Alembic Migrations to Head..." -ForegroundColor Cyan
+        Push-Location "$RepoRoot\backend"
+        try {
+            & .venv\Scripts\alembic.exe upgrade head
+        } finally {
+            Pop-Location
+        }
+    }
+
+    "makemigration" {
+        Write-Host "==> Creating Alembic Migration: $Message..." -ForegroundColor Cyan
+        Push-Location "$RepoRoot\backend"
+        try {
+            & .venv\Scripts\alembic.exe revision --autogenerate -m "$Message"
+        } finally {
+            Pop-Location
+        }
+    }
+
+    "seed" {
+        Write-Host "==> Running Database Seed..." -ForegroundColor Cyan
+        Push-Location "$RepoRoot\backend"
+        try {
+            & .venv\Scripts\python.exe -m app.seed
         } finally {
             Pop-Location
         }
