@@ -18,6 +18,8 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ai_service import ai_match_topics
@@ -421,7 +423,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except JWTError:
         raise credentials_exception
 
-    user = db.query(UserProfile).filter(UserProfile.email == email).first()
+    user = db.query(UserProfile).filter(func.lower(UserProfile.email) == email.lower()).first()
     if user is None:
         raise credentials_exception
     return user
@@ -481,26 +483,34 @@ def update_profile(
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
     """
     Registers a new user account with bcrypt password hashing and returns an initial access token.
+    Uses case-insensitive get-or-create and handles IntegrityError race conditions gracefully.
     """
-    existing_user = db.query(UserProfile).filter(UserProfile.email == user_data.email).first()
+    clean_email = user_data.email.strip().lower()
+    existing_user = db.query(UserProfile).filter(func.lower(UserProfile.email) == clean_email).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        access_token = create_access_token(data={"sub": existing_user.email})
+        return {"access_token": access_token, "token_type": "bearer"}
 
     hashed_password = get_password_hash(user_data.password)
 
     new_user = UserProfile(
         name=user_data.name if user_data.name else "User",
-        email=user_data.email,
+        email=clean_email,
         password_hash=hashed_password,
         role="",
         experience="",
         interests="",
     )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        user = new_user
+    except IntegrityError:
+        db.rollback()
+        user = db.query(UserProfile).filter(func.lower(UserProfile.email) == clean_email).first()
 
-    access_token = create_access_token(data={"sub": new_user.email})
+    access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -518,7 +528,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     """
     Authenticates user credentials (email entered in username field) and returns an OAuth2 Bearer JWT.
     """
-    user = db.query(UserProfile).filter(UserProfile.email == form_data.username).first()
+    user = (
+        db.query(UserProfile)
+        .filter(func.lower(UserProfile.email) == form_data.username.strip().lower())
+        .first()
+    )
     if not user or not user.password_hash or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -543,14 +557,15 @@ def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db))
     """
     Syncs user authenticated via Supabase Google OAuth into the Becon database.
     Stores/updates their real Gmail profile picture (picture_url), name, and issues a Becon JWT.
+    Uses case-insensitive get-or-create and handles IntegrityError race conditions gracefully.
     """
     email = payload.email.strip().lower()
-    user = db.query(UserProfile).filter(UserProfile.email == email).first()
+    user = db.query(UserProfile).filter(func.lower(UserProfile.email) == email).first()
 
     clean_name = payload.name.strip() if payload.name else email.split("@")[0].capitalize()
 
     if not user:
-        user = UserProfile(
+        new_user = UserProfile(
             name=clean_name,
             email=email,
             picture_url=payload.picture_url,
@@ -561,9 +576,14 @@ def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db))
             customPrompt="",
             aiTone="",
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            db.add(new_user)
+            db.commit()
+            db.refresh(new_user)
+            user = new_user
+        except IntegrityError:
+            db.rollback()
+            user = db.query(UserProfile).filter(func.lower(UserProfile.email) == email).first()
     else:
         updated = False
         if payload.picture_url and user.picture_url != payload.picture_url:
@@ -576,8 +596,12 @@ def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db))
             user.auth_provider = payload.provider
             updated = True
         if updated:
-            db.commit()
-            db.refresh(user)
+            try:
+                db.commit()
+                db.refresh(user)
+            except IntegrityError:
+                db.rollback()
+                user = db.query(UserProfile).filter(func.lower(UserProfile.email) == email).first()
 
     access_token = create_access_token(data={"sub": user.email, "provider": user.auth_provider or "google"})
     return {"access_token": access_token, "token_type": "bearer"}
@@ -597,6 +621,7 @@ def guest_auth(request: Request, db: Session = Depends(get_db)):
     """
     Creates an instant guest session with default engineering intelligence preferences.
     Requires zero credentials or personal data. Rate-limited per client IP.
+    Uses get-or-create and handles IntegrityError gracefully.
     """
     client_ip = get_client_ip(request)
     now = time.time()
@@ -623,11 +648,16 @@ def guest_auth(request: Request, db: Session = Depends(get_db)):
         interests="AI & Generative Models, Cloud Architecture, Full-Stack Development",
         experience="Curious",
         auth_provider="guest",
+        is_anonymous=True,
         picture_url=None,
     )
-    db.add(guest_user)
-    db.commit()
-    db.refresh(guest_user)
+    try:
+        db.add(guest_user)
+        db.commit()
+        db.refresh(guest_user)
+    except IntegrityError:
+        db.rollback()
+        guest_user = db.query(UserProfile).filter(func.lower(UserProfile.email) == guest_email).first()
 
     access_token = create_access_token(data={"sub": guest_user.email, "provider": "guest"})
     return {"access_token": access_token, "token_type": "bearer"}
