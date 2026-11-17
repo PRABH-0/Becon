@@ -4,18 +4,27 @@ import re
 import socket
 import time
 import urllib.parse
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Dict, List, Tuple
 
 import feedparser
+from fastapi import BackgroundTasks
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
 
-from app.ai_service import generate_action_card
-from app.schemas import BriefingCard
+from app.config import settings
+from app.database import SessionLocal
+from app.models import (
+    Card,
+    Event,
+    EventTopic,
+    FocusTopic,
+)
+from app.schemas import ActionGuidance, BriefingCard, BriefingCardContent
 
 logger = logging.getLogger(__name__)
 
-# Set socket timeout to prevent any hanging feeds from stalling generation
+# Set socket timeout to prevent hanging feeds from stalling generation
 socket.setdefaulttimeout(7.0)
 
 # Comprehensive mapping from popular topics and industries to live RSS feeds
@@ -99,42 +108,35 @@ TOPIC_FEED_MAP: Dict[str, Tuple[str, str]] = {
     "c# architecture & microservices": ("C# Systems", "https://dev.to/feed/tag/csharp"),
     "c#": ("C#", "https://dev.to/feed/tag/csharp"),
     
-    # Angular
-    "angular & web frameworks": ("Angular", "https://dev.to/feed/tag/angular"),
+    # Angular & Signals
+    "angular & signals architecture": ("Angular", "https://dev.to/feed/tag/angular"),
     "angular": ("Angular", "https://dev.to/feed/tag/angular"),
     
-    # React & Next.js
-    "react & next.js systems": ("React & Next.js", "https://dev.to/feed/tag/react"),
-    "react": ("React", "https://dev.to/feed/tag/react"),
+    # Next.js & Server Components
+    "next.js & server components": ("Next.js", "https://dev.to/feed/tag/nextjs"),
     "next.js": ("Next.js", "https://dev.to/feed/tag/nextjs"),
+    "nextjs": ("Next.js", "https://dev.to/feed/tag/nextjs"),
+    "react": ("React", "https://dev.to/feed/tag/react"),
     
     # Python & FastAPI
-    "python & fastapi setup": ("Python & FastAPI", "https://dev.to/feed/tag/python"),
+    "python & fastml": ("Python & AI", "https://dev.to/feed/tag/python"),
     "python": ("Python", "https://dev.to/feed/tag/python"),
     "fastapi": ("FastAPI", "https://dev.to/feed/tag/fastapi"),
     
-    # Rust
-    "rust programming language": ("Rust", "https://dev.to/feed/tag/rust"),
+    # Docker, Kubernetes & DevSecOps
+    "docker & kubernetes systems": ("Containers", "https://dev.to/feed/tag/docker"),
+    "docker": ("Docker", "https://dev.to/feed/tag/docker"),
+    "kubernetes": ("Kubernetes", "https://dev.to/feed/tag/kubernetes"),
+    "k8s": ("Kubernetes", "https://dev.to/feed/tag/kubernetes"),
+    
+    # Rust & Systems Programming
+    "rust systems & memory safety": ("Rust", "https://dev.to/feed/tag/rust"),
     "rust": ("Rust", "https://dev.to/feed/tag/rust"),
     
-    # Go
-    "go & high-performance services": ("Go Systems", "https://dev.to/feed/tag/go"),
-    "go": ("Go", "https://dev.to/feed/tag/go"),
-    "golang": ("Go", "https://dev.to/feed/tag/go"),
-    
-    # Docker & Containers
-    "docker & containerization": ("Docker", "https://dev.to/feed/tag/docker"),
-    "docker": ("Docker", "https://dev.to/feed/tag/docker"),
-    "containers": ("Containers", "https://dev.to/feed/tag/docker"),
-    
-    # Kubernetes & DevOps
-    "kubernetes & devops pipelines": ("Kubernetes & DevOps", "https://dev.to/feed/tag/devops"),
-    "kubernetes": ("Kubernetes", "https://dev.to/feed/tag/kubernetes"),
-    "devops": ("DevOps", "https://dev.to/feed/tag/devops"),
-    
-    # TypeScript & Modern Tooling
-    "typescript & modern tooling": ("TypeScript", "https://dev.to/feed/tag/typescript"),
-    "typescript": ("TypeScript", "https://dev.to/feed/tag/typescript"),
+    # Kafka & Event-Driven Architecture
+    "apache kafka & event streaming": ("Kafka & Events", "https://dev.to/feed/tag/kafka"),
+    "kafka": ("Kafka", "https://dev.to/feed/tag/kafka"),
+    "event-driven": ("Event Architecture", "https://dev.to/feed/tag/architecture"),
     
     # eBPF & Observability
     "ebpf & system observability": ("Observability", "https://dev.to/feed/tag/observability"),
@@ -151,17 +153,15 @@ DEFAULT_FEED_SOURCES = {
     "Cloud & Systems": "https://dev.to/feed/tag/cloud",
 }
 
-# Multi-tenant cache dictionary: key -> {"data": [...], "timestamp": float}
-_USER_CACHES: Dict[str, dict] = {}
-CACHE_TTL_SECONDS = 1800  # 30 minutes
 
 def clean_html_tags(text: str) -> str:
     if not text:
         return ""
     text = html.unescape(text)
-    clean_text = re.sub(r'<[^>]+>', ' ', text)
-    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+    clean_text = re.sub(r"<[^>]+>", " ", text)
+    clean_text = re.sub(r"\s+", " ", clean_text).strip()
     return clean_text
+
 
 def get_topic_default_image(tag_name: str, title: str) -> str:
     combined = (tag_name + " " + title).lower()
@@ -191,20 +191,21 @@ def get_topic_default_image(tag_name: str, title: str) -> str:
         return "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800&auto=format&fit=crop"
     return "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800&auto=format&fit=crop"
 
+
 def resolve_feed_for_topic(topic: str) -> Tuple[str, str]:
     t_clean = topic.strip().lower()
     if t_clean in TOPIC_FEED_MAP:
         return TOPIC_FEED_MAP[t_clean]
-    
-    # Try partial substring match against known topics
+
+    # Substring match
     for k, v in TOPIC_FEED_MAP.items():
         if k in t_clean or t_clean in k:
             return v
-            
-    # Universal Google News RSS feed for ANY custom topic or industry!
+
     encoded = urllib.parse.quote(topic.strip())
     display_name = topic.strip().title()
     return (display_name, f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en")
+
 
 def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str, str]:
     title = entry.get("title", "No Title")
@@ -224,12 +225,10 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
         summary = f"Latest production updates regarding {tag_name}."
 
     image_url = None
-    # 1. Check summary HTML for <img>
     img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', summary_raw)
     if img_match:
         image_url = img_match.group(1)
 
-    # 2. Check content blocks for <img>
     if not image_url and entry.get("content"):
         for c in entry.get("content", []):
             val = c.get("value", "") if isinstance(c, dict) else str(c)
@@ -238,22 +237,14 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
                 image_url = c_match.group(1)
                 break
 
-    # 3. Check media_content
     if not image_url and entry.get("media_content") and isinstance(entry["media_content"], list) and len(entry["media_content"]) > 0:
         image_url = entry["media_content"][0].get("url")
 
-    # 4. Check media_thumbnail
     if not image_url and entry.get("media_thumbnail") and isinstance(entry["media_thumbnail"], list) and len(entry["media_thumbnail"]) > 0:
         image_url = entry["media_thumbnail"][0].get("url")
 
-    # 5. Check enclosures and links
     if not image_url and entry.get("enclosures") and isinstance(entry["enclosures"], list) and len(entry["enclosures"]) > 0:
         image_url = entry["enclosures"][0].get("href")
-    if not image_url and entry.get("links") and isinstance(entry["links"], list):
-        for link_item in entry.get("links"):
-            if isinstance(link_item, dict) and ("image" in link_item.get("type", "") or link_item.get("rel") == "enclosure"):
-                image_url = link_item.get("href")
-                break
 
     published_at = None
     if entry.get("published_parsed"):
@@ -274,7 +265,6 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
     if not published_at:
         published_at = datetime.now().strftime("%b %d, %Y")
 
-    # Strictly validate genuine article images: must be http(s) and not tracking pixels or tiny icons
     is_real = False
     clean_image_url = None
     if image_url and isinstance(image_url, str):
@@ -291,15 +281,16 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
         "title": title,
         "link": link,
         "summary": summary,
+        "content_raw": content_raw,
         "tag": tag_name,
         "image_url": clean_image_url,
         "is_real_image": is_real,
-        "published_at": published_at
+        "published_at": published_at,
     }
+
 
 def fetch_topic_feed_items(topic: str, limit: int = 30) -> Tuple[str, List[Dict[str, str]]]:
     tag_name, url = resolve_feed_for_topic(topic)
-    logger.info(f"Querying topic feed '{url}' for subject '{topic}'...")
     try:
         feed = feedparser.parse(url)
         items = []
@@ -311,100 +302,98 @@ def fetch_topic_feed_items(topic: str, limit: int = 30) -> Tuple[str, List[Dict[
         logger.error(f"Failed to fetch '{tag_name}' ({url}): {e}")
         return tag_name, []
 
-def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 15) -> List[Dict[str, str]]:
-    """
-    Fetches raw articles dynamically matching the user's selected interests.
-    If user_interests contains topics, pulls articles from those specific topic feeds first.
-    Interleaves articles evenly so all selected topics get fair representation.
-    """
-    topics = [t.strip() for t in user_interests.split(",") if t.strip()]
-    feed_sources_to_use: List[Tuple[str, str]] = []
-    
-    if topics:
-        seen_urls = set()
-        for t in topics:
-            tag_name, url = resolve_feed_for_topic(t)
-            if url not in seen_urls:
-                seen_urls.add(url)
-                feed_sources_to_use.append((tag_name, url))
-        actual_limit = max(15, 30 // len(feed_sources_to_use))
-    else:
-        feed_sources_to_use = list(DEFAULT_FEED_SOURCES.items())
-        actual_limit = max(6, limit_per_source)
 
-    logger.info(f"Querying {len(feed_sources_to_use)} live feeds (limit {actual_limit}/feed)...")
+def _db_card_to_briefing_card(
+    db: Session,
+    card: Card,
+    rank: int,
+    user_role: str = "Professional",
+    custom_prompt: str = "",
+) -> BriefingCard:
+    """Transform an ORM Card row and its variant into the public BriefingCard DTO."""
+    from app.ingestion import get_or_create_card_variant
 
-    def fetch_single_feed(tag_name: str, url: str) -> List[Dict[str, str]]:
-        try:
-            feed = feedparser.parse(url)
-            items = []
-            for entry in feed.entries[:actual_limit]:
-                item = parse_feed_entry(entry, tag_name, url)
-                items.append(item)
-            return items
-        except Exception as e:
-            logger.error(f"Failed to fetch feed '{tag_name}' ({url}): {e}")
-            return []
+    how_it_affects_you, action_type, action_guidance = get_or_create_card_variant(
+        db=db,
+        card=card,
+        user_role=user_role,
+        custom_prompt=custom_prompt,
+    )
 
-    # Parallelize feed fetching
-    topic_results: List[List[Dict[str, str]]] = []
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        future_map = {executor.submit(fetch_single_feed, tag, url): tag for tag, url in feed_sources_to_use}
-        for future in future_map:
-            feed_items = future.result()
-            if feed_items:
-                topic_results.append(feed_items)
-
-    # Interleave items across feeds so topics are evenly distributed
-    articles: List[Dict[str, str]] = []
-    if topic_results:
-        max_len = max(len(it) for it in topic_results)
-        for i in range(max_len):
-            for it in topic_results:
-                if i < len(it):
-                    articles.append(it[i])
-
-    logger.info(f"Successfully gathered {len(articles)} raw articles matching user topics.")
-    return articles
-
-def worker_generate_card(index: int, item: Dict[str, str], role: str, interests: str, prompt: str) -> dict:
-    if index == 0:
+    if rank == 1:
         priority = "lead"
-    elif index in [1, 2, 3, 4]:
-        priority = "brief"  # Top 4 quick wire stories
-    elif index in [5, 6, 7]:
-        priority = "major"
-    elif index in [8, 9]:
-        priority = "spotlight"
-    elif index in [10, 11]:
-        priority = "watch"
-    else:
+    elif rank in (2, 3, 4):
         priority = "brief"
+    elif rank in (5, 6, 7):
+        priority = "major"
+    elif rank in (8, 9):
+        priority = "spotlight"
+    else:
+        priority = "watch"
 
-    card_content = generate_action_card(
-        article_title=item["title"],
-        source_url=item["link"],
-        raw_summary=item["summary"],
-        tech_tag=item["tag"],
-        user_role=role,
-        user_interests=interests,
-        custom_prompt=prompt
+    # Stack tags
+    stack_tags: List[str] = []
+    if card.event and card.event.event_topics:
+        stack_tags = [et.topic.name for et in card.event.event_topics if et.topic]
+    if not stack_tags:
+        stack_tags = [card.event.category.title()] if card.event else ["Technology"]
+    stack_tags.append("AI Customized")
+
+    # Image resolution
+    image_url = None
+    is_real_image = False
+    if card.event and card.event.raw_items:
+        for r in card.event.raw_items:
+            img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', r.summary or "")
+            if img_m:
+                image_url = img_m.group(1)
+                is_real_image = True
+                break
+
+    primary_tag = stack_tags[0] if stack_tags else "General"
+    title_text = card.event.canonical_title if card.event else "Update"
+    if not image_url:
+        image_url = get_topic_default_image(primary_tag, title_text)
+        is_real_image = False
+
+    pub_at = (
+        card.published_at.strftime("%b %d, %Y")
+        if card.published_at
+        else datetime.now().strftime("%b %d, %Y")
     )
 
-    card = BriefingCard(
-        id=f"live-{index+1}",
-        rank=index + 1,
-        title=item["title"],
-        source_url=item["link"],
-        image_url=item.get("image_url"),
-        is_real_image=bool(item.get("is_real_image", False)),
-        published_at=item.get("published_at") or datetime.now().strftime("%b %d, %Y"),
-        target_role=role,
-        target_stack=[item["tag"], "AI Customized"],
+    return BriefingCard(
+        id=str(card.id),
+        rank=rank,
+        title=title_text,
+        source_url=card.source_url,
+        target_role=user_role,
+        target_stack=stack_tags,
         priority=priority,
-        card_content=card_content
+        image_url=image_url,
+        is_real_image=is_real_image,
+        published_at=pub_at,
+        card_content=BriefingCardContent(
+            what_happened=card.what_happened if isinstance(card.what_happened, list) else [str(card.what_happened)],
+            why_it_matters=card.why_it_matters,
+            how_it_affects_you=how_it_affects_you,
+            what_to_do_next=ActionGuidance(
+                action_type=action_type if action_type in ("learn", "apply", "avoid", "prepare") else "apply",
+                guidance=action_guidance,
+            ),
+        ),
     )
-    return card.model_dump()
+
+
+def _trigger_background_ingest_safely(user_interests: str) -> None:
+    """Background task runner that manages its own DB session."""
+    with SessionLocal() as session:
+        try:
+            from app.ingestion import run_ingestion_pipeline
+            run_ingestion_pipeline(db=session, user_interests=user_interests)
+        except Exception as e:
+            logger.error(f"Background ingestion task failed: {e}")
+
 
 def get_live_briefings(
     force_refresh: bool = False,
@@ -414,306 +403,203 @@ def get_live_briefings(
     page: int = 1,
     limit: int = 16,
     scope: str = "all",
-    offset: int = None
-) -> List[dict]:
-    current_time = time.time()
-    cache_key = f"v3|{user_role.strip().lower()}|{user_interests.strip().lower()}|{custom_prompt.strip().lower()}"
-    cached = _USER_CACHES.get(cache_key)
+    offset: int | None = None,
+    db: Session | None = None,
+    background_tasks: BackgroundTasks | None = None,
+) -> List[BriefingCard]:
+    """Retrieve personalized Action Cards from the database.
 
-    # 1. SCOPE = "TOP" (FAST RENDER TOP 5 CARDS IN ~1.8 SECONDS)
+    Features:
+    - Zero in-memory cache: All cards, variants, and events persist in the database.
+    - Stale-while-revalidate: Triggers background refresh when cards exceed TTL.
+    - Synchronous bootstrap: Runs pipeline on empty database.
+    - Scope slicing: 'top' (top 5), 'remaining' (5-17), or direct offset.
+    """
+    if db is None:
+        with SessionLocal() as local_db:
+            return get_live_briefings(
+                force_refresh=force_refresh,
+                user_role=user_role,
+                user_interests=user_interests,
+                custom_prompt=custom_prompt,
+                page=page,
+                limit=limit,
+                scope=scope,
+                offset=offset,
+                db=local_db,
+                background_tasks=background_tasks,
+            )
+
+    from app.ingestion import run_ingestion_pipeline
+
+    total_published = db.query(func.count(Card.id)).filter(Card.status == "published").scalar() or 0
+
+    # 1. Synchronous bootstrap on empty database or explicit force_refresh
+    if total_published == 0 or force_refresh:
+        logger.info(
+            "Sync ingestion required (total_published=%d, force_refresh=%s)...",
+            total_published,
+            force_refresh,
+        )
+        run_ingestion_pipeline(db=db, user_interests=user_interests)
+    else:
+        # 2. Stale-while-revalidate check
+        newest = (
+            db.query(Card)
+            .filter(Card.status == "published")
+            .order_by(Card.created_at.desc())
+            .first()
+        )
+        if newest and newest.created_at:
+            created_tz = newest.created_at.replace(tzinfo=UTC) if newest.created_at.tzinfo is None else newest.created_at
+            age = (datetime.now(UTC) - created_tz).total_seconds()
+            if age > settings.FEED_CACHE_TTL_SECONDS:
+                if background_tasks:
+                    logger.info("Scheduling background re-ingestion (card age: %.1fs > TTL %ds)...", age, settings.FEED_CACHE_TTL_SECONDS)
+                    background_tasks.add_task(_trigger_background_ingest_safely, user_interests)
+
+    # 3. Build query filtered by user focus topics if provided
+    base_query = (
+        db.query(Card)
+        .join(Event, Card.event_id == Event.id)
+        .filter(Card.status == "published")
+    )
+
+    topics_list = [t.strip() for t in user_interests.split(",") if t.strip()]
+    if topics_list:
+        topic_clauses = []
+        for t in topics_list:
+            clean_t = t.lower()
+            topic_clauses.append(Event.canonical_title.ilike(f"%{clean_t}%"))
+            topic_clauses.append(Card.why_it_matters.ilike(f"%{clean_t}%"))
+            topic_clauses.append(
+                Event.event_topics.any(
+                    EventTopic.topic.has(
+                        or_(
+                            func.lower(FocusTopic.name).contains(clean_t),
+                            func.lower(FocusTopic.slug).contains(clean_t),
+                        )
+                    )
+                )
+            )
+        matched_query = base_query.filter(or_(*topic_clauses))
+        if matched_query.count() > 0:
+            query = matched_query
+        else:
+            query = base_query
+    else:
+        query = base_query
+
+    query = query.order_by(Event.published_at.desc(), Card.created_at.desc())
+
+    # 4. Apply scope / pagination
     if scope == "top":
-        if not force_refresh and cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
-            cards = cached.get("data", [])
-            has_fallback = any(
-                "Real-time signal reported for" in str(c.get("card_content", {}).get("what_happened", []))
-                for c in cards
-            )
-            if not has_fallback and len(cards) >= 5:
-                logger.debug("Serving top 5 AI cards from cache")
-                return cards[:5]
-
-        logger.info(f"Ingesting feeds & generating top 5 cards for: {cache_key[:50]}...")
-        raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=15)
-        if not raw_articles:
-            if cached and cached.get("data"):
-                return cached["data"][:5]
-            return []
-
-        top_articles = raw_articles[:5]
-        top_cards = []
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            future_map = {
-                executor.submit(worker_generate_card, idx, item, user_role, user_interests, custom_prompt): idx
-                for idx, item in enumerate(top_articles)
-            }
-            results = []
-            for future in as_completed(future_map):
-                idx = future_map[future]
-                try:
-                    data = future.result()
-                    results.append((idx, data))
-                except Exception as e:
-                    logger.warning(f"Top worker item {idx} failed: {e}")
-            results.sort(key=lambda x: x[0])
-            top_cards = [res[1] for res in results]
-
-        # Cache top 5 and the raw articles for subsequent requests
-        _USER_CACHES[cache_key] = {
-            "data": top_cards,
-            "raw_articles": raw_articles,
-            "timestamp": current_time,
-            "top_only": True
-        }
-        logger.info(f"Generated {len(top_cards)} top cards in parallel.")
-        return top_cards
-
-    # 2. SCOPE = "REMAINING" (LAZY LOAD REMAINING CARDS FOR BENTO DECK)
+        target_cards = query.limit(5).all()
+        start_rank = 1
     elif scope == "remaining":
-        if not force_refresh and cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
-            if not cached.get("top_only", False) and len(cached.get("data", [])) > 5:
-                logger.debug(f"Serving {len(cached['data'][5:17])} remaining cards from cache.")
-                return cached["data"][5:17]
-
-        logger.info(f"Generating remaining cards for: {cache_key[:50]}...")
-        raw_articles = cached.get("raw_articles") if cached else None
-        if not raw_articles or len(raw_articles) < 10:
-            raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=15)
-
-        if not raw_articles:
-            return []
-
-        target_articles = raw_articles[5:17]
-        remaining_cards = []
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            future_map = {
-                executor.submit(worker_generate_card, idx + 5, item, user_role, user_interests, custom_prompt): idx + 5
-                for idx, item in enumerate(target_articles)
-            }
-            results = []
-            for future in as_completed(future_map):
-                idx = future_map[future]
-                try:
-                    data = future.result()
-                    results.append((idx, data))
-                except Exception as e:
-                    logger.warning(f"Remaining worker item {idx} failed: {e}")
-            results.sort(key=lambda x: x[0])
-            remaining_cards = [res[1] for res in results]
-
-        existing_top = cached.get("data", [])[:5] if cached else []
-        full_cards = existing_top + remaining_cards
-        _USER_CACHES[cache_key] = {
-            "data": full_cards,
-            "raw_articles": raw_articles,
-            "timestamp": current_time,
-            "top_only": False
-        }
-        logger.info(f"Generated & cached {len(remaining_cards)} remaining cards for Bento deck.")
-        return remaining_cards
-
-    # 3. DIRECT OFFSET / INFINITE SCROLL (GIVES EXACTLY UNSEEN CARDS MATCHING TOPICS)
-    elif offset is not None or (page and page > 1):
-        req_offset = offset if offset is not None else ((page - 1) * limit)
-        logger.debug(f"Infinite scroll: offset {req_offset}, limit {limit}")
-
-        cached_cards = cached.get("data", []) if cached else []
-        if len(cached_cards) >= req_offset + limit:
-            logger.debug(f"Serving cached cards for offset {req_offset}..{req_offset + limit}")
-            return cached_cards[req_offset : req_offset + limit]
-
-        raw_articles = cached.get("raw_articles") if cached else None
-        if not raw_articles or len(raw_articles) < req_offset + limit:
-            fresh = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=20)
-            if not raw_articles:
-                raw_articles = fresh
-            else:
-                seen_titles = {a["title"].lower().strip() for a in raw_articles}
-                for a in fresh:
-                    if a["title"].lower().strip() not in seen_titles:
-                        raw_articles.append(a)
-                        seen_titles.add(a["title"].lower().strip())
-
-        target_articles = raw_articles[req_offset : req_offset + limit]
-        if not target_articles:
-            # If still short, slice from beginning or cycle
-            target_articles = raw_articles[:limit]
-
-        new_cards = []
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            future_map = {
-                executor.submit(worker_generate_card, req_offset + idx, item, user_role, user_interests, custom_prompt): req_offset + idx
-                for idx, item in enumerate(target_articles)
-            }
-            results = []
-            for future in as_completed(future_map):
-                idx = future_map[future]
-                try:
-                    data = future.result()
-                    results.append((idx, data))
-                except Exception as e:
-                    logger.warning(f"Infinite worker item {idx} failed: {e}")
-            results.sort(key=lambda x: x[0])
-            new_cards = [res[1] for res in results]
-
-        if cached:
-            cached["data"] = cached_cards + new_cards
-            cached["raw_articles"] = raw_articles
-        else:
-            _USER_CACHES[cache_key] = {
-                "data": new_cards,
-                "raw_articles": raw_articles,
-                "timestamp": current_time,
-                "top_only": False
-            }
-
-        return new_cards
-
-    # 4. SCOPE = "ALL" (DEFAULT / FULL FETCH)
+        target_cards = query.offset(5).limit(limit if limit else 12).all()
+        start_rank = 6
+    elif offset is not None:
+        target_cards = query.offset(offset).limit(limit).all()
+        start_rank = offset + 1
     else:
-        if not force_refresh and cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
-            cards = cached.get("data", [])
-            has_fallback = any(
-                "Real-time signal reported for" in str(c.get("card_content", {}).get("what_happened", []))
-                for c in cards
-            )
-            if not has_fallback and not cached.get("top_only", False):
-                all_data = cached["data"]
-                start = (page - 1) * limit
-                paged_cards = all_data[start : start + limit]
-                logger.debug(f"Serving {len(paged_cards)} customized AI cards from cache (page {page})...")
-                return paged_cards
+        req_offset = (page - 1) * limit
+        target_cards = query.offset(req_offset).limit(limit).all()
+        start_rank = req_offset + 1
 
-        raw_articles = cached.get("raw_articles") if cached else None
-        if not raw_articles:
-            raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=15)
-        if not raw_articles:
-            if cached and cached.get("data"):
-                return cached["data"]
-            return []
-
-        target_articles = raw_articles[:17]
-        cards_list = []
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            future_map = {
-                executor.submit(worker_generate_card, idx, item, user_role, user_interests, custom_prompt): idx
-                for idx, item in enumerate(target_articles)
-            }
-            results = []
-            for future in as_completed(future_map):
-                idx = future_map[future]
-                try:
-                    data = future.result()
-                    results.append((idx, data))
-                except Exception as e:
-                    logger.warning(f"Worker item {idx} failed: {e}")
-            results.sort(key=lambda x: x[0])
-            cards_list = [res[1] for res in results]
-
-        if cards_list:
-            _USER_CACHES[cache_key] = {
-                "data": cards_list,
-                "raw_articles": raw_articles,
-                "timestamp": current_time,
-                "top_only": False
-            }
-            logger.info(f"Cached {len(cards_list)} personalized AI cards for user topics.")
-
-        start = (page - 1) * limit
-        return cards_list[start : start + limit]
-
-def search_topic_briefings(
-    topic: str,
-    user_role: str = "Professional",
-    limit: int = 6,
-    offset: int = 0,
-    page: int = 1
-) -> List[dict]:
-    """
-    Synthesizes real-time intelligence cards tailored to any specific favorite subject or topic using Gemini AI.
-    Supports continuous pagination through offset and page numbers.
-    """
-    clean_topic = topic.strip()
-    if not clean_topic:
-        return []
-
-    current_time = time.time()
-    cache_key = f"search|{clean_topic.lower()}|{user_role.strip().lower()}"
-    cached = _USER_CACHES.get(cache_key)
-
-    # 1. If we already generated and cached cards covering this offset, return them immediately
-    if cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
-        cached_cards = cached.get("data", [])
-        if len(cached_cards) >= offset + limit:
-            logger.debug(f"Serving cached search cards for '{clean_topic}' (slice {offset}..{offset+limit})")
-            return cached_cards[offset : offset + limit]
-
-    # 2. Retrieve or fetch raw articles
-    raw_articles = []
-    if cached and cached.get("raw_articles"):
-        raw_articles = cached["raw_articles"]
-    else:
-        logger.info(f"Ingesting & synthesizing news for favorite subject: '{clean_topic}'...")
-        tag_name, raw_articles = fetch_topic_feed_items(clean_topic, limit=30)
-        if not raw_articles:
-            slug = re.sub(r'[^a-z0-9]', '', clean_topic.lower())
-            if slug and slug != clean_topic.lower():
-                tag_name, raw_articles = fetch_topic_feed_items(slug, limit=30)
-
-        if not raw_articles:
-            general = fetch_raw_feed_items(user_interests="", limit_per_source=6)
-            filtered = [
-                a for a in general
-                if clean_topic.lower() in a["title"].lower() or clean_topic.lower() in a["summary"].lower()
-            ]
-            raw_articles = filtered if filtered else general
-
-    # 3. Determine target slice for synthesis
-    if len(raw_articles) > offset:
-        target = raw_articles[offset : offset + limit]
-    else:
-        # Wrap around raw articles if more editions are pulled than feed length
-        if raw_articles:
-            wrap_offset = offset % len(raw_articles)
-            target = (raw_articles + raw_articles)[wrap_offset : wrap_offset + limit]
-        else:
-            target = []
-
-    results = []
-    if target:
-        with ThreadPoolExecutor(max_workers=min(6, len(target))) as executor:
-            future_map = {
-                executor.submit(
-                    worker_generate_card,
-                    offset + idx,
-                    item,
-                    user_role,
-                    clean_topic,
-                    f"Highlight specific practical applications, operational impact, and actionable takeaways of {clean_topic} for a {user_role} (Edition {page})."
-                ): idx
-                for idx, item in enumerate(target)
-            }
-            res_list = []
-            for future in as_completed(future_map):
-                idx = future_map[future]
-                try:
-                    card_data = future.result()
-                    clean_slug = re.sub(r'[^a-z0-9]', '', clean_topic.lower()) or "topic"
-                    card_data["id"] = f"search-{clean_slug}-ed{page}-{offset + idx}"
-                    res_list.append((idx, card_data))
-                except Exception as e:
-                    logger.warning(f"Search worker item {idx}: {e}")
-            res_list.sort(key=lambda x: x[0])
-            results = [r[1] for r in res_list]
-
-    if results:
-        existing_cards = cached.get("data", []) if cached else []
-        all_cards = existing_cards + results
-        _USER_CACHES[cache_key] = {
-            "data": all_cards,
-            "raw_articles": raw_articles,
-            "timestamp": current_time,
-            "top_only": False
-        }
-        logger.info(f"Generated {len(results)} new cards for '{clean_topic}' (total: {len(all_cards)}).")
+    results: List[BriefingCard] = []
+    for idx, c in enumerate(target_cards):
+        card_dto = _db_card_to_briefing_card(
+            db=db,
+            card=c,
+            rank=start_rank + idx,
+            user_role=user_role,
+            custom_prompt=custom_prompt,
+        )
+        results.append(card_dto)
 
     return results
+
+
+def search_topic_briefings(
+    query: str,
+    user_role: str = "Professional",
+    db: Session | None = None,
+    limit: int = 6,
+    offset: int = 0,
+    page: int = 1,
+) -> dict:
+    """Search persisted intelligence cards matching a specific query string."""
+    if db is None:
+        with SessionLocal() as local_db:
+            return search_topic_briefings(
+                query=query,
+                user_role=user_role,
+                db=local_db,
+                limit=limit,
+                offset=offset,
+                page=page,
+            )
+
+    clean_query = query.strip()
+    if not clean_query:
+        return {"query": query, "matches": [], "cards": []}
+
+    from app.ingestion import run_ingestion_pipeline
+
+    search_filter = or_(
+        Event.canonical_title.ilike(f"%{clean_query}%"),
+        Card.why_it_matters.ilike(f"%{clean_query}%"),
+        Card.how_it_affects_you.ilike(f"%{clean_query}%"),
+        Event.event_topics.any(
+            EventTopic.topic.has(
+                or_(
+                    func.lower(FocusTopic.name).contains(clean_query.lower()),
+                    func.lower(FocusTopic.slug).contains(clean_query.lower()),
+                )
+            )
+        ),
+    )
+
+    matching_query = (
+        db.query(Card)
+        .join(Event, Card.event_id == Event.id)
+        .filter(Card.status == "published", search_filter)
+        .order_by(Event.published_at.desc(), Card.created_at.desc())
+    )
+
+    if matching_query.count() == 0:
+        logger.info("No matching cards in DB for search query '%s'; ingesting on demand...", clean_query)
+        run_ingestion_pipeline(db=db, user_interests=clean_query, limit_per_source=10)
+
+    matched_cards = matching_query.offset(offset).limit(limit).all()
+
+    # Resolve matching FocusTopic names
+    matching_topics = (
+        db.query(FocusTopic.name)
+        .filter(
+            or_(
+                func.lower(FocusTopic.name).contains(clean_query.lower()),
+                func.lower(FocusTopic.slug).contains(clean_query.lower()),
+            )
+        )
+        .limit(5)
+        .all()
+    )
+    matches_list = [m[0] for m in matching_topics] if matching_topics else [clean_query.title()]
+
+    cards_dto = [
+        _db_card_to_briefing_card(
+            db=db,
+            card=c,
+            rank=offset + idx + 1,
+            user_role=user_role,
+        )
+        for idx, c in enumerate(matched_cards)
+    ]
+
+    return {
+        "query": clean_query,
+        "matches": matches_list,
+        "cards": cards_dto,
+    }

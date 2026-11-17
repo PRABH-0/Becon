@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = Field(default=None)
     INGEST_API_TOKEN: str | None = Field(default=None)
     LOG_LEVEL: str = Field(default="INFO")
+    FEED_CACHE_TTL_SECONDS: int = Field(default=1800, description="Stale-while-revalidate TTL in seconds")
 
     # Supabase Authentication settings
     # Project URL, e.g. https://your-project.supabase.co

@@ -21,6 +21,7 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user
 from app.feed_service import get_live_briefings, search_topic_briefings
+from app.ingestion import run_ingestion_pipeline
 from app.logging_config import request_id_ctx_var, setup_logging
 from app.models import UserProfile
 from app.schemas import (
@@ -28,6 +29,7 @@ from app.schemas import (
     ChatRequest,
     ChatResponse,
     HealthResponse,
+    IngestCounts,
     IngestResponse,
     TopicSearchResponse,
     UserMeResponse,
@@ -257,6 +259,8 @@ def get_briefings(
         description="Direct card offset for continuous infinite scroll pagination",
         examples=[0, 6, 12],
     ),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
     current_user: UserProfile | None = Depends(get_optional_user),
 ):
     """
@@ -278,6 +282,8 @@ def get_briefings(
             effective_prompt = current_user.customPrompt
 
     return get_live_briefings(
+        db=db,
+        background_tasks=background_tasks,
         force_refresh=refresh,
         user_role=effective_role,
         user_interests=effective_interests,
@@ -307,13 +313,14 @@ def search_briefings_endpoint(
         description="Target professional role for relevance evaluation",
         examples=["Senior Backend Engineer"],
     ),
+    db: Session = Depends(get_db),
     current_user: UserProfile | None = Depends(get_optional_user),
 ):
     """
     Searches the live intelligence cache using fuzzy match algorithms and Gemini semantic reranking.
     """
     effective_role = current_user.role if (current_user and current_user.role) else role
-    result = search_topic_briefings(query=q, user_role=effective_role)
+    result = search_topic_briefings(query=q, user_role=effective_role, db=db)
     return TopicSearchResponse(**result)
 
 
@@ -337,7 +344,7 @@ def match_topics_endpoint(payload: dict):
 @app.post(
     "/api/ingest",
     tags=["Ingestion"],
-    summary="Trigger immediate background feed fetch & synthesis",
+    summary="Trigger immediate feed fetch and database persistence pipeline",
     response_model=IngestResponse,
     responses={
         401: {"description": "Unauthorized - Missing or invalid X-Ingest-Token"},
@@ -345,11 +352,11 @@ def match_topics_endpoint(payload: dict):
     },
 )
 def trigger_ingest(
-    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
     x_ingest_token: str | None = Header(default=None, alias="X-Ingest-Token"),
 ):
     """
-    Forces immediate fetching of all RSS sources and regeneration of AI briefings in the background.
+    Triggers feed ingestion pipeline and persists sources, raw items, events, and cards in the database.
     Protected by a dedicated secret token header (`X-Ingest-Token`).
     """
     if not settings.INGEST_API_TOKEN or not settings.INGEST_API_TOKEN.strip():
@@ -366,11 +373,25 @@ def trigger_ingest(
             detail="Invalid or missing X-Ingest-Token header.",
         )
 
-    background_tasks.add_task(get_live_briefings, force_refresh=True)
-    return {
-        "message": "Real-time AI feed ingestion triggered in background",
-        "status": "processing",
-    }
+    stats = run_ingestion_pipeline(db=db)
+    return IngestResponse(
+        message="Feed ingestion completed successfully",
+        status="success",
+        sources_fetched=stats.sources_fetched,
+        raw_items_new=stats.raw_items_new,
+        raw_items_duplicate=stats.raw_items_duplicate,
+        events_created=stats.events_created,
+        cards_created=stats.cards_created,
+        errors=stats.errors,
+        counts=IngestCounts(
+            sources_fetched=stats.sources_fetched,
+            raw_items_new=stats.raw_items_new,
+            raw_items_duplicate=stats.raw_items_duplicate,
+            events_created=stats.events_created,
+            cards_created=stats.cards_created,
+            errors=stats.errors,
+        ),
+    )
 
 
 # =============================================================================

@@ -19,7 +19,8 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `main.py`: App routing, CORS middleware, request ID tracking, `/health`, `/api/me`, `/api/account`.
   - `supabase_auth.py`: Token verification via PyJWT using Supabase JWKS (ES256/RS256) or legacy HS256 secret.
   - `deps.py`: User mapping (`get_current_user`, `get_optional_user`, `map_token_to_user`).
-  - `feed_service.py`: RSS/Atom feed fetching (`feedparser`), image resolution, multi-tenant in-memory cache.
+  - `ingestion.py`: Ingestion pipeline resolving feeds into `sources`, upserting `raw_items`, exact dedup into `events`, shared canonical `cards`, and lazy `card_variants` caching.
+  - `feed_service.py`: Database-backed feed querying, stale-while-revalidate orchestration, and pagination slicing (zero in-memory cache).
   - `ai_service.py`: Google Gemini integration (`google-genai`), Pydantic schema-constrained JSON extraction.
   - `database.py`: SQLAlchemy session and engine management with naming conventions for SQLite and PostgreSQL.
   - `models.py`: Declarative ORM models (20 tables; see [docs/DATA_MODEL.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/DATA_MODEL.md)).
@@ -97,9 +98,9 @@ Full specification and ER diagram documented in [docs/DATA_MODEL.md](file:///d:/
 ## 9. Known Gaps & Tech Debt (Factual)
 - [`frontend/src/app/page.tsx:1638-2035`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1638-L2035): Main feed cards omit *How It Affects You* and *What To Do Next* (tactical guidance).
 - [`frontend/src/app/page.tsx:1723`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1723): No modal or drawer component exists for card deep-dives (code snippets/diagrams).
-- [`backend/app/feed_service.py:150`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L150): Cards are cached only in memory (`_USER_CACHES`); zero card persistence in the database (Phase 1.5).
+- *Resolved in Task 1.5*: Ingestion pipeline persists sources, raw_items, events, cards, and card_variants in the database with exact deduplication; in-memory `_USER_CACHES` retired. Feed served directly from DB with stale-while-revalidate background refresh.
 - [`backend/app/feed_service.py:18-138`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L18-L138): Feeds rely on `dev.to` and Google News queries rather than official vendor release notes and advisories (Phase 2).
-- Legacy table `saved_briefings` has no user relation; slated for removal in Phase 1.5.
+- Legacy table `saved_briefings` has no user relation; slated for removal.
 
 ## 10. Required Progress Report Format
 ```

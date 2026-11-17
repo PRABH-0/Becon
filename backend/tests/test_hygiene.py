@@ -67,4 +67,5 @@ def test_ingest_endpoint_token_protection(client, monkeypatch):
         headers={"X-Ingest-Token": "valid-test-ingest-token"},
     )
     assert resp_valid.status_code == 200
-    assert resp_valid.json()["status"] == "processing"
+    assert resp_valid.json()["status"] in ("success", "processing")
+    assert "sources_fetched" in resp_valid.json()

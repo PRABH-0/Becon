@@ -231,8 +231,24 @@ class TopicSearchResponse(BaseModel):
     )
 
 
+class IngestCounts(BaseModel):
+    sources_fetched: int = 0
+    raw_items_new: int = 0
+    raw_items_duplicate: int = 0
+    events_created: int = 0
+    cards_created: int = 0
+    errors: int = 0
+
+
 class IngestResponse(BaseModel):
     message: str = Field(
         ..., description="Status announcement message", examples=["Real-time AI feed ingestion triggered in background"]
     )
-    status: str = Field(default="processing", description="Background execution status", examples=["processing"])
+    status: str = Field(default="success", description="Execution status", examples=["success"])
+    sources_fetched: int = 0
+    raw_items_new: int = 0
+    raw_items_duplicate: int = 0
+    events_created: int = 0
+    cards_created: int = 0
+    errors: int = 0
+    counts: IngestCounts | None = None

@@ -239,3 +239,16 @@ cd backend
 ..\backend\.venv\Scripts\python.exe -m app.seed
 ```
 The seeder performs upserts keyed by `slug`, synchronizes aliases, establishes parent-child hierarchies, and maps profession-topic relationships without creating duplicates.
+
+---
+
+## 8. Ingestion Pipeline & Persistence (Task 1.5)
+
+The ingestion pipeline ([`backend/app/ingestion.py`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/ingestion.py)) replaces transient in-memory card dictionaries with durable database persistence across `sources`, `raw_items`, `events`, `cards`, and `card_variants`:
+
+1. **Source Tracking:** Resolves each configured feed URL into a `sources` record with fetch timestamps (`last_fetched_at`, `last_success_at`), error tracking (`last_error`), and consecutive failure counters.
+2. **Idempotent Raw Ingestion:** Parses incoming feed items into `raw_items` with SHA-256 hashes on normalized canonical URLs and article content. Re-running ingestion on existing feeds generates zero duplicate raw items.
+3. **Exact Deduplication into Events:** Merges duplicate items across feeds into a single canonical `events` entity via exact URL matching followed by case-insensitive title normalization.
+4. **Single Shared Canonical Card:** Creates exactly one shared `cards` record per event storing structured 4-part intelligence (`what_happened`, `why_it_matters`, generic `how_it_affects_you`, and `action_guidance`).
+5. **Lazy Variant Caching:** Role-specific adaptations (`how_it_affects_you` and `action_guidance`) are dynamically cached in `card_variants` keyed by `(card_id, profession_id)`. Subsequent requests for the same role hit the cache directly without additional AI inference or heuristic calls.
+6. **Stale-While-Revalidate Serving:** `GET /api/briefings` queries persisted cards directly from the database (supporting pagination and scope slicing). When the newest card exceeds `FEED_CACHE_TTL_SECONDS` (1800s), an asynchronous background re-ingestion task is scheduled while the current feed is returned immediately.
