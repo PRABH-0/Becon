@@ -1,5 +1,6 @@
 import html
 import json
+import logging
 import re
 import time
 
@@ -9,9 +10,11 @@ from google.genai import types
 from app.config import settings
 from app.schemas import ActionGuidance, BriefingCardContent, ChatMessage, ChatResponse
 
+logger = logging.getLogger(__name__)
+
 api_key = settings.GEMINI_API_KEY
 if not api_key:
-    print("[WARNING] GEMINI_API_KEY is not set in environment or .env. AI generation will use fallback cards.")
+    logger.warning("GEMINI_API_KEY is not set in environment or .env. AI generation will use fallback cards.")
     client = None
 else:
     client = genai.Client(api_key=api_key)
@@ -171,7 +174,7 @@ def generate_action_card(
             last_err = e
             time.sleep(0.5)
 
-    print(f"[AI Service Error] Failed to generate card for '{article_title}': {last_err}")
+    logger.error(f"Failed to generate card for '{article_title}': {last_err}")
     return fallback_card
 
 
@@ -223,7 +226,7 @@ Return ONLY a valid JSON array of up to {max_results} strings. Each string must 
             ),
         )
         raw = response.text.strip()
-        print(f"[AI Topic Complete] query='{clean_q}', raw_response='{raw}'")
+        logger.debug(f"AI Topic autocomplete for query='{clean_q}'")
 
         raw = raw.removeprefix("```json")
         raw = raw.removeprefix("```")
@@ -238,7 +241,7 @@ Return ONLY a valid JSON array of up to {max_results} strings. Each string must 
                 return results[:max_results]
         return local_hits
     except Exception as e:
-        print(f"[AI Topic Complete Error] query='{clean_q}': {e}")
+        logger.error(f"AI Topic autocomplete failed for query='{clean_q}': {e}")
         return local_hits
 
 
@@ -289,7 +292,7 @@ def ai_onboarding_chat(history: list[ChatMessage], available_topics: list[str]) 
 
         return ChatResponse.model_validate_json(raw_json.strip())
     except Exception as e:
-        print(f"[AI Onboarding Error] {e}")
+        logger.error(f"AI Onboarding chat error: {e}")
         return ChatResponse(
             reply_text="I'm having trouble thinking right now. Let's try again in a moment.",
             onboarding_complete=False,

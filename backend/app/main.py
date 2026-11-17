@@ -1,3 +1,4 @@
+import logging
 import secrets
 import time
 import uuid
@@ -30,6 +31,7 @@ from app.auth import (
 from app.config import settings
 from app.database import get_db
 from app.feed_service import get_live_briefings, search_topic_briefings
+from app.logging_config import request_id_ctx_var, setup_logging
 from app.models import UserProfile
 from app.schemas import (
     BriefingCard,
@@ -44,6 +46,9 @@ from app.schemas import (
     UserProfileResponse,
     UserRegister,
 )
+
+setup_logging(environment=settings.ENVIRONMENT, log_level=settings.LOG_LEVEL)
+logger = logging.getLogger("becon.api")
 
 AVAILABLE_TOPICS = [
     "Tax Regulations & GST Compliance",
@@ -144,6 +149,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    token = request_id_ctx_var.set(request_id)
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        logger.info(
+            f"{request.method} {request.url.path} {response.status_code} - {duration_ms:.2f}ms",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
+    except Exception as exc:
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        logger.error(
+            f"{request.method} {request.url.path} 500 - {duration_ms:.2f}ms - Error: {exc}",
+            exc_info=True,
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": 500,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+        raise
+    finally:
+        request_id_ctx_var.reset(token)
+
+
 _guest_ip_log: dict[str, list[float]] = defaultdict(list)
 _guest_lock = Lock()
 
@@ -155,6 +197,20 @@ def get_client_ip(request: Request) -> str:
     if request.client:
         return request.client.host
     return "127.0.0.1"
+
+
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Liveness and container health check",
+    response_model=dict[str, str],
+)
+def health_check():
+    """
+    Returns ok status for container health checks and orchestrator probes.
+    Does not touch database or external services.
+    """
+    return {"status": "ok"}
 
 
 @app.get(

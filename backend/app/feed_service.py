@@ -1,14 +1,19 @@
-import time
-from datetime import datetime
-import re
 import html
-import urllib.parse
+import logging
+import re
 import socket
-from typing import List, Dict, Tuple
-import feedparser
+import time
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from app.schemas import BriefingCard
+from datetime import datetime
+from typing import Dict, List, Tuple
+
+import feedparser
+
 from app.ai_service import generate_action_card
+from app.schemas import BriefingCard
+
+logger = logging.getLogger(__name__)
 
 # Set socket timeout to prevent any hanging feeds from stalling generation
 socket.setdefaulttimeout(7.0)
@@ -245,9 +250,9 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
     if not image_url and entry.get("enclosures") and isinstance(entry["enclosures"], list) and len(entry["enclosures"]) > 0:
         image_url = entry["enclosures"][0].get("href")
     if not image_url and entry.get("links") and isinstance(entry["links"], list):
-        for l in entry.get("links"):
-            if isinstance(l, dict) and ("image" in l.get("type", "") or l.get("rel") == "enclosure"):
-                image_url = l.get("href")
+        for link_item in entry.get("links"):
+            if isinstance(link_item, dict) and ("image" in link_item.get("type", "") or link_item.get("rel") == "enclosure"):
+                image_url = link_item.get("href")
                 break
 
     published_at = None
@@ -294,7 +299,7 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
 
 def fetch_topic_feed_items(topic: str, limit: int = 30) -> Tuple[str, List[Dict[str, str]]]:
     tag_name, url = resolve_feed_for_topic(topic)
-    print(f"[Topic Feed Fetcher] Querying '{url}' for subject '{topic}'...")
+    logger.info(f"Querying topic feed '{url}' for subject '{topic}'...")
     try:
         feed = feedparser.parse(url)
         items = []
@@ -303,7 +308,7 @@ def fetch_topic_feed_items(topic: str, limit: int = 30) -> Tuple[str, List[Dict[
             items.append(item)
         return tag_name, items
     except Exception as e:
-        print(f"[Topic Ingestion Error] Failed to fetch '{tag_name}' ({url}): {e}")
+        logger.error(f"Failed to fetch '{tag_name}' ({url}): {e}")
         return tag_name, []
 
 def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 15) -> List[Dict[str, str]]:
@@ -327,7 +332,7 @@ def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 15) -
         feed_sources_to_use = list(DEFAULT_FEED_SOURCES.items())
         actual_limit = max(6, limit_per_source)
 
-    print(f"[Feed Fetcher] Querying {len(feed_sources_to_use)} live feeds (limit {actual_limit}/feed) for interests: {user_interests[:60]}...")
+    logger.info(f"Querying {len(feed_sources_to_use)} live feeds (limit {actual_limit}/feed)...")
 
     def fetch_single_feed(tag_name: str, url: str) -> List[Dict[str, str]]:
         try:
@@ -338,7 +343,7 @@ def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 15) -
                 items.append(item)
             return items
         except Exception as e:
-            print(f"[Feed Ingestion Error] Failed to fetch '{tag_name}' ({url}): {e}")
+            logger.error(f"Failed to fetch feed '{tag_name}' ({url}): {e}")
             return []
 
     # Parallelize feed fetching
@@ -359,7 +364,7 @@ def fetch_raw_feed_items(user_interests: str = "", limit_per_source: int = 15) -
                 if i < len(it):
                     articles.append(it[i])
 
-    print(f"[Feed Fetcher] Successfully gathered {len(articles)} raw articles matching user topics.")
+    logger.info(f"Successfully gathered {len(articles)} raw articles matching user topics.")
     return articles
 
 def worker_generate_card(index: int, item: Dict[str, str], role: str, interests: str, prompt: str) -> dict:
@@ -424,10 +429,10 @@ def get_live_briefings(
                 for c in cards
             )
             if not has_fallback and len(cards) >= 5:
-                print(f"[Cache Hit - Top 5] Serving top 5 AI cards for: {cache_key[:50]}...")
+                logger.debug("Serving top 5 AI cards from cache")
                 return cards[:5]
 
-        print(f"[Fast Render - Top 5] Ingesting feeds & generating top 5 cards for: {cache_key[:50]}...")
+        logger.info(f"Ingesting feeds & generating top 5 cards for: {cache_key[:50]}...")
         raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=15)
         if not raw_articles:
             if cached and cached.get("data"):
@@ -448,7 +453,7 @@ def get_live_briefings(
                     data = future.result()
                     results.append((idx, data))
                 except Exception as e:
-                    print(f"[Top Worker Exception] Item {idx} failed: {e}")
+                    logger.warning(f"Top worker item {idx} failed: {e}")
             results.sort(key=lambda x: x[0])
             top_cards = [res[1] for res in results]
 
@@ -459,17 +464,17 @@ def get_live_briefings(
             "timestamp": current_time,
             "top_only": True
         }
-        print(f"[Fast Render Complete] Generated {len(top_cards)} top cards in parallel.")
+        logger.info(f"Generated {len(top_cards)} top cards in parallel.")
         return top_cards
 
     # 2. SCOPE = "REMAINING" (LAZY LOAD REMAINING CARDS FOR BENTO DECK)
     elif scope == "remaining":
         if not force_refresh and cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
             if not cached.get("top_only", False) and len(cached.get("data", [])) > 5:
-                print(f"[Cache Hit - Remaining] Serving {len(cached['data'][5:17])} remaining cards.")
+                logger.debug(f"Serving {len(cached['data'][5:17])} remaining cards from cache.")
                 return cached["data"][5:17]
 
-        print(f"[Lazy Load - Remaining] Generating remaining cards for: {cache_key[:50]}...")
+        logger.info(f"Generating remaining cards for: {cache_key[:50]}...")
         raw_articles = cached.get("raw_articles") if cached else None
         if not raw_articles or len(raw_articles) < 10:
             raw_articles = fetch_raw_feed_items(user_interests=user_interests, limit_per_source=15)
@@ -491,7 +496,7 @@ def get_live_briefings(
                     data = future.result()
                     results.append((idx, data))
                 except Exception as e:
-                    print(f"[Remaining Worker Exception] Item {idx} failed: {e}")
+                    logger.warning(f"Remaining worker item {idx} failed: {e}")
             results.sort(key=lambda x: x[0])
             remaining_cards = [res[1] for res in results]
 
@@ -503,17 +508,17 @@ def get_live_briefings(
             "timestamp": current_time,
             "top_only": False
         }
-        print(f"[Lazy Load Complete] Generated & cached {len(remaining_cards)} remaining cards for Bento deck.")
+        logger.info(f"Generated & cached {len(remaining_cards)} remaining cards for Bento deck.")
         return remaining_cards
 
     # 3. DIRECT OFFSET / INFINITE SCROLL (GIVES EXACTLY UNSEEN CARDS MATCHING TOPICS)
     elif offset is not None or (page and page > 1):
         req_offset = offset if offset is not None else ((page - 1) * limit)
-        print(f"[Infinite Scroll] Requesting offset {req_offset}, limit {limit} for {cache_key[:50]}...")
-        
+        logger.debug(f"Infinite scroll: offset {req_offset}, limit {limit}")
+
         cached_cards = cached.get("data", []) if cached else []
         if len(cached_cards) >= req_offset + limit:
-            print(f"[Cache Hit - Infinite Scroll] Serving existing cards {req_offset}..{req_offset + limit}")
+            logger.debug(f"Serving cached cards for offset {req_offset}..{req_offset + limit}")
             return cached_cards[req_offset : req_offset + limit]
 
         raw_articles = cached.get("raw_articles") if cached else None
@@ -546,7 +551,7 @@ def get_live_briefings(
                     data = future.result()
                     results.append((idx, data))
                 except Exception as e:
-                    print(f"[Infinite Worker Exception] Item {idx} failed: {e}")
+                    logger.warning(f"Infinite worker item {idx} failed: {e}")
             results.sort(key=lambda x: x[0])
             new_cards = [res[1] for res in results]
 
@@ -575,7 +580,7 @@ def get_live_briefings(
                 all_data = cached["data"]
                 start = (page - 1) * limit
                 paged_cards = all_data[start : start + limit]
-                print(f"[Cache Hit] Serving {len(paged_cards)} customized AI cards (page {page})...")
+                logger.debug(f"Serving {len(paged_cards)} customized AI cards from cache (page {page})...")
                 return paged_cards
 
         raw_articles = cached.get("raw_articles") if cached else None
@@ -600,7 +605,7 @@ def get_live_briefings(
                     data = future.result()
                     results.append((idx, data))
                 except Exception as e:
-                    print(f"[Worker Exception] Item {idx} failed: {e}")
+                    logger.warning(f"Worker item {idx} failed: {e}")
             results.sort(key=lambda x: x[0])
             cards_list = [res[1] for res in results]
 
@@ -611,7 +616,7 @@ def get_live_briefings(
                 "timestamp": current_time,
                 "top_only": False
             }
-            print(f"[Pipeline Complete] Cached {len(cards_list)} personalized AI cards for user topics.")
+            logger.info(f"Cached {len(cards_list)} personalized AI cards for user topics.")
 
         start = (page - 1) * limit
         return cards_list[start : start + limit]
@@ -639,7 +644,7 @@ def search_topic_briefings(
     if cached and (current_time - cached["timestamp"] < CACHE_TTL_SECONDS):
         cached_cards = cached.get("data", [])
         if len(cached_cards) >= offset + limit:
-            print(f"[Search Cache Hit] Serving cached AI cards for '{clean_topic}' (slice {offset}..{offset+limit})")
+            logger.debug(f"Serving cached search cards for '{clean_topic}' (slice {offset}..{offset+limit})")
             return cached_cards[offset : offset + limit]
 
     # 2. Retrieve or fetch raw articles
@@ -647,7 +652,7 @@ def search_topic_briefings(
     if cached and cached.get("raw_articles"):
         raw_articles = cached["raw_articles"]
     else:
-        print(f"[Search Topic AI] Ingesting & synthesizing news for favorite subject: '{clean_topic}'...")
+        logger.info(f"Ingesting & synthesizing news for favorite subject: '{clean_topic}'...")
         tag_name, raw_articles = fetch_topic_feed_items(clean_topic, limit=30)
         if not raw_articles:
             slug = re.sub(r'[^a-z0-9]', '', clean_topic.lower())
@@ -696,7 +701,7 @@ def search_topic_briefings(
                     card_data["id"] = f"search-{clean_slug}-ed{page}-{offset + idx}"
                     res_list.append((idx, card_data))
                 except Exception as e:
-                    print(f"[Search Worker Error] Item {idx}: {e}")
+                    logger.warning(f"Search worker item {idx}: {e}")
             res_list.sort(key=lambda x: x[0])
             results = [r[1] for r in res_list]
 
@@ -709,6 +714,6 @@ def search_topic_briefings(
             "timestamp": current_time,
             "top_only": False
         }
-        print(f"[Search Topic Complete] Generated {len(results)} new cards for '{clean_topic}' (total: {len(all_cards)}).")
+        logger.info(f"Generated {len(results)} new cards for '{clean_topic}' (total: {len(all_cards)}).")
 
     return results

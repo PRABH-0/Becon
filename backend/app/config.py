@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = Field(default=None)
     INGEST_API_TOKEN: str | None = Field(default=None)
     GUEST_RATE_LIMIT_PER_HOUR: int = Field(default=5)
+    LOG_LEVEL: str = Field(default="INFO")
 
     @property
     def allowed_origins_list(self) -> list[str]:
