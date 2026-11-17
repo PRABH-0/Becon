@@ -1,31 +1,35 @@
-import os
+import secrets
+import time
 import uuid
-from typing import List, Any, Dict
-from fastapi import FastAPI, Query, BackgroundTasks, Depends
+from collections import defaultdict
+from threading import Lock
+from typing import Dict, List
+
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import UserProfile
-from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from app.auth import get_password_hash, verify_password, create_access_token
 from jose import JWTError, jwt
-from app.auth import SECRET_KEY, ALGORITHM
+from sqlalchemy.orm import Session
+
+from app.ai_service import ai_match_topics
+from app.auth import ALGORITHM, SECRET_KEY, create_access_token, get_password_hash, verify_password
+from app.config import settings
+from app.database import get_db
+from app.feed_service import get_live_briefings, search_topic_briefings
+from app.models import UserProfile
 from app.schemas import (
     BriefingCard,
-    UserProfileCreate,
-    UserProfileResponse,
-    UserRegister,
-    SupabaseAuthSync,
-    Token,
     ChatRequest,
     ChatResponse,
     HealthResponse,
-    TopicSearchResponse,
     IngestResponse,
+    SupabaseAuthSync,
+    Token,
+    TopicSearchResponse,
+    UserProfileCreate,
+    UserProfileResponse,
+    UserRegister,
 )
-from app.feed_service import get_live_briefings, search_topic_briefings
-from app.ai_service import ai_match_topics
 
 AVAILABLE_TOPICS = [
     "Tax Regulations & GST Compliance",
@@ -59,7 +63,7 @@ AVAILABLE_TOPICS = [
     "SQL & Vector Databases",
     "Micro-Frontends & Module Federation",
     "Zero-Trust Cloud Security",
-    "eBPF & System Observability"
+    "eBPF & System Observability",
 ]
 
 API_DESCRIPTION = """
@@ -76,31 +80,29 @@ API_DESCRIPTION = """
 OPENAPI_TAGS = [
     {
         "name": "Health",
-        "description": "System health and operational telemetry status endpoints."
+        "description": "System health and operational telemetry status endpoints.",
     },
     {
         "name": "Briefings",
-        "description": "Real-time AI briefings, customized subject search, and broadsheet feed generation."
+        "description": "Real-time AI briefings, customized subject search, and broadsheet feed generation.",
     },
     {
         "name": "Auth",
-        "description": "User registration and OAuth2 password-bearer authentication."
+        "description": "User registration and OAuth2 password-bearer authentication.",
     },
     {
         "name": "Profile",
-        "description": "Authenticated user profile management and personalized intelligence preferences."
+        "description": "Authenticated user profile management and personalized intelligence preferences.",
     },
     {
         "name": "Onboarding",
-        "description": "Conversational AI assistant for progressive profile extraction and setup."
+        "description": "Conversational AI assistant for progressive profile extraction and setup.",
     },
     {
         "name": "Ingestion",
-        "description": "Background RSS multi-feed ingestion and cache pre-warming triggers."
-    }
+        "description": "Background RSS multi-feed ingestion and cache pre-warming triggers.",
+    },
 ]
-
-enable_docs = os.getenv("ENABLE_DOCS", "true").strip().lower() in ("true", "1", "yes")
 
 app = FastAPI(
     title="Becon AI Intelligence Briefing API",
@@ -110,31 +112,42 @@ app = FastAPI(
     contact={
         "name": "Becon Intelligence Team",
         "url": "https://becon.dev",
-        "email": "support@becon.dev"
+        "email": "support@becon.dev",
     },
     license_info={
         "name": "MIT License",
-        "url": "https://opensource.org/licenses/MIT"
+        "url": "https://opensource.org/licenses/MIT",
     },
-    docs_url="/docs" if enable_docs else None,
-    redoc_url="/redoc" if enable_docs else None
+    docs_url="/docs" if settings.ENABLE_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_DOCS else None,
 )
-
-origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+_guest_ip_log: Dict[str, List[float]] = defaultdict(list)
+_guest_lock = Lock()
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "127.0.0.1"
+
+
 @app.get(
     "/",
     tags=["Health"],
     summary="System health status",
-    response_model=HealthResponse
+    response_model=HealthResponse,
 )
 def read_root():
     """
@@ -143,63 +156,64 @@ def read_root():
     return {
         "status": "online",
         "app": "Becon AI Intelligence Briefing",
-        "engine": "Becon AI Intelligence (Personalized & Structured)"
+        "engine": "Becon AI Intelligence (Personalized & Structured)",
     }
+
 
 @app.get(
     "/api/briefings",
     tags=["Briefings"],
     summary="Fetch personalized intelligence cards",
-    response_model=List[BriefingCard]
+    response_model=List[BriefingCard],
 )
 def get_briefings(
     stack: str = Query(
         default="All",
         description="Filter by topic or category tag",
-        examples=["All", "Python, Data & Analytics", "React & Next.js Systems"]
+        examples=["All", "Python, Data & Analytics", "React & Next.js Systems"],
     ),
     role: str = Query(
         default="Professional",
         description="Target role or profession of reading user",
-        examples=["Senior Full Stack Engineer", "Accountant / Finance", "Retail Store Owner"]
+        examples=["Senior Full Stack Engineer", "Accountant / Finance", "Retail Store Owner"],
     ),
     interests: str = Query(
         default="",
         description="Comma-separated list of focus areas, technologies, and industry interests",
-        examples=[".NET Core, Angular, Python", "Tax Regulations, GST, Accounting"]
+        examples=[".NET Core, Angular, Python", "Tax Regulations, GST, Accounting"],
     ),
     custom_prompt: str = Query(
         default="",
         description="Custom user editorial instruction for Gemini AI personalization",
-        examples=["Focus on architectural trade-offs, security, and scalability."]
+        examples=["Focus on architectural trade-offs, security, and scalability."],
     ),
     refresh: bool = Query(
         default=False,
-        description="Force re-fetch from live RSS feeds and regenerate AI cards"
+        description="Force re-fetch from live RSS feeds and regenerate AI cards",
     ),
     page: int = Query(
         default=1,
         ge=1,
         description="Page number for pagination",
-        examples=[1, 2]
+        examples=[1, 2],
     ),
     limit: int = Query(
         default=16,
         ge=1,
         le=50,
         description="Maximum number of briefing cards to return per page",
-        examples=[6, 16]
+        examples=[6, 16],
     ),
     scope: str = Query(
         default="all",
         description="Scope of briefings: 'top' (top 5 for fast initial render), 'remaining' (lazy-loaded remaining cards), or 'all'",
-        examples=["all", "top", "remaining"]
+        examples=["all", "top", "remaining"],
     ),
     offset: int = Query(
         default=None,
         description="Direct card offset for continuous infinite scroll pagination",
-        examples=[0, 6, 12]
-    )
+        examples=[0, 6, 12],
+    ),
 ):
     """
     Returns real-time intelligence cards tailored to the user's specific profession, interests, and preferences.
@@ -213,46 +227,47 @@ def get_briefings(
         page=page,
         limit=limit,
         scope=scope,
-        offset=offset
+        offset=offset,
     )
+
 
 @app.get(
     "/api/search-topic",
     tags=["Briefings"],
     summary="Synthesize live cards for a custom topic",
-    response_model=List[BriefingCard]
+    response_model=List[BriefingCard],
 )
 def get_search_topic_briefings(
     query: str = Query(
         ...,
         min_length=1,
         description="Topic or favorite subject to search and synthesize into briefing cards",
-        examples=["punjabi", "generative ai", "retail inventory", "rust programming"]
+        examples=["punjabi", "generative ai", "retail inventory", "rust programming"],
     ),
     role: str = Query(
         default="Professional",
         description="Target professional role of reading user",
-        examples=["Professional", "Data Engineer", "Founder"]
+        examples=["Professional", "Data Engineer", "Founder"],
     ),
     limit: int = Query(
         default=6,
         ge=1,
         le=12,
         description="Number of synthesized cards to return",
-        examples=[6]
+        examples=[6],
     ),
     offset: int = Query(
         default=0,
         ge=0,
         description="Offset for infinite scroll pagination across search results",
-        examples=[0, 6, 12]
+        examples=[0, 6, 12],
     ),
     page: int = Query(
         default=1,
         ge=1,
         description="Page number for pagination tracking",
-        examples=[1, 2]
-    )
+        examples=[1, 2],
+    ),
 ):
     """
     Synthesizes real-time intelligence cards tailored to any specific favorite subject or topic using Gemini AI.
@@ -260,18 +275,19 @@ def get_search_topic_briefings(
     """
     return search_topic_briefings(topic=query, user_role=role, limit=limit, offset=offset, page=page)
 
+
 @app.get(
     "/api/topic-search",
     tags=["Briefings"],
     summary="Semantic topic search & catalog autocomplete",
-    response_model=TopicSearchResponse
+    response_model=TopicSearchResponse,
 )
 def search_topics(
     q: str = Query(
         ...,
         min_length=1,
         description="Search query to match against predefined topics",
-        examples=["python", "cloud", "taxes", "angular"]
+        examples=["python", "cloud", "taxes", "angular"],
     ),
 ):
     """
@@ -281,24 +297,45 @@ def search_topics(
     matched = ai_match_topics(query=q, available_topics=AVAILABLE_TOPICS, max_results=3)
     return {"query": q, "matches": matched}
 
+
 @app.post(
     "/api/ingest",
     tags=["Ingestion"],
     summary="Trigger background feed ingestion",
-    response_model=IngestResponse
+    response_model=IngestResponse,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid X-Ingest-Token header"},
+        503: {"description": "Service Unavailable - Ingestion token is not configured on server"},
+    },
 )
-def trigger_ingestion(background_tasks: BackgroundTasks):
+def trigger_ingestion(
+    background_tasks: BackgroundTasks,
+    x_ingest_token: str | None = Header(default=None, alias="X-Ingest-Token"),
+):
     """
     Triggers asynchronous polling and synthesis across all configured RSS feeds in the background.
+    Protected by X-Ingest-Token header matching INGEST_API_TOKEN.
     """
+    if not settings.INGEST_API_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ingest API token is not configured on server (INGEST_API_TOKEN unset).",
+        )
+    if not x_ingest_token or not secrets.compare_digest(x_ingest_token, settings.INGEST_API_TOKEN):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Ingest-Token header.",
+        )
+
     background_tasks.add_task(get_live_briefings, force_refresh=True)
     return {
         "message": "Real-time AI feed ingestion triggered in background",
-        "status": "processing"
+        "status": "processing",
     }
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -313,11 +350,12 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    
+
     user = db.query(UserProfile).filter(UserProfile.email == email).first()
     if user is None:
         raise credentials_exception
     return user
+
 
 @app.get(
     "/api/profile",
@@ -325,14 +363,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     summary="Get authenticated user profile",
     response_model=UserProfileResponse,
     responses={
-        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"}
-    }
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+    },
 )
 def get_profile(current_user: UserProfile = Depends(get_current_user)):
     """
     Retrieves the authenticated user's profile, including role, experience, focus topics, and custom AI prompt.
     """
     return current_user
+
 
 @app.post(
     "/api/profile",
@@ -341,13 +380,13 @@ def get_profile(current_user: UserProfile = Depends(get_current_user)):
     response_model=UserProfileResponse,
     responses={
         401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
-        422: {"description": "Validation Error - Invalid profile payload"}
-    }
+        422: {"description": "Validation Error - Invalid profile payload"},
+    },
 )
 def update_profile(
     profile_data: UserProfileCreate,
     current_user: UserProfile = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Updates the authenticated user's profile settings and preferences in the database.
@@ -358,6 +397,7 @@ def update_profile(
     db.refresh(current_user)
     return current_user
 
+
 @app.post(
     "/api/register",
     tags=["Auth"],
@@ -365,8 +405,8 @@ def update_profile(
     response_model=Token,
     responses={
         400: {"description": "Email already registered"},
-        422: {"description": "Validation Error - Invalid registration data"}
-    }
+        422: {"description": "Validation Error - Invalid registration data"},
+    },
 )
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
     """
@@ -375,23 +415,24 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     existing_user = db.query(UserProfile).filter(UserProfile.email == user_data.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     hashed_password = get_password_hash(user_data.password)
-    
+
     new_user = UserProfile(
         name=user_data.name if user_data.name else "User",
         email=user_data.email,
         password_hash=hashed_password,
         role="",
         experience="",
-        interests=""
+        interests="",
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
+
     access_token = create_access_token(data={"sub": new_user.email})
     return {"access_token": access_token, "token_type": "bearer"}
+
 
 @app.post(
     "/api/login",
@@ -400,8 +441,8 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     response_model=Token,
     responses={
         401: {"description": "Incorrect email or password"},
-        422: {"description": "Validation Error - Invalid login form data"}
-    }
+        422: {"description": "Validation Error - Invalid login form data"},
+    },
 )
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
@@ -417,6 +458,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
+
 @app.post(
     "/api/auth/supabase-sync",
     tags=["Auth"],
@@ -424,8 +466,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     response_model=Token,
     responses={
         400: {"description": "Invalid sync payload"},
-        422: {"description": "Validation Error"}
-    }
+        422: {"description": "Validation Error"},
+    },
 )
 def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db)):
     """
@@ -434,20 +476,20 @@ def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db))
     """
     email = payload.email.strip().lower()
     user = db.query(UserProfile).filter(UserProfile.email == email).first()
-    
+
     clean_name = payload.name.strip() if payload.name else email.split("@")[0].capitalize()
-    
+
     if not user:
         user = UserProfile(
             name=clean_name,
             email=email,
             picture_url=payload.picture_url,
             auth_provider=payload.provider or "google",
-            role="Software Engineer",
-            interests="AI & ML, Cloud Architecture, Full-Stack",
-            experience="Senior (5+ Years)",
+            role="",
+            interests="",
+            experience="",
             customPrompt="",
-            aiTone="Architectural Analysis (Deep Tech)"
+            aiTone="",
         )
         db.add(user)
         db.commit()
@@ -466,9 +508,10 @@ def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db))
         if updated:
             db.commit()
             db.refresh(user)
-            
+
     access_token = create_access_token(data={"sub": user.email, "provider": user.auth_provider or "google"})
     return {"access_token": access_token, "token_type": "bearer"}
+
 
 @app.post(
     "/api/auth/guest",
@@ -476,17 +519,33 @@ def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db))
     summary="Instant guest exploration mode",
     response_model=Token,
     responses={
-        422: {"description": "Validation Error"}
-    }
+        422: {"description": "Validation Error"},
+        429: {"description": "Too Many Requests - Rate limit exceeded for guest accounts"},
+    },
 )
-def guest_auth(db: Session = Depends(get_db)):
+def guest_auth(request: Request, db: Session = Depends(get_db)):
     """
     Creates an instant guest session with default engineering intelligence preferences.
-    Requires zero credentials or personal data.
+    Requires zero credentials or personal data. Rate-limited per client IP.
     """
+    client_ip = get_client_ip(request)
+    now = time.time()
+    cutoff = now - 3600.0  # 1 hour window
+
+    with _guest_lock:
+        valid_timestamps = [t for t in _guest_ip_log[client_ip] if t > cutoff]
+        if len(valid_timestamps) >= settings.GUEST_RATE_LIMIT_PER_HOUR:
+            _guest_ip_log[client_ip] = valid_timestamps
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many guest accounts created from this IP. Limit is {settings.GUEST_RATE_LIMIT_PER_HOUR} per hour.",
+            )
+        valid_timestamps.append(now)
+        _guest_ip_log[client_ip] = valid_timestamps
+
     guest_uuid = uuid.uuid4().hex[:8]
     guest_email = f"guest_{guest_uuid}@guest.becon.local"
-    
+
     guest_user = UserProfile(
         name="Guest Reader",
         email=guest_email,
@@ -494,14 +553,15 @@ def guest_auth(db: Session = Depends(get_db)):
         interests="AI & Generative Models, Cloud Architecture, Full-Stack Development",
         experience="Curious",
         auth_provider="guest",
-        picture_url=None
+        picture_url=None,
     )
     db.add(guest_user)
     db.commit()
     db.refresh(guest_user)
-    
+
     access_token = create_access_token(data={"sub": guest_user.email, "provider": "guest"})
     return {"access_token": access_token, "token_type": "bearer"}
+
 
 @app.post(
     "/api/onboarding/chat",
@@ -510,27 +570,31 @@ def guest_auth(db: Session = Depends(get_db)):
     response_model=ChatResponse,
     responses={
         401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
-        422: {"description": "Validation Error - Invalid chat history format"}
-    }
+        422: {"description": "Validation Error - Invalid chat history format"},
+    },
 )
 def onboarding_chat_endpoint(
     chat_request: ChatRequest,
     current_user: UserProfile = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Processes chat messages with the onboarding conversational agent.
     When onboarding completes, automatically updates the user profile in the database.
     """
     from app.ai_service import ai_onboarding_chat
-    
+
     response = ai_onboarding_chat(chat_request.messages, AVAILABLE_TOPICS)
-    
+
     if response.onboarding_complete and response.extracted_data:
-        if response.extracted_data.name: current_user.name = response.extracted_data.name
-        if response.extracted_data.role: current_user.role = response.extracted_data.role
-        if response.extracted_data.experience: current_user.experience = response.extracted_data.experience
-        if response.extracted_data.interests: current_user.interests = response.extracted_data.interests
+        if response.extracted_data.name:
+            current_user.name = response.extracted_data.name
+        if response.extracted_data.role:
+            current_user.role = response.extracted_data.role
+        if response.extracted_data.experience:
+            current_user.experience = response.extracted_data.experience
+        if response.extracted_data.interests:
+            current_user.interests = response.extracted_data.interests
         db.commit()
-        
+
     return response
