@@ -37,14 +37,14 @@ class BriefingCard(BaseModel):
 
 
 class UserProfileBase(BaseModel):
-    name: str = Field(default="Prabhjot Singh", description="Full name of user", examples=["Prabhjot Singh"])
+    name: str = Field(default="Alex Doe", description="Full name of user", examples=["Alex Doe"])
     role: str = Field(
         default="Senior Full Stack .NET & Angular Engineer",
         description="Target professional role or job title",
         examples=["Senior Full Stack .NET & Angular Engineer"],
     )
     email: str | None = Field(
-        default=None, description="Corporate or personal email address", examples=["prabhjot@example.com"]
+        default=None, description="Corporate or personal email address", examples=["alex@example.com"]
     )
     experience: str = Field(
         default="Senior (5+ Years)",
@@ -79,9 +79,9 @@ class UserProfileBase(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
-                    "name": "Prabhjot Singh",
+                    "name": "Alex Doe",
                     "role": "Senior Full Stack .NET & Angular Engineer",
-                    "email": "prabhjot@example.com",
+                    "email": "alex@example.com",
                     "experience": "Senior (5+ Years)",
                     "interests": ".NET Core, Angular, Python, Cloud Architecture",
                     "customPrompt": "Focus on architectural trade-offs, system design, and security updates.",
@@ -105,9 +105,9 @@ class UserProfileResponse(UserProfileBase):
             "examples": [
                 {
                     "id": 1,
-                    "name": "Prabhjot Singh",
+                    "name": "Alex Doe",
                     "role": "Senior Full Stack .NET & Angular Engineer",
-                    "email": "prabhjot@example.com",
+                    "email": "alex@example.com",
                     "experience": "Senior (5+ Years)",
                     "interests": ".NET Core, Angular, Python, Cloud Architecture",
                     "customPrompt": "Focus on architectural trade-offs, system design, and security updates.",
@@ -133,31 +133,6 @@ class UserMeResponse(BaseModel):
     )
 
     model_config = {"from_attributes": True}
-
-
-class UserRegister(BaseModel):
-    name: str | None = Field(default="Prabhjot Singh", description="User's full name", examples=["Prabhjot Singh"])
-    email: str = Field(
-        ..., description="Valid unique email address for registration", examples=["prabhjot@example.com"]
-    )
-    password: str = Field(
-        ..., description="Account password (minimum 6 characters recommended)", examples=["StrongP@ssw0rd!"]
-    )
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [{"name": "Prabhjot Singh", "email": "prabhjot@example.com", "password": "StrongP@ssw0rd!"}]
-        }
-    }
-
-
-class SupabaseAuthSync(BaseModel):
-    email: str = Field(..., description="User email from Supabase Auth", examples=["prabhjot@gmail.com"])
-    name: str | None = Field(default=None, description="User full name from OAuth", examples=["Prabhjot Singh"])
-    picture_url: str | None = Field(
-        default=None, description="Gmail / Google avatar URL", examples=["https://lh3.googleusercontent.com/a/..."]
-    )
-    provider: str = Field(default="google", description="Auth provider ('google', etc.)", examples=["google"])
 
 
 class ChatMessage(BaseModel):
@@ -193,7 +168,7 @@ class ChatRequest(BaseModel):
                         {"role": "system", "content": "User has just registered. Start the onboarding."},
                         {
                             "role": "user",
-                            "content": "Hi! My name is Prabhjot, I am a Senior Full Stack Engineer interested in Python, .NET Core, and Azure.",
+                            "content": "Hi! My name is Alex, I am a Senior Full Stack Engineer interested in Python, .NET Core, and Azure.",
                         },
                     ]
                 }
@@ -203,7 +178,7 @@ class ChatRequest(BaseModel):
 
 
 class ExtractedProfile(BaseModel):
-    name: str | None = Field(default=None, description="Extracted user name", examples=["Prabhjot"])
+    name: str | None = Field(default=None, description="Extracted user name", examples=["Alex"])
     role: str | None = Field(
         default=None, description="Extracted professional role", examples=["Senior Full Stack Engineer"]
     )
@@ -220,7 +195,7 @@ class ChatResponse(BaseModel):
         ...,
         description="AI conversational reply message",
         examples=[
-            "Welcome aboard Prabhjot! I've personalized your Daily Gazette for Senior Full Stack Engineering with a focus on Python, .NET Core, and Azure."
+            "Welcome aboard Alex! I've personalized your Daily Gazette for Senior Full Stack Engineering with a focus on Python, .NET Core, and Azure."
         ],
     )
     onboarding_complete: bool = Field(
@@ -231,15 +206,6 @@ class ChatResponse(BaseModel):
     extracted_data: ExtractedProfile | None = Field(
         default=None, description="Extracted profile attributes if onboarding concluded during this turn"
     )
-
-
-class Token(BaseModel):
-    access_token: str = Field(
-        ...,
-        description="OAuth2 Bearer JSON Web Token (JWT) string",
-        examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."],
-    )
-    token_type: str = Field(default="bearer", description="Standard OAuth2 token type", examples=["bearer"])
 
 
 class HealthResponse(BaseModel):
