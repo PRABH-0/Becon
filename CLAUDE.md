@@ -75,8 +75,15 @@ Run the test and migration commands below to check current test and table counts
   - `RATE_LIMIT_ENABLED`: Enable/disable in-process rate limits and daily Gemini quotas (default: `true`).
   - `RATE_LIMIT_PUBLIC_PER_MIN`: Per-IP requests/min limit on public endpoints (default: `30`).
   - `RATE_LIMIT_AUTH_AI_PER_MIN`: Per-user requests/min limit on authenticated AI-triggering endpoints (default: `10`).
-  - `GEMINI_DAILY_CAP_PER_USER`: Hard daily (UTC) Gemini call cap per user (default: `25`).
+  - `GUEST_AI_PER_MIN`: Per-guest requests/min limit on AI-triggering endpoints (default: `2`).
+  - `GEMINI_DAILY_CAP_PER_USER`: Hard daily (UTC) Gemini call cap per full authenticated user (default: `25`).
+  - `GEMINI_DAILY_CAP_GUEST`: Hard daily (UTC) Gemini call cap per anonymous guest (default: `3`).
+  - `GEMINI_DAILY_CAP_ALL_GUESTS`: Hard daily (UTC) Gemini call cap shared across all anonymous guests (default: `30`).
   - `GEMINI_DAILY_CAP_GLOBAL`: Hard daily (UTC) Gemini call cap globally per process (default: `200`).
+  - `INGEST_MAX_GEMINI_CALLS_PER_RUN`: Maximum Gemini card-synthesis calls per ingestion run; excess items remain as `raw_items` for the next run (default: `25`).
+  - `GEMINI_MAX_OUTPUT_TOKENS_CARD`: `max_output_tokens` cap for card generation calls (default: `650`).
+  - `GEMINI_MAX_OUTPUT_TOKENS_CHAT`: `max_output_tokens` cap for onboarding chat calls (default: `400`).
+  - `GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS`: `max_output_tokens` cap for topic matching calls (default: `200`).
   - `TRUSTED_PROXIES`: Comma-separated reverse proxy IPs allowed to supply `X-Forwarded-For` (default: empty = ignore `X-Forwarded-For`).
 - **Frontend (`frontend/.env.local`, template [`frontend/.env.example`](frontend/.env.example)):**
   - `NEXT_PUBLIC_API_URL`: Base URL of the backend FastAPI service (e.g. `http://127.0.0.1:8000`).
