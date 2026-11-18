@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-18  
 Current phase: 1 (Stabilization & Pre-Phase-2 Hardening)  
-Current task: 1.6 (Pre-push stabilization; next: 1.7 Pre-Phase-2 hardening and 6.1 compact-card fix)  
+Current task: 1.7 (Pre-Phase-2 hardening — pending approval; next: Phase 2 or 6.1 compact-card fix & 1.8)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -57,8 +57,8 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 - [~] 1.4c Post-auth cleanup and docs drift: docker-compose cleanup, .env.example matching CLAUDE.md, UI_DESIGN.md and README.md updated, CI PostgreSQL service container job added *(remote history/UI_DESIGN drift unverified)*
 - [x] 1.4d Viewport fitting: auth pages fit within one viewport without scrollbars via AuthShell and responsive height queries
 - [x] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
-- [~] 1.6 Pre-push stabilization: back up and discard dirty `page.tsx` diff, verify green `tsc`/`test`/`build`, fix trivial ESLint errors, update `dev.ps1 test` to run frontend + backend tests, fix high-priority doc drift, commit & push *(pending lead approval)*
-- [ ] 1.7 Pre-Phase-2 hardening: fix `/api/search-topic` and `/api/topic-search` vs `/api/briefings/search` contract (`TopicSearchResponse` strips `cards`), rate limiting on unauthenticated endpoints, `hmac.compare_digest` for ingest token, gate `refresh=true` and `/api/ai/match-topics`, tighten CORS, test for soft-delete 401, cap auto-created `Profession` rows
+- [x] 1.6 Pre-push stabilization: back up and discard dirty `page.tsx` diff, verify green `tsc`/`test`/`build`, fix trivial ESLint errors, update `dev.ps1 test` to run frontend + backend tests, fix high-priority doc drift, commit & push *(approved; commits `74dccc7`, `695ed3e`, `d35c4dd`)*
+- [~] 1.7 Pre-Phase-2 hardening: fix `/api/search-topic` and `/api/topic-search` vs `/api/briefings/search` contract (`TopicSearchResponse` strips `cards`), rate limiting on unauthenticated endpoints, `hmac.compare_digest` for ingest token, gate `refresh=true` and `/api/ai/match-topics`, tighten CORS, test for soft-delete 401, cap auto-created `Profession` rows *(done, pending approval)*
 - [ ] 1.8 Docs drift cleanup: refresh `UI_DESIGN.md` Sections 6–9 & 12, update `CLAUDE.md` Section 3 component inventory, and resolve remaining 12 ESLint hook/`any` errors (remove CI `continue-on-error: true` once at 0 errors)
 
 *Pending manual QA (to be done post-push): email signup + verification, Google OAuth, guest upgrade, forgot/reset password, account deletion, token refresh, and `alembic upgrade head` against the Supabase dev project (RLS role check).*
@@ -184,4 +184,5 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-17 | 1.5 | Done (`72d873c`) | Feed ingestion pipeline (backend/app/ingestion.py), exact deduplication (URL and title), durable DB persistence across sources/raw_items/events/cards/card_variants, lazy variant caching, stale-while-revalidate serving, in-memory _USER_CACHES retired, 44 passing backend tests. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
 | 2026-11-17 | 6.1 | In Progress (`376852d`) | Extracted 4-part card components (`LeadCard`, `RectangleCard`, `SquareCard`, `BriefCard`, `ActionBadge`, `ActionCardBody`) and `CardDrawer` (+13 Vitest tests); compact cards still omit `why_it_matters` (fix pending) |
 | 2026-11-17 | 6.2 | Done (`4afb33f`) | Removed infinite scroll, wheel/touch listeners, and page-lift animation (D12); added `BRIEFING_MAX_CARDS=10`, reading-time estimate, and "You're all caught up for today" end state (+3 Vitest tests) |
-| 2026-11-18 | 1.6 | In Progress | Pre-push stabilization: backed up and restored dirty `page.tsx`, verified green backend/frontend checks, fixed trivial ESLint issues (down to 12 errors/4 warnings), updated `dev.ps1 test` to run backend + frontend tests, resolved high-priority doc drift, added `docs/COMPLETION_REPORT.md`, committed & pushed |
+| 2026-11-18 | 1.6 | Done (`74dccc7`, `695ed3e`, `d35c4dd`) | Approved by lead: Pre-push stabilization, backed up/restored dirty `page.tsx`, fixed trivial ESLint issues (12 errors/4 warnings remaining), updated `dev.ps1 test` to run backend + frontend tests, resolved high-priority doc drift, added `docs/COMPLETION_REPORT.md`, pushed `phase-6-action-cards` |
+| 2026-11-18 | 1.7 | Pending Approval | Pre-Phase-2 hardening on `task-1.7-hardening`: aligned `/api/briefings/search` & `/api/topics/search` contracts + frontend callers, added in-process sliding-window rate limiter & daily Gemini caps with `TRUSTED_PROXIES`, gated `refresh=true` & `/api/ai/match-topics`, used `hmac.compare_digest` on `/api/ingest`, stopped auto-creating `Profession` rows, tightened CORS, added soft-delete 401 tests, updated docs/env examples |

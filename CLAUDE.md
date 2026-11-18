@@ -52,7 +52,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 | **Typecheck**| `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A | Verified |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` | Verified |
 | **Build** | `cd frontend && npm run build` | N/A | N/A | Verified |
-| **Test** | `cd frontend && npm test` *(41 unit tests via Vitest)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
+| **Test** | `cd frontend && npm test` *(43 unit tests via Vitest)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
 | **Docker** | `docker compose build && docker compose up -d` | `docker compose build && docker compose up -d` | N/A | Config Verified |
 
 ## 5. Environment Variables
@@ -70,6 +70,12 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `ALLOWED_ORIGINS`: Comma-separated CORS allowed domains (e.g. `http://localhost:3000`).
   - `ENABLE_DOCS`: Toggle for `/docs` and `/redoc` Swagger documentation endpoints (`"true"`/`"false"`).
   - `FEED_CACHE_TTL_SECONDS`: Stale-while-revalidate TTL in seconds for persisted briefing cards (default: `1800`).
+  - `RATE_LIMIT_ENABLED`: Enable/disable in-process rate limits and daily Gemini quotas (default: `true`).
+  - `RATE_LIMIT_PUBLIC_PER_MIN`: Per-IP requests/min limit on public endpoints (default: `30`).
+  - `RATE_LIMIT_AUTH_AI_PER_MIN`: Per-user requests/min limit on authenticated AI-triggering endpoints (default: `10`).
+  - `GEMINI_DAILY_CAP_PER_USER`: Hard daily (UTC) Gemini call cap per user (default: `25`).
+  - `GEMINI_DAILY_CAP_GLOBAL`: Hard daily (UTC) Gemini call cap globally per process (default: `200`).
+  - `TRUSTED_PROXIES`: Comma-separated reverse proxy IPs allowed to supply `X-Forwarded-For` (default: empty = ignore `X-Forwarded-For`).
 - **Frontend (`frontend/.env.local`):**
   - `NEXT_PUBLIC_API_URL`: Base URL of the backend FastAPI service (e.g. `http://127.0.0.1:8000`).
   - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for Google OAuth handling.
@@ -101,7 +107,7 @@ Full specification and ER diagram documented in [docs/DATA_MODEL.md](file:///d:/
 - *Resolved in Tasks 6.1 & 6.2*: Main feed extracted `LeadCard`, `RectangleCard`, `SquareCard`, `BriefCard`, `ActionBadge`, `ActionCardBody`, and `CardDrawer`; infinite scroll and page-lift animation removed (D12).
 - [`frontend/src/components/cards/ActionCardBody.tsx:80-110`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/components/cards/ActionCardBody.tsx#L80-L110): Compact card variant (`SquareCard`, `BriefCard`) still omits *Why It Matters* when *How It Affects You* is present (pending fix in Task 6.1).
 - [`frontend/src/app/page.tsx`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx): ~610 lines of mock fallback generators remain (Task 6.3), and 12 non-trivial ESLint errors (`react-hooks/set-state-in-effect`, `immutability`, `preserve-manual-memoization`, `@typescript-eslint/no-explicit-any`) remain across `page.tsx`, `profile/page.tsx`, `onboarding/page.tsx`, and `ThemeContext.tsx` (Task 1.8 / 6.3).
-- Frontend-backend search contract mismatch: frontend calls `GET /api/search-topic` and `GET /api/topic-search`, while backend only exposes `GET /api/briefings/search` (whose `TopicSearchResponse` omits `cards`) and `POST /api/ai/match-topics` (Task 1.7).
+- *Resolved in Task 1.7*: Search contracts aligned (`GET /api/briefings/search` returns `cards`, `GET /api/topics/search` queries `focus_topics` + `topic_aliases`), in-process rate limiting & daily Gemini quotas added, `refresh=true` & `/api/ai/match-topics` gated, `hmac.compare_digest` used on `/api/ingest`, explicit CORS methods/headers enforced, and `get_or_create_card_variant` no longer auto-creates `Profession` rows.
 - *Resolved in Task 1.5*: Ingestion pipeline persists sources, raw_items, events, cards, and card_variants in the database with exact deduplication; in-memory `_USER_CACHES` retired. Feed served directly from DB with stale-while-revalidate background refresh.
 - [`backend/app/feed_service.py:31-154`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L31-L154): Feeds rely on `dev.to` and Google News queries rather than official vendor release notes and advisories (Phase 2).
 - Legacy table `saved_briefings` has no user relation; slated for removal in Phase 6.5 (after `saved_cards` UI ships).

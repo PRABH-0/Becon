@@ -286,7 +286,7 @@ def get_briefings(
     ),
     offset: int = Query(
         default=None,
-        description="Direct card offset for continuous infinite scroll pagination",
+        description="Direct card offset for explicit pagination slicing",
         examples=[0, 6, 12],
     ),
     background_tasks: BackgroundTasks = None,
@@ -295,9 +295,9 @@ def get_briefings(
     _: None = Depends(enforce_public_rate_limit),
 ):
     """
-    Returns real-time intelligence cards tailored to the user's specific profession, interests, and preferences.
-    Supports progressive loading (scope='top' then scope='remaining') and direct offset infinite scroll.
-    Accepts optional Bearer token to personalize based on authenticated user preferences.
+    Returns finite daily briefing cards tailored to the user's profession, interests, and preferences.
+    Supports two-phase loading (scope='top' then scope='remaining') and explicit offset pagination.
+    Accepts optional Bearer token to personalize based on authenticated user preferences (required for refresh=true).
     """
     if refresh:
         if current_user is None:

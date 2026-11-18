@@ -230,3 +230,32 @@ Run this checklist against a live Supabase project to verify end-to-end function
 - **Task 6.7 (Anonymous User Cleanup):** Anonymous guest accounts accumulate over time. A periodic cleanup job will purge anonymous users older than 30 days that have no saved cards or follows, and support converting anonymous sessions to permanent email accounts.
 - **Task 7.1 (Custom SMTP):** Default Supabase email service is rate-limited to 30 emails per hour. Production deployment will configure Resend SMTP in the Supabase Dashboard.
 - **Task 8.1 (CAPTCHA for Anonymous Sign-Ins):** To prevent bot spam on anonymous user creation in production, Cloudflare Turnstile CAPTCHA will be enabled in Supabase Auth settings.
+
+---
+
+## 9. Rate Limits & Abuse Controls (Task 1.7)
+
+Becon enforces lightweight, zero-dependency in-process sliding-window rate limits and hard UTC-day Gemini quotas in [`backend/app/rate_limit.py`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/rate_limit.py).
+
+> [!NOTE]
+> **Scaling Caveat:** The current limiter stores sliding windows and daily counters in process memory. When running multiple Uvicorn workers or horizontally scaled backend containers, replace the backing store with a shared store (e.g., Redis) so quotas are enforced globally across instances.
+
+### Configured Defaults (Environment-Overridable)
+
+| Env Variable | Default | Scope & Behavior |
+| :--- | :--- | :--- |
+| `RATE_LIMIT_ENABLED` | `true` | Master toggle for rate limits and daily Gemini quotas |
+| `RATE_LIMIT_PUBLIC_PER_MIN` | `30` | Per-IP sliding 60s window on public endpoints (`/api/briefings`, `/api/briefings/search`, `/api/topics/search`) |
+| `RATE_LIMIT_AUTH_AI_PER_MIN` | `10` | Per-user sliding 60s window on authenticated AI/refresh triggers (`/api/onboarding/chat`, `/api/ai/match-topics`, `/api/briefings?refresh=true`) |
+| `GEMINI_DAILY_CAP_PER_USER` | `25` | Hard UTC-day Gemini API call cap per authenticated user |
+| `GEMINI_DAILY_CAP_GLOBAL` | `200` | Hard UTC-day Gemini API call cap globally per process |
+| `TRUSTED_PROXIES` | `""` *(empty)* | Comma-separated reverse proxy IPs allowed to supply `X-Forwarded-For`; when empty, `X-Forwarded-For` is ignored and the direct socket peer address is used |
+
+All limit and quota rejections return **HTTP `429 Too Many Requests`** with a standard **`Retry-After`** header (seconds).
+
+### Additional Hardening Guards
+- **`GET /api/briefings?refresh=true`:** Requires a valid Supabase Bearer token (`401` if unauthenticated) and applies `RATE_LIMIT_AUTH_AI_PER_MIN`.
+- **`POST /api/ai/match-topics`:** Requires authentication (`401`), enforces `RATE_LIMIT_AUTH_AI_PER_MIN`, and caps `description` input length at 500 characters (`422` if exceeded).
+- **`POST /api/ingest`:** Verifies `X-Ingest-Token` against `INGEST_API_TOKEN` using constant-time `hmac.compare_digest`.
+- **Profession Resolution:** `get_or_create_card_variant` resolves `role` strictly against existing active `professions` rows and falls back to shared generic card text for unknown roles (zero auto-created `Profession` rows or AI calls from arbitrary query strings).
+- **CORS:** Restricted to explicit origins (`ALLOWED_ORIGINS`), explicit methods (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`), and explicit headers (`Authorization`, `Content-Type`, `Accept`, `X-Request-ID`, `X-Ingest-Token`).
