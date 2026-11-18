@@ -1,12 +1,11 @@
 "use client";
 
-import { Layers, Radio, Flame, Pin, ChevronLeft, ChevronRight, ArrowUp, Sun, Moon, X, Search, Loader2, Sparkles, CheckCircle2, ArrowRight } from "lucide-react";
+import { Layers, Radio, Flame, Pin, ChevronLeft, ChevronRight, ArrowUp, X, Search, Loader2, Sparkles, CheckCircle2, ArrowRight } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
-import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import { getBriefingsCacheKey, syncIdentityCache } from "@/lib/cache";
@@ -217,9 +216,6 @@ export default function Home() {
 
   // Floating Back to Top Arrow Button State
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
-
-  // Dark / Light Mode Theme State from Global Context
-  const { isDarkMode, toggleTheme } = useTheme();
 
   const scrollToTop = () => {
     window.scrollTo({
@@ -636,7 +632,7 @@ export default function Home() {
       {/* GUEST BANNER */}
       <GuestBanner />
 
-      {/* 2. EDITION INDEX RIBBON (ALL SIGNALS IN ONE VIEW WITH PREV/NEXT CONTROLS & THEME SWITCHER) */}
+      {/* 2. EDITION INDEX RIBBON (ALL SIGNALS IN ONE VIEW WITH RIGHT-ALIGNED PREV/NEXT CONTROLS) */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-1.5 sm:py-2 shadow-2xs transition-colors duration-200">
         <div className="max-w-[1600px] mx-auto flex items-center gap-1.5 sm:gap-3 font-mono text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
           {/* Label */}
@@ -645,22 +641,10 @@ export default function Home() {
             <span className="hidden sm:inline">COVERAGE:</span>
           </div>
 
-          {/* Previous Button */}
-          <button
-            type="button"
-            onClick={() => scrollCoverage("left")}
-            disabled={!canScrollLeft}
-            aria-label="Previous topics"
-            title="Scroll topics left"
-            className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
           {/* Topics Container with Hidden Scrollbar & Touch Panning */}
           <div
             ref={coverageScrollRef}
-            className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5 touch-pan-x"
+            className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5 touch-pan-x"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
@@ -693,56 +677,29 @@ export default function Home() {
             )}
           </div>
 
-          {/* Next Button */}
-          <button
-            type="button"
-            onClick={() => scrollCoverage("right")}
-            disabled={!canScrollRight}
-            aria-label="Next topics"
-            title="Scroll topics right"
-            className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
-          >
-            <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          </button>
-
-          {/* Subtle Vertical Divider */}
-          <div className="h-4 sm:h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0 mx-0.5 sm:mx-1"></div>
-
-          {/* Theme Switch Toggle (On Sub-header Rightmost Position) */}
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isDarkMode}
-            onClick={toggleTheme}
-            aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            className="relative inline-flex items-center h-6 w-11 sm:h-7 sm:w-14 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-300 ease-in-out focus:outline-none select-none bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-inner group"
-          >
-            {/* Left Track Icon (Sun) */}
-            <span className="absolute left-1 sm:left-1.5 flex items-center justify-center pointer-events-none text-amber-500/70 dark:text-slate-600">
-              <Sun className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            </span>
-
-            {/* Right Track Icon (Moon) */}
-            <span className="absolute right-1 sm:right-1.5 flex items-center justify-center pointer-events-none text-slate-400 dark:text-amber-300/70">
-              <Moon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            </span>
-
-            {/* Sliding Knob */}
-            <span
-              className={`relative z-10 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full shadow-md transition-transform duration-300 ease-in-out ${
-                isDarkMode
-                  ? "translate-x-5 sm:translate-x-7 bg-slate-800 border border-slate-600 text-amber-300"
-                  : "translate-x-0 bg-white border border-slate-200 text-amber-500"
-              }`}
+          {/* Right-aligned Prev/Next Scroll Controls */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => scrollCoverage("left")}
+              disabled={!canScrollLeft}
+              aria-label="Previous topics"
+              title="Scroll topics left"
+              className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
             >
-              {isDarkMode ? (
-                <Moon className="w-3.5 h-3.5 fill-amber-300 text-amber-300 transition-transform duration-200 group-hover:rotate-12" />
-              ) : (
-                <Sun className="w-3.5 h-3.5 fill-amber-500 text-amber-500 transition-transform duration-200 group-hover:rotate-45" />
-              )}
-            </span>
-          </button>
+              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollCoverage("right")}
+              disabled={!canScrollRight}
+              aria-label="Next topics"
+              title="Scroll topics right"
+              className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+            >
+              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
