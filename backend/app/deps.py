@@ -1,6 +1,7 @@
 """FastAPI dependency injection and user mapping from Supabase JWT tokens."""
 
 import logging
+from urllib.parse import urlparse
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -30,6 +31,22 @@ def extract_bearer_token(request: Request, creds: HTTPAuthorizationCredentials |
     if auth_header and auth_header.lower().startswith("bearer "):
         return auth_header[7:].strip()
     return None
+
+
+def sanitize_https_avatar_url(raw_url: object) -> str | None:
+    """Return trimmed URL only if it is a valid https:// URL with a host; otherwise None."""
+    if not isinstance(raw_url, str):
+        return None
+    trimmed = raw_url.strip()
+    if not trimmed:
+        return None
+    try:
+        parsed = urlparse(trimmed)
+    except Exception:
+        return None
+    if parsed.scheme.lower() != "https" or not parsed.netloc:
+        return None
+    return trimmed
 
 
 def map_token_to_user(payload: dict, db: Session) -> UserProfile:
@@ -65,7 +82,9 @@ def map_token_to_user(payload: dict, db: Session) -> UserProfile:
         "Guest Reader" if is_anonymous else (email.split("@")[0].capitalize() if email else "User")
     )
 
-    picture_url = user_metadata.get("avatar_url") or user_metadata.get("picture")
+    picture_url = sanitize_https_avatar_url(
+        user_metadata.get("avatar_url") or user_metadata.get("picture")
+    )
 
     # 1. Lookup by external_auth_id (fast indexed lookup)
     user = db.query(UserProfile).filter(UserProfile.external_auth_id == sub).first()

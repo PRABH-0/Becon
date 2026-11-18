@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.ai_service import ai_match_topics
 from app.config import settings
 from app.database import get_db
-from app.deps import get_current_user, get_optional_user
+from app.deps import get_current_user, get_optional_user, sanitize_https_avatar_url
 from app.feed_service import get_live_briefings, search_topic_briefings
 from app.ingestion import run_ingestion_pipeline
 from app.logging_config import request_id_ctx_var, setup_logging
@@ -552,7 +552,7 @@ def get_me(current_user: UserProfile = Depends(get_current_user)):
         id=current_user.id,
         email=current_user.email,
         name=current_user.name or "",
-        picture_url=current_user.picture_url,
+        picture_url=sanitize_https_avatar_url(current_user.picture_url),
         is_anonymous=current_user.is_anonymous,
         profession=profession_slug,
         timezone=current_user.timezone or "UTC",

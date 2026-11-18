@@ -484,6 +484,37 @@ def test_user_mapping_identity_name_and_backfill_rules(auth_client):
     assert res_guest.json()["email"] is None
     assert res_guest.json()["is_anonymous"] is True
 
+    # 6. Avatar URL in /api/me accepts https:// only (rejects http:// and javascript:)
+    sub_https = str(uuid.uuid4())
+    tok_https = make_es256_token(
+        sub=sub_https,
+        email="https_pic@example.com",
+        user_metadata={"full_name": "Photo User", "avatar_url": "https://lh3.googleusercontent.com/a/photo"},
+    )
+    res_https = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_https}"})
+    assert res_https.status_code == 200
+    assert res_https.json()["picture_url"] == "https://lh3.googleusercontent.com/a/photo"
+
+    sub_http = str(uuid.uuid4())
+    tok_http = make_es256_token(
+        sub=sub_http,
+        email="http_pic@example.com",
+        user_metadata={"full_name": "Bad Photo", "avatar_url": "http://insecure.example.com/pic.png"},
+    )
+    res_http = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_http}"})
+    assert res_http.status_code == 200
+    assert res_http.json()["picture_url"] is None
+
+    sub_js = str(uuid.uuid4())
+    tok_js = make_es256_token(
+        sub=sub_js,
+        email="js_pic@example.com",
+        user_metadata={"full_name": "XSS Photo", "picture": "javascript:alert(1)"},
+    )
+    res_js = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_js}"})
+    assert res_js.status_code == 200
+    assert res_js.json()["picture_url"] is None
+
 
 def test_get_me_shape(auth_client):
     sub = str(uuid.uuid4())
