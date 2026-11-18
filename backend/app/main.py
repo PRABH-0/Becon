@@ -14,6 +14,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,11 @@ from app.feed_service import get_live_briefings, search_topic_briefings
 from app.ingestion import run_ingestion_pipeline
 from app.logging_config import request_id_ctx_var, setup_logging
 from app.models import FocusTopic, TopicAlias, UserProfile
+from app.rate_limit import (
+    GeminiQuotaExceededError,
+    enforce_auth_ai_rate_limit,
+    enforce_public_rate_limit,
+)
 from app.schemas import (
     BriefingCard,
     BriefingSearchResponse,
@@ -133,6 +139,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(GeminiQuotaExceededError)
+async def gemini_quota_exceeded_handler(request: Request, exc: GeminiQuotaExceededError):
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": exc.detail},
+        headers={"Retry-After": str(exc.retry_after)},
+    )
 
 
 @app.middleware("http")
@@ -264,6 +279,7 @@ def get_briefings(
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: UserProfile | None = Depends(get_optional_user),
+    _: None = Depends(enforce_public_rate_limit),
 ):
     """
     Returns real-time intelligence cards tailored to the user's specific profession, interests, and preferences.
@@ -330,6 +346,7 @@ def search_briefings_endpoint(
     ),
     db: Session = Depends(get_db),
     current_user: UserProfile | None = Depends(get_optional_user),
+    _: None = Depends(enforce_public_rate_limit),
 ):
     """
     Searches persisted briefing cards and returns them in the same BriefingCard shape used by /api/briefings.
@@ -360,6 +377,7 @@ def search_topics_autocomplete(
         description="Maximum number of canonical topics to return (default 10)",
     ),
     db: Session = Depends(get_db),
+    _: None = Depends(enforce_public_rate_limit),
 ):
     """
     Public topic autocomplete backed by focus_topics and topic_aliases.
@@ -621,7 +639,8 @@ def onboarding_chat_endpoint(
     """
     from app.ai_service import ai_onboarding_chat
 
-    response = ai_onboarding_chat(chat_request.messages, AVAILABLE_TOPICS)
+    enforce_auth_ai_rate_limit(current_user.id, scope="onboarding_chat")
+    response = ai_onboarding_chat(chat_request.messages, AVAILABLE_TOPICS, user_key=str(current_user.id))
 
     if response.onboarding_complete and response.extracted_data:
         if response.extracted_data.name:

@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 
 from app.config import settings
+from app.rate_limit import GeminiQuotaExceededError, rate_limiter
 from app.schemas import ActionGuidance, BriefingCardContent, ChatMessage, ChatResponse
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,7 @@ def generate_action_card(
     user_role: str = "Professional",
     user_interests: str = "Business, Finance & Tech",
     custom_prompt: str = "",
+    user_key: str | None = None,
 ) -> BriefingCardContent:
     """
     Leverages Google Gemini with Structured Outputs to transform raw news & industry signals into a 4-part action card
@@ -151,6 +153,7 @@ def generate_action_card(
     last_err = None
     for attempt in range(2):
         try:
+            rate_limiter.consume_gemini_quota(user_key=user_key)
             response = client.models.generate_content(
                 model=MODEL_NAME,
                 contents=prompt,
@@ -170,6 +173,8 @@ def generate_action_card(
             card_content = BriefingCardContent.model_validate_json(raw_json.strip())
             return card_content
 
+        except GeminiQuotaExceededError:
+            raise
         except Exception as e:
             last_err = e
             time.sleep(0.5)
@@ -178,7 +183,12 @@ def generate_action_card(
     return fallback_card
 
 
-def ai_match_topics(query: str, available_topics: list[str] = None, max_results: int = 3) -> list[str]:
+def ai_match_topics(
+    query: str,
+    available_topics: list[str] = None,
+    max_results: int = 3,
+    user_key: str | None = None,
+) -> list[str]:
     """
     Intelligent search autocomplete engine.
     Completes user input with up to `max_results` relevant topics or keywords
@@ -217,6 +227,7 @@ Examples:
 Return ONLY a valid JSON array of up to {max_results} strings. Each string must be a concise, title-cased topic name (max 45 characters). Do not return markdown, just raw JSON array."""
 
     try:
+        rate_limiter.consume_gemini_quota(user_key=user_key)
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,
@@ -240,12 +251,18 @@ Return ONLY a valid JSON array of up to {max_results} strings. Each string must 
             if results:
                 return results[:max_results]
         return local_hits
+    except GeminiQuotaExceededError:
+        raise
     except Exception as e:
         logger.error(f"AI Topic autocomplete failed for query='{clean_q}': {e}")
         return local_hits
 
 
-def ai_onboarding_chat(history: list[ChatMessage], available_topics: list[str]) -> ChatResponse:
+def ai_onboarding_chat(
+    history: list[ChatMessage],
+    available_topics: list[str],
+    user_key: str | None = None,
+) -> ChatResponse:
     topics_list = ", ".join(available_topics)
 
     prompt = f"""You are the Becon AI onboarding assistant. Your job is to warmly chat with a new user and extract 4 pieces of information to build their profile.
@@ -275,6 +292,7 @@ def ai_onboarding_chat(history: list[ChatMessage], available_topics: list[str]) 
         prompt += f"{msg.role}: {msg.content}\n"
 
     try:
+        rate_limiter.consume_gemini_quota(user_key=user_key)
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,
@@ -291,6 +309,8 @@ def ai_onboarding_chat(history: list[ChatMessage], available_topics: list[str]) 
         raw_json = raw_json.removesuffix("```")
 
         return ChatResponse.model_validate_json(raw_json.strip())
+    except GeminiQuotaExceededError:
+        raise
     except Exception as e:
         logger.error(f"AI Onboarding chat error: {e}")
         return ChatResponse(

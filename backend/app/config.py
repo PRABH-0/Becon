@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field(default="INFO")
     FEED_CACHE_TTL_SECONDS: int = Field(default=1800, description="Stale-while-revalidate TTL in seconds")
 
+    # Rate limiting & Gemini quota caps (in-process; use Redis/shared store when horizontally scaled)
+    RATE_LIMIT_ENABLED: bool = Field(default=True)
+    RATE_LIMIT_PUBLIC_PER_MIN: int = Field(default=30, ge=1)
+    RATE_LIMIT_AUTH_AI_PER_MIN: int = Field(default=10, ge=1)
+    GEMINI_DAILY_CAP_PER_USER: int = Field(default=25, ge=1)
+    GEMINI_DAILY_CAP_GLOBAL: int = Field(default=200, ge=1)
+    # Comma-separated trusted reverse proxy IPs allowed to supply X-Forwarded-For (empty = ignore XFF)
+    TRUSTED_PROXIES: str = Field(default="")
+
     # Supabase Authentication settings
     # Project URL, e.g. https://your-project.supabase.co
     SUPABASE_URL: str | None = Field(default=None)
@@ -39,6 +48,10 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> list[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def trusted_proxies_set(self) -> set[str]:
+        return {p.strip() for p in self.TRUSTED_PROXIES.split(",") if p.strip()}
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
