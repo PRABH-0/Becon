@@ -350,7 +350,10 @@ def test_briefing_card_schema_conformance(test_client):
 
 
 def test_stale_while_revalidate_flow(test_client, db_session, monkeypatch):
-    """Verify stale data is returned immediately while background re-ingestion is scheduled."""
+    """Verify stale data is returned immediately while background re-ingestion schedules only for authenticated non-guests."""
+    from app.deps import get_optional_user
+    from app.models import UserProfile
+
     # Ensure all existing cards are older than TTL (30 minutes)
     db_session.query(Card).update({Card.created_at: datetime.now(UTC) - timedelta(minutes=45)})
     db_session.commit()
@@ -362,11 +365,22 @@ def test_stale_while_revalidate_flow(test_client, db_session, monkeypatch):
 
     monkeypatch.setattr("fastapi.BackgroundTasks.add_task", mock_add_task)
 
-    resp = test_client.get("/api/briefings?scope=top&limit=5")
-    assert resp.status_code == 200
-    assert len(resp.json()) > 0
-    # Background refresh scheduled
-    assert len(scheduled_tasks) >= 1
+    # Unauthenticated caller -> returns persisted cards, schedules 0 background tasks
+    resp_anon = test_client.get("/api/briefings?scope=top&limit=5")
+    assert resp_anon.status_code == 200
+    assert len(resp_anon.json()) > 0
+    assert len(scheduled_tasks) == 0
+
+    # Authenticated non-guest caller -> schedules background refresh
+    fake_user = UserProfile(id=7701, email="swr@example.com", name="SWR User", is_anonymous=False)
+    app.dependency_overrides[get_optional_user] = lambda: fake_user
+    try:
+        resp_auth = test_client.get("/api/briefings?scope=top&limit=5")
+        assert resp_auth.status_code == 200
+        assert len(resp_auth.json()) > 0
+        assert len(scheduled_tasks) >= 1
+    finally:
+        app.dependency_overrides.pop(get_optional_user, None)
 
 
 def test_ingest_token_auth_and_real_counts(test_client, monkeypatch):

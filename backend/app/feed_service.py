@@ -406,13 +406,18 @@ def get_live_briefings(
     offset: int | None = None,
     db: Session | None = None,
     background_tasks: BackgroundTasks | None = None,
+    allow_ingestion: bool = False,
+    allow_variant_generation: bool = False,
+    user_key: str | None = None,
 ) -> List[BriefingCard]:
     """Retrieve personalized Action Cards from the database.
 
     Features:
     - Zero in-memory cache: All cards, variants, and events persist in the database.
-    - Stale-while-revalidate: Triggers background refresh when cards exceed TTL.
-    - Synchronous bootstrap: Runs pipeline on empty database.
+    - Unauthenticated / guest callers read persisted cards only (allow_ingestion=False,
+      allow_variant_generation=False) and never trigger ingestion or Gemini calls.
+    - Stale-while-revalidate: Triggers background refresh for authenticated non-guests
+      when cards exceed TTL.
     - Scope slicing: 'top' (top 5), 'remaining' (5-17), or direct offset.
     """
     if db is None:
@@ -428,22 +433,25 @@ def get_live_briefings(
                 offset=offset,
                 db=local_db,
                 background_tasks=background_tasks,
+                allow_ingestion=allow_ingestion,
+                allow_variant_generation=allow_variant_generation,
+                user_key=user_key,
             )
 
     from app.ingestion import run_ingestion_pipeline
 
     total_published = db.query(func.count(Card.id)).filter(Card.status == "published").scalar() or 0
 
-    # 1. Synchronous bootstrap on empty database or explicit force_refresh
-    if total_published == 0 or force_refresh:
+    # 1. Synchronous bootstrap on empty database or explicit force_refresh (authenticated non-guests only)
+    if allow_ingestion and (total_published == 0 or force_refresh):
         logger.info(
             "Sync ingestion required (total_published=%d, force_refresh=%s)...",
             total_published,
             force_refresh,
         )
         run_ingestion_pipeline(db=db, user_interests=user_interests)
-    else:
-        # 2. Stale-while-revalidate check
+    elif allow_ingestion and total_published > 0:
+        # 2. Stale-while-revalidate check (authenticated non-guests only)
         newest = (
             db.query(Card)
             .filter(Card.status == "published")
