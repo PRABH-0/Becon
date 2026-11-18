@@ -226,8 +226,21 @@ class TopicSearchResponse(BaseModel):
     query: str = Field(..., description="The queried keyword or phrase", examples=["python"])
     matches: List[str] = Field(
         ...,
-        description="List of semantically matched topics from the catalog",
-        examples=["Python, Data & Analytics", "Python & FastAPI Setup"],
+        description="List of matched canonical topic names from focus_topics and topic_aliases",
+        examples=[["Python", "PyTorch"]],
+    )
+
+
+class BriefingSearchResponse(BaseModel):
+    query: str = Field(..., description="The queried keyword or phrase", examples=["docker"])
+    matches: List[str] = Field(
+        default_factory=list,
+        description="Matched focus topic names for the query",
+        examples=[["Docker"]],
+    )
+    cards: List[BriefingCard] = Field(
+        default_factory=list,
+        description="Matching BriefingCard items in the same shape as GET /api/briefings",
     )
 
 

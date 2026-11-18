@@ -14,6 +14,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.ai_service import ai_match_topics
@@ -23,9 +24,10 @@ from app.deps import get_current_user, get_optional_user
 from app.feed_service import get_live_briefings, search_topic_briefings
 from app.ingestion import run_ingestion_pipeline
 from app.logging_config import request_id_ctx_var, setup_logging
-from app.models import UserProfile
+from app.models import FocusTopic, TopicAlias, UserProfile
 from app.schemas import (
     BriefingCard,
+    BriefingSearchResponse,
     ChatRequest,
     ChatResponse,
     HealthResponse,
@@ -298,30 +300,108 @@ def get_briefings(
 @app.get(
     "/api/briefings/search",
     tags=["Briefings"],
-    summary="Semantic topic search across briefing feeds",
-    response_model=TopicSearchResponse,
+    summary="Search persisted briefing cards by topic or keyword",
+    response_model=BriefingSearchResponse,
 )
 def search_briefings_endpoint(
     q: str = Query(
         ...,
         min_length=2,
+        max_length=200,
         description="Search query string or specific topic name",
         examples=["Docker", "Rust memory safety", "PostgreSQL indexes"],
     ),
     role: str = Query(
         default="Software Engineer",
+        max_length=120,
         description="Target professional role for relevance evaluation",
         examples=["Senior Backend Engineer"],
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of briefing cards to return",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Offset for search result pagination",
     ),
     db: Session = Depends(get_db),
     current_user: UserProfile | None = Depends(get_optional_user),
 ):
     """
-    Searches the live intelligence cache using fuzzy match algorithms and Gemini semantic reranking.
+    Searches persisted briefing cards and returns them in the same BriefingCard shape used by /api/briefings.
     """
     effective_role = current_user.role if (current_user and current_user.role) else role
-    result = search_topic_briefings(query=q, user_role=effective_role, db=db)
-    return TopicSearchResponse(**result)
+    result = search_topic_briefings(query=q, user_role=effective_role, db=db, limit=limit, offset=offset)
+    return BriefingSearchResponse(**result)
+
+
+@app.get(
+    "/api/topics/search",
+    tags=["Profile"],
+    summary="Autocomplete canonical focus topics using focus_topics and topic_aliases",
+    response_model=TopicSearchResponse,
+)
+def search_topics_autocomplete(
+    q: str = Query(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Topic prefix, name, slug, or alias to match",
+        examples=["pyt", "k8s", "nextjs"],
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=20,
+        description="Maximum number of canonical topics to return (default 10)",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Public topic autocomplete backed by focus_topics and topic_aliases.
+    Prioritizes prefix and exact alias matches, returning deduplicated canonical topic names.
+    """
+    clean_q = q.strip()
+    if not clean_q:
+        return TopicSearchResponse(query=q, matches=[])
+
+    q_lower = clean_q.lower()
+    substr_pat = f"%{q_lower}%"
+
+    # Find active focus_topics matching by name, slug, or any TopicAlias
+    rows = (
+        db.query(FocusTopic)
+        .outerjoin(TopicAlias, TopicAlias.topic_id == FocusTopic.id)
+        .filter(
+            FocusTopic.is_active.is_(True),
+            or_(
+                func.lower(FocusTopic.name).like(substr_pat),
+                func.lower(FocusTopic.slug).like(substr_pat),
+                func.lower(TopicAlias.alias).like(substr_pat),
+            ),
+        )
+        .distinct()
+        .all()
+    )
+
+    # Rank: exact name/slug/alias match (0), prefix match (1), substring match (2), then alphabetical
+    def _rank_topic(topic: FocusTopic) -> tuple[int, str]:
+        name_l = topic.name.lower()
+        slug_l = topic.slug.lower()
+        aliases_l = [a.alias.lower() for a in (topic.aliases or [])]
+        if q_lower == name_l or q_lower == slug_l or q_lower in aliases_l:
+            return (0, name_l)
+        if name_l.startswith(q_lower) or slug_l.startswith(q_lower) or any(a.startswith(q_lower) for a in aliases_l):
+            return (1, name_l)
+        return (2, name_l)
+
+    ranked = sorted(rows, key=_rank_topic)
+    matches = [t.name for t in ranked[:limit]]
+    return TopicSearchResponse(query=clean_q, matches=matches)
 
 
 @app.post(

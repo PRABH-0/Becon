@@ -161,7 +161,7 @@ export default function ProfilePage() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         const data = await apiFetch<{ matches?: string[] }>(
-          `/api/topic-search?q=${encodeURIComponent(query)}`
+          `/api/topics/search?q=${encodeURIComponent(query)}`
         );
         if (data.matches && data.matches.length > 0) {
           setAiSuggestions(data.matches);

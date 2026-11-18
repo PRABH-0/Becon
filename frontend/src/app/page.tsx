@@ -283,13 +283,16 @@ export default function Home() {
 
     try {
       const params = new URLSearchParams({
-        query,
+        q: query,
         role: userRole,
         limit: "10",
         offset: "0",
       });
-      const data = await apiFetch<BriefingCard[]>(`/api/search-topic?${params.toString()}`);
-      if (Array.isArray(data) && data.length > 0) {
+      const res = await apiFetch<{ query: string; matches: string[]; cards: BriefingCard[] }>(
+        `/api/briefings/search?${params.toString()}`
+      );
+      const data = Array.isArray(res?.cards) ? res.cards : [];
+      if (data.length > 0) {
         setSearchedStories(
           data.map((c) => ({
             ...c,
@@ -329,13 +332,16 @@ export default function Home() {
     setIsLoadingMoreSearch(true);
     try {
       const params = new URLSearchParams({
-        query: activeSearchTopic,
+        q: activeSearchTopic,
         role: userRole,
         limit: "10",
         offset: String(searchOffset),
       });
-      const data = await apiFetch<BriefingCard[]>(`/api/search-topic?${params.toString()}`);
-      if (Array.isArray(data) && data.length > 0) {
+      const res = await apiFetch<{ query: string; matches: string[]; cards: BriefingCard[] }>(
+        `/api/briefings/search?${params.toString()}`
+      );
+      const data = Array.isArray(res?.cards) ? res.cards : [];
+      if (data.length > 0) {
         setSearchedStories((prev) => {
           const base = prev || [];
           const existingIds = new Set(base.map((c) => c.id));
