@@ -67,19 +67,19 @@ def validate_interests_param(interests: str) -> str:
         return ""
     if len(interests) > 1000:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="interests exceeds maximum allowed length.",
         )
     topics = [t.strip() for t in interests.split(",") if t.strip()]
     if len(topics) > MAX_BRIEFING_INTEREST_TOPICS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"interests cannot exceed {MAX_BRIEFING_INTEREST_TOPICS} topics.",
         )
     for topic in topics:
         if len(topic) > MAX_BRIEFING_INTEREST_TOPIC_LEN:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Each interest topic must be at most {MAX_BRIEFING_INTEREST_TOPIC_LEN} characters.",
             )
     return ", ".join(topics)
