@@ -57,6 +57,32 @@ log_verification_modes()
 logger = logging.getLogger("becon.api")
 
 REQUEST_ID_REGEX = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+MAX_BRIEFING_INTEREST_TOPICS = 10
+MAX_BRIEFING_INTEREST_TOPIC_LEN = 60
+
+
+def validate_interests_param(interests: str) -> str:
+    """Validate comma-separated interests query parameter (max 10 topics, each max 60 chars)."""
+    if not interests:
+        return ""
+    if len(interests) > 1000:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="interests exceeds maximum allowed length.",
+        )
+    topics = [t.strip() for t in interests.split(",") if t.strip()]
+    if len(topics) > MAX_BRIEFING_INTEREST_TOPICS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"interests cannot exceed {MAX_BRIEFING_INTEREST_TOPICS} topics.",
+        )
+    for topic in topics:
+        if len(topic) > MAX_BRIEFING_INTEREST_TOPIC_LEN:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Each interest topic must be at most {MAX_BRIEFING_INTEREST_TOPIC_LEN} characters.",
+            )
+    return ", ".join(topics)
 
 AVAILABLE_TOPICS = [
     "AI & Generative Models",
@@ -249,16 +275,18 @@ def get_briefings(
     ),
     role: str = Query(
         default="Professional",
+        max_length=120,
         description="Target role or profession of reading user",
         examples=["Senior Full Stack Engineer", "Accountant / Finance", "Retail Store Owner"],
     ),
     interests: str = Query(
         default="",
-        description="Comma-separated list of focus areas, technologies, and industry interests",
+        description="Comma-separated list of focus areas, technologies, and industry interests (max 10 topics, 60 chars each)",
         examples=[".NET Core, Angular, Python", "Tax Regulations, GST, Accounting"],
     ),
     custom_prompt: str = Query(
         default="",
+        max_length=500,
         description="Custom user editorial instruction for Gemini AI personalization",
         examples=["Focus on architectural trade-offs, security, and scalability."],
     ),
@@ -299,6 +327,8 @@ def get_briefings(
     Supports two-phase loading (scope='top' then scope='remaining') and explicit offset pagination.
     Accepts optional Bearer token to personalize based on authenticated user preferences (required for refresh=true).
     """
+    validated_interests = validate_interests_param(interests)
+
     if refresh:
         if current_user is None:
             raise HTTPException(
@@ -306,11 +336,16 @@ def get_briefings(
                 detail="Authentication required to force refresh briefings.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        if current_user.is_anonymous:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Sign in with a full account to force refresh briefings.",
+            )
         enforce_auth_ai_rate_limit(current_user.id, scope="briefings_refresh")
 
     # Use authenticated profile preferences as defaults if available and not overridden
     effective_role = role
-    effective_interests = interests
+    effective_interests = validated_interests
     effective_prompt = custom_prompt
 
     if current_user:
@@ -320,6 +355,8 @@ def get_briefings(
             effective_interests = current_user.interests
         if not effective_prompt and current_user.customPrompt:
             effective_prompt = current_user.customPrompt
+
+    is_authenticated_non_guest = bool(current_user and not current_user.is_anonymous)
 
     return get_live_briefings(
         db=db,
@@ -332,6 +369,9 @@ def get_briefings(
         limit=limit,
         scope=scope,
         offset=offset,
+        allow_ingestion=is_authenticated_non_guest,
+        allow_variant_generation=is_authenticated_non_guest,
+        user_key=str(current_user.id) if current_user else None,
     )
 
 
@@ -366,15 +406,46 @@ def search_briefings_endpoint(
         ge=0,
         description="Offset for search result pagination",
     ),
+    live: bool = Query(
+        default=False,
+        description="Allow live feed fetch on DB cache miss (requires authenticated non-guest account)",
+    ),
     db: Session = Depends(get_db),
     current_user: UserProfile | None = Depends(get_optional_user),
     _: None = Depends(enforce_public_rate_limit),
 ):
     """
     Searches persisted briefing cards and returns them in the same BriefingCard shape used by /api/briefings.
+    Unauthenticated callers read from persisted DB rows only (zero ingestion or AI calls).
     """
+    allow_live_fetch = False
+    if live:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required for live search ingestion.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if current_user.is_anonymous:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Sign in with a full account to trigger live search ingestion.",
+            )
+        enforce_auth_ai_rate_limit(current_user.id, scope="briefings_search_live")
+        allow_live_fetch = True
+
     effective_role = current_user.role if (current_user and current_user.role) else role
-    result = search_topic_briefings(query=q, user_role=effective_role, db=db, limit=limit, offset=offset)
+    is_authenticated_non_guest = bool(current_user and not current_user.is_anonymous)
+    result = search_topic_briefings(
+        query=q,
+        user_role=effective_role,
+        db=db,
+        limit=limit,
+        offset=offset,
+        allow_live_fetch=allow_live_fetch,
+        allow_variant_generation=is_authenticated_non_guest,
+        user_key=str(current_user.id) if current_user else None,
+    )
     return BriefingSearchResponse(**result)
 
 
@@ -463,11 +534,17 @@ def match_topics_endpoint(
     Extracts relevant developer topics from free-form natural language text using Gemini.
     Requires authentication, rate-limits per user, and caps input length at 500 characters.
     """
-    enforce_auth_ai_rate_limit(current_user.id, scope="match_topics")
+    is_guest = bool(current_user.is_anonymous)
+    enforce_auth_ai_rate_limit(current_user.id, scope="match_topics", is_guest=is_guest)
     description = payload.description.strip()
     if not description:
         return {"matched_topics": []}
-    matched = ai_match_topics(description, AVAILABLE_TOPICS, user_key=str(current_user.id))
+    matched = ai_match_topics(
+        description,
+        AVAILABLE_TOPICS,
+        user_key=str(current_user.id),
+        is_guest=is_guest,
+    )
     return {"matched_topics": matched}
 
 
@@ -673,8 +750,14 @@ def onboarding_chat_endpoint(
     """
     from app.ai_service import ai_onboarding_chat
 
-    enforce_auth_ai_rate_limit(current_user.id, scope="onboarding_chat")
-    response = ai_onboarding_chat(chat_request.messages, AVAILABLE_TOPICS, user_key=str(current_user.id))
+    is_guest = bool(current_user.is_anonymous)
+    enforce_auth_ai_rate_limit(current_user.id, scope="onboarding_chat", is_guest=is_guest)
+    response = ai_onboarding_chat(
+        chat_request.messages,
+        AVAILABLE_TOPICS,
+        user_key=str(current_user.id),
+        is_guest=is_guest,
+    )
 
     if response.onboarding_complete and response.extracted_data:
         if response.extracted_data.name:

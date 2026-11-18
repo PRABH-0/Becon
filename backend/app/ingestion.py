@@ -23,7 +23,9 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.ai_service import MODEL_NAME, client, generate_action_card
+import app.ai_service as ai_service
+from app.ai_service import MODEL_NAME, generate_action_card
+from app.config import settings
 from app.models import (
     Card,
     CardVariant,
@@ -46,6 +48,9 @@ class IngestionStats:
     events_created: int = 0
     cards_created: int = 0
     errors: int = 0
+    gemini_calls_used: int = 0
+    raw_items_deferred: int = 0
+    budget_reached_logged: bool = False
 
 
 def normalize_url(url: str) -> str:
@@ -197,8 +202,14 @@ def process_raw_item_entry(
     raw_data: dict,
     tag_name: str,
     stats: IngestionStats,
+    max_gemini_calls: int | None = None,
+    user_key: str | None = None,
 ) -> Card | None:
-    """Process a single parsed feed entry through RawItem, Event dedup, and Card creation."""
+    """Process a single parsed feed entry through RawItem, Event dedup, and Card creation.
+
+    When Gemini is active and `max_gemini_calls` is reached, newly fetched items remain
+    persisted as `raw_items` with `status='new'` for processing in a subsequent run.
+    """
     raw_title = sanitize_text(raw_data.get("title", ""), max_length=1000)
     raw_url = raw_data.get("link", "").strip()
     raw_summary = sanitize_text(raw_data.get("summary", ""), max_length=3000)
@@ -217,34 +228,37 @@ def process_raw_item_entry(
     ).first()
 
     if existing_raw:
-        stats.raw_items_duplicate += 1
-        return None
-
-    # Parse published timestamp
-    pub_dt = None
-    if raw_data.get("published_at"):
-        try:
-            pub_dt = datetime.strptime(raw_data["published_at"], "%b %d, %Y").replace(tzinfo=UTC)
-        except Exception:
-            pub_dt = datetime.now(UTC)
+        if existing_raw.status != "new" or existing_raw.event_id is not None:
+            stats.raw_items_duplicate += 1
+            return None
+        raw_item = existing_raw
+        pub_dt = existing_raw.published_at or datetime.now(UTC)
     else:
-        pub_dt = datetime.now(UTC)
+        # Parse published timestamp
+        pub_dt = None
+        if raw_data.get("published_at"):
+            try:
+                pub_dt = datetime.strptime(raw_data["published_at"], "%b %d, %Y").replace(tzinfo=UTC)
+            except Exception:
+                pub_dt = datetime.now(UTC)
+        else:
+            pub_dt = datetime.now(UTC)
 
-    raw_item = RawItem(
-        source_id=source.id,
-        url=norm_url,
-        url_hash=url_hash,
-        title=raw_title,
-        summary=raw_summary,
-        content_text=raw_data.get("content_raw") or raw_summary,
-        content_hash=content_hash,
-        published_at=pub_dt,
-        fetched_at=datetime.now(UTC),
-        status="processed",
-    )
-    db.add(raw_item)
-    db.flush()
-    stats.raw_items_new += 1
+        raw_item = RawItem(
+            source_id=source.id,
+            url=norm_url,
+            url_hash=url_hash,
+            title=raw_title,
+            summary=raw_summary,
+            content_text=raw_data.get("content_raw") or raw_summary,
+            content_hash=content_hash,
+            published_at=pub_dt,
+            fetched_at=datetime.now(UTC),
+            status="new",
+        )
+        db.add(raw_item)
+        db.flush()
+        stats.raw_items_new += 1
 
     # 2. Exact Deduplication into Events
     # Check 1: exact normalized URL across all sources
@@ -254,6 +268,22 @@ def process_raw_item_entry(
     if not event:
         title_lower = raw_title.lower()
         event = db.query(Event).filter(func.lower(Event.canonical_title) == title_lower).first()
+
+    existing_card = db.query(Card).filter(Card.event_id == event.id).first() if event else None
+    if (
+        existing_card is None
+        and ai_service.client is not None
+        and max_gemini_calls is not None
+        and stats.gemini_calls_used >= max_gemini_calls
+    ):
+        stats.raw_items_deferred += 1
+        if not stats.budget_reached_logged:
+            logger.warning(
+                "Ingest per-run Gemini budget (%d) reached; remaining items stay as raw_items (status='new') for the next run.",
+                max_gemini_calls,
+            )
+            stats.budget_reached_logged = True
+        return None
 
     if event:
         # Deduplicated into existing event
@@ -303,14 +333,17 @@ def process_raw_item_entry(
                 db.flush()
 
     # 3. Create Shared Canonical Card (1 per event)
-    card = db.query(Card).filter(Card.event_id == event.id).first()
+    card = existing_card or db.query(Card).filter(Card.event_id == event.id).first()
     if not card:
         card_content = generate_action_card(
             article_title=event.canonical_title,
             source_url=event.canonical_url,
             raw_summary=raw_summary,
             tech_tag=tag_name,
+            user_key=user_key,
         )
+        if ai_service.client is not None:
+            stats.gemini_calls_used += 1
 
         card = Card(
             event_id=event.id,
@@ -321,7 +354,7 @@ def process_raw_item_entry(
             action_guidance=card_content.what_to_do_next.guidance,
             source_url=event.canonical_url,
             source_text_hash=content_hash,
-            model_name="fallback-heuristic" if not client else MODEL_NAME,
+            model_name="fallback-heuristic" if not ai_service.client else MODEL_NAME,
             prompt_version="1.0",
             validation_status="passed",
             published_at=event.published_at or datetime.now(UTC),
@@ -331,6 +364,8 @@ def process_raw_item_entry(
         db.flush()
         stats.cards_created += 1
 
+    raw_item.status = "processed"
+    db.flush()
     return card
 
 
@@ -340,6 +375,8 @@ def ingest_single_feed(
     feed_url: str,
     stats: IngestionStats,
     limit: int = 15,
+    max_gemini_calls: int | None = None,
+    user_key: str | None = None,
 ) -> None:
     """Ingest a single feed source with isolated error handling."""
     source = get_or_create_source(db, feed_url, tag_name)
@@ -358,7 +395,15 @@ def ingest_single_feed(
 
         for entry in entries[:limit]:
             raw_data = parse_feed_entry(entry, tag_name, feed_url)
-            process_raw_item_entry(db, source, raw_data, tag_name, stats)
+            process_raw_item_entry(
+                db,
+                source,
+                raw_data,
+                tag_name,
+                stats,
+                max_gemini_calls=max_gemini_calls,
+                user_key=user_key,
+            )
 
         source.last_success_at = datetime.now(UTC)
         source.last_error = None
@@ -381,11 +426,18 @@ def run_ingestion_pipeline(
     db: Session,
     user_interests: str = "",
     limit_per_source: int = 15,
+    max_gemini_calls: int | None = None,
+    user_key: str | None = None,
 ) -> IngestionStats:
-    """Run full ingestion pipeline over configured feed sources."""
+    """Run full ingestion pipeline over configured feed sources within the per-run Gemini budget."""
     from app.feed_service import DEFAULT_FEED_SOURCES, resolve_feed_for_topic
 
     stats = IngestionStats()
+    effective_budget = (
+        settings.INGEST_MAX_GEMINI_CALLS_PER_RUN
+        if max_gemini_calls is None
+        else max_gemini_calls
+    )
 
     feed_sources_to_use: List[Tuple[str, str]] = []
     topics = [t.strip() for t in user_interests.split(",") if t.strip()]
@@ -406,18 +458,32 @@ def run_ingestion_pipeline(
                 seen.add(url)
                 feed_sources_to_use.append((name, url))
 
-    logger.info(f"Starting ingestion pipeline across {len(feed_sources_to_use)} sources...")
+    logger.info(
+        "Starting ingestion pipeline across %d sources (max_gemini_calls=%d)...",
+        len(feed_sources_to_use),
+        effective_budget,
+    )
 
     for tag_name, feed_url in feed_sources_to_use:
-        ingest_single_feed(db, tag_name, feed_url, stats, limit=limit_per_source)
+        ingest_single_feed(
+            db,
+            tag_name,
+            feed_url,
+            stats,
+            limit=limit_per_source,
+            max_gemini_calls=effective_budget,
+            user_key=user_key,
+        )
 
     logger.info(
-        "Ingestion pipeline finished: sources_fetched=%d, raw_items_new=%d, raw_items_duplicate=%d, events_created=%d, cards_created=%d, errors=%d",
+        "Ingestion pipeline finished: sources_fetched=%d, raw_items_new=%d, raw_items_duplicate=%d, raw_items_deferred=%d, events_created=%d, cards_created=%d, gemini_calls_used=%d, errors=%d",
         stats.sources_fetched,
         stats.raw_items_new,
         stats.raw_items_duplicate,
+        stats.raw_items_deferred,
         stats.events_created,
         stats.cards_created,
+        stats.gemini_calls_used,
         stats.errors,
     )
     return stats
@@ -452,13 +518,17 @@ def get_or_create_card_variant(
     db: Session,
     card: Card,
     user_role: str,
-    custom_prompt: str = "",
+    allow_generate: bool = True,
+    user_key: str | None = None,
 ) -> Tuple[str, str, str]:
     """Retrieve or generate lazy cached CardVariant for an existing Profession.
 
-    If `user_role` does not resolve to an existing active `Profession` row,
-    falls back directly to the shared generic card text without creating any
-    new `Profession` rows or triggering AI inference.
+    - Resolves `user_role` strictly against existing active `Profession` rows.
+    - Never passes `custom_prompt` or arbitrary user free text into shared `CardVariant` rows;
+      variants depend exclusively on the canonical `card` and the resolved `profession`.
+    - When `allow_generate=False` (unauthenticated or anonymous guest callers), returns an
+      already-cached shared variant if present, otherwise falls back to canonical card text
+      with zero Gemini calls and zero DB writes.
 
     Returns:
         (how_it_affects_you, action_type, action_guidance)
@@ -479,7 +549,10 @@ def get_or_create_card_variant(
     if variant:
         return variant.how_it_affects_you, variant.action_type, variant.action_guidance
 
-    # First request for a known profession: generate and cache variant in DB
+    if not allow_generate:
+        return card.how_it_affects_you, card.action_type, card.action_guidance
+
+    # First authenticated request for a known profession: generate shared variant from card + profession ONLY
     event_title = card.event.canonical_title if card.event else "Career Update"
     content = generate_action_card(
         article_title=event_title,
@@ -487,7 +560,8 @@ def get_or_create_card_variant(
         raw_summary=card.why_it_matters,
         tech_tag="General",
         user_role=profession.name,
-        custom_prompt=custom_prompt,
+        custom_prompt="",
+        user_key=user_key,
     )
 
     new_variant = CardVariant(
@@ -497,7 +571,7 @@ def get_or_create_card_variant(
         how_it_affects_you=content.how_it_affects_you,
         action_type=content.what_to_do_next.action_type,
         action_guidance=content.what_to_do_next.guidance,
-        model_name="fallback-heuristic" if not client else MODEL_NAME,
+        model_name="fallback-heuristic" if not ai_service.client else MODEL_NAME,
         prompt_version="1.0",
     )
     db.add(new_variant)

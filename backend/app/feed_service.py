@@ -308,16 +308,21 @@ def _db_card_to_briefing_card(
     card: Card,
     rank: int,
     user_role: str = "Professional",
-    custom_prompt: str = "",
+    allow_variant_generation: bool = False,
+    user_key: str | None = None,
 ) -> BriefingCard:
-    """Transform an ORM Card row and its variant into the public BriefingCard DTO."""
+    """Transform an ORM Card row and its shared variant into the public BriefingCard DTO.
+
+    Never passes user free-text prompts into shared `CardVariant` cache rows.
+    """
     from app.ingestion import get_or_create_card_variant
 
     how_it_affects_you, action_type, action_guidance = get_or_create_card_variant(
         db=db,
         card=card,
         user_role=user_role,
-        custom_prompt=custom_prompt,
+        allow_generate=allow_variant_generation,
+        user_key=user_key,
     )
 
     if rank == 1:
@@ -406,13 +411,18 @@ def get_live_briefings(
     offset: int | None = None,
     db: Session | None = None,
     background_tasks: BackgroundTasks | None = None,
+    allow_ingestion: bool = False,
+    allow_variant_generation: bool = False,
+    user_key: str | None = None,
 ) -> List[BriefingCard]:
     """Retrieve personalized Action Cards from the database.
 
     Features:
     - Zero in-memory cache: All cards, variants, and events persist in the database.
-    - Stale-while-revalidate: Triggers background refresh when cards exceed TTL.
-    - Synchronous bootstrap: Runs pipeline on empty database.
+    - Unauthenticated / guest callers read persisted cards only (allow_ingestion=False,
+      allow_variant_generation=False) and never trigger ingestion or Gemini calls.
+    - Stale-while-revalidate: Triggers background refresh for authenticated non-guests
+      when cards exceed TTL.
     - Scope slicing: 'top' (top 5), 'remaining' (5-17), or direct offset.
     """
     if db is None:
@@ -428,22 +438,25 @@ def get_live_briefings(
                 offset=offset,
                 db=local_db,
                 background_tasks=background_tasks,
+                allow_ingestion=allow_ingestion,
+                allow_variant_generation=allow_variant_generation,
+                user_key=user_key,
             )
 
     from app.ingestion import run_ingestion_pipeline
 
     total_published = db.query(func.count(Card.id)).filter(Card.status == "published").scalar() or 0
 
-    # 1. Synchronous bootstrap on empty database or explicit force_refresh
-    if total_published == 0 or force_refresh:
+    # 1. Synchronous bootstrap on empty database or explicit force_refresh (authenticated non-guests only)
+    if allow_ingestion and (total_published == 0 or force_refresh):
         logger.info(
             "Sync ingestion required (total_published=%d, force_refresh=%s)...",
             total_published,
             force_refresh,
         )
-        run_ingestion_pipeline(db=db, user_interests=user_interests)
-    else:
-        # 2. Stale-while-revalidate check
+        run_ingestion_pipeline(db=db, user_interests=user_interests, user_key=user_key)
+    elif allow_ingestion and total_published > 0:
+        # 2. Stale-while-revalidate check (authenticated non-guests only)
         newest = (
             db.query(Card)
             .filter(Card.status == "published")
@@ -514,7 +527,8 @@ def get_live_briefings(
             card=c,
             rank=start_rank + idx,
             user_role=user_role,
-            custom_prompt=custom_prompt,
+            allow_variant_generation=allow_variant_generation,
+            user_key=user_key,
         )
         results.append(card_dto)
 
@@ -528,8 +542,15 @@ def search_topic_briefings(
     limit: int = 6,
     offset: int = 0,
     page: int = 1,
+    allow_live_fetch: bool = False,
+    allow_variant_generation: bool = False,
+    user_key: str | None = None,
 ) -> dict:
-    """Search persisted intelligence cards matching a specific query string."""
+    """Search persisted intelligence cards matching a specific query string.
+
+    By default (and always for unauthenticated callers), reads strictly from the DB
+    with zero feed ingestion, zero Source/FocusTopic row creation, and zero Gemini calls.
+    """
     if db is None:
         with SessionLocal() as local_db:
             return search_topic_briefings(
@@ -539,11 +560,14 @@ def search_topic_briefings(
                 limit=limit,
                 offset=offset,
                 page=page,
+                allow_live_fetch=allow_live_fetch,
+                allow_variant_generation=allow_variant_generation,
+                user_key=user_key,
             )
 
     clean_query = query.strip()
     if not clean_query:
-        return {"query": query, "matches": [], "cards": []}
+        return {"query": query, "matches": [], "cards": [], "message": "No matches yet for this topic."}
 
     from app.ingestion import run_ingestion_pipeline
 
@@ -569,10 +593,24 @@ def search_topic_briefings(
     )
 
     if matching_query.count() == 0:
-        logger.info("No matching cards in DB for search query '%s'; ingesting on demand...", clean_query)
-        run_ingestion_pipeline(db=db, user_interests=clean_query, limit_per_source=10)
+        if not allow_live_fetch:
+            return {
+                "query": clean_query,
+                "matches": [],
+                "cards": [],
+                "message": "No matches yet for this topic.",
+            }
+        logger.info("No matching cards in DB for authenticated live search '%s'; ingesting on demand...", clean_query)
+        run_ingestion_pipeline(db=db, user_interests=clean_query, limit_per_source=10, user_key=user_key)
 
     matched_cards = matching_query.offset(offset).limit(limit).all()
+    if not matched_cards:
+        return {
+            "query": clean_query,
+            "matches": [],
+            "cards": [],
+            "message": "No matches yet for this topic.",
+        }
 
     # Resolve matching FocusTopic names
     matching_topics = (
@@ -594,6 +632,8 @@ def search_topic_briefings(
             card=c,
             rank=offset + idx + 1,
             user_role=user_role,
+            allow_variant_generation=allow_variant_generation,
+            user_key=user_key,
         )
         for idx, c in enumerate(matched_cards)
     ]
@@ -602,4 +642,5 @@ def search_topic_briefings(
         "query": clean_query,
         "matches": matches_list,
         "cards": cards_dto,
+        "message": None,
     }

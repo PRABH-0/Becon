@@ -240,20 +240,22 @@ Run this checklist against a live Supabase project to verify end-to-end function
 
 Becon enforces lightweight, zero-dependency in-process sliding-window rate limits and hard UTC-day Gemini quotas in [`backend/app/rate_limit.py`](../backend/app/rate_limit.py).
 
-> [!NOTE]
-> **Scaling Caveat:** The current limiter stores sliding windows and daily counters in process memory. When running multiple Uvicorn workers or horizontally scaled backend containers, replace the backing store with a shared store (e.g., Redis) so quotas are enforced globally across instances.
+> [!WARNING]
+> **Per-Process Limiter Caveat:** `InProcessRateLimiter` stores sliding windows and daily counters in Python process memory. **Before running multiple Uvicorn/Gunicorn workers or horizontally scaled replicas, migrate the backing store to Redis or another shared store** so per-IP, per-user, guest-pool, and global daily Gemini quotas are enforced globally across instances and survive restarts.
 
 ### Enforcement Scopes
 Environment variable names and defaults are owned by [`CLAUDE.md` — Section 5](../CLAUDE.md#5-environment-variables):
-- **Public endpoints** (`/api/briefings`, `/api/briefings/search`, `/api/topics/search`): per-IP 60s sliding window (`RATE_LIMIT_PUBLIC_PER_MIN`). `X-Forwarded-For` is ignored unless the direct socket peer matches `TRUSTED_PROXIES`.
-- **Authenticated AI/refresh triggers** (`/api/onboarding/chat`, `/api/ai/match-topics`, `/api/briefings?refresh=true`): per-user 60s sliding window (`RATE_LIMIT_AUTH_AI_PER_MIN`).
-- **Daily Gemini quotas:** Hard UTC-day per-user (`GEMINI_DAILY_CAP_PER_USER`) and global per-process (`GEMINI_DAILY_CAP_GLOBAL`) call caps, toggled via `RATE_LIMIT_ENABLED`.
+- **Public endpoints** (`/api/briefings`, `/api/briefings/search`, `/api/topics/search`): per-IP 60s sliding window (`RATE_LIMIT_PUBLIC_PER_MIN`). `X-Forwarded-For` is ignored unless the direct socket peer matches `TRUSTED_PROXIES`. Unauthenticated callers read persisted DB rows only (zero ingestion, zero `Source`/`FocusTopic`/`Profession`/`CardVariant` creation, zero Gemini calls).
+- **Authenticated AI/refresh triggers** (`/api/onboarding/chat`, `/api/ai/match-topics`, `/api/briefings?refresh=true`, `/api/briefings/search?live=true`): per-user 60s sliding window (`RATE_LIMIT_AUTH_AI_PER_MIN` for full accounts; stricter `GUEST_AI_PER_MIN` for anonymous guests).
+- **Daily Gemini quotas:** Hard UTC-day per-user (`GEMINI_DAILY_CAP_PER_USER`), per-guest (`GEMINI_DAILY_CAP_GUEST`), all-guests shared pool (`GEMINI_DAILY_CAP_ALL_GUESTS`), and global per-process (`GEMINI_DAILY_CAP_GLOBAL`) call caps, toggled via `RATE_LIMIT_ENABLED`. Daily quota is counted **at most once per logical request** (retries capped at `1`, and calls that fail before reaching Gemini consume zero quota).
+- **Anonymous Guest Boundary:** Guests receive read-only access to shared persisted cards and cached variants (rejected with `403` on `refresh=true` and `live=true`; never trigger ingestion or `CardVariant` generation). **Limitation:** anonymous guest account creation (`signInAnonymously()`) occurs directly at Supabase Auth, so the Becon backend cannot enforce an IP rate limit on guest account creation; bot-farm protection requires enabling Cloudflare Turnstile CAPTCHA in Supabase Auth (**`ROADMAP.md` Task `8.1`**).
+- **Ingest Per-Run Budget:** `POST /api/ingest` enforces `INGEST_MAX_GEMINI_CALLS_PER_RUN` so one run cannot exhaust `GEMINI_DAILY_CAP_GLOBAL`; excess items remain persisted as `raw_items` (`status='new'`) for the next run.
 
 All limit and quota rejections return **HTTP `429 Too Many Requests`** with a standard **`Retry-After`** header (seconds).
 
 ### Additional Hardening Guards
-- **`GET /api/briefings?refresh=true`:** Requires a valid Supabase Bearer token (`401` if unauthenticated) and applies `RATE_LIMIT_AUTH_AI_PER_MIN`.
-- **`POST /api/ai/match-topics`:** Requires authentication (`401`), enforces `RATE_LIMIT_AUTH_AI_PER_MIN`, and caps `description` input length at 500 characters (`422` if exceeded).
+- **`GET /api/briefings` & `GET /api/briefings/search`:** Unauthenticated callers are strictly DB-only (search cache misses return empty `cards` + `"No matches yet"` message). Input caps enforce `422` on violations (`interests` max 10 topics / 60 chars each, `role` max 120 chars, `custom_prompt` max 500 chars). `refresh=true` and `live=true` require an authenticated non-guest account (`401` unauthenticated, `403` guest).
+- **`POST /api/ai/match-topics` & `POST /api/onboarding/chat`:** Require authentication (`401`); `match-topics` caps `description` at 500 chars (`422`), `onboarding/chat` caps `messages` at 20 items and `content` at 1000 chars (`422`). Every Gemini call enforces configurable `max_output_tokens` (`GEMINI_MAX_OUTPUT_TOKENS_CARD`, `GEMINI_MAX_OUTPUT_TOKENS_CHAT`, `GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS`).
 - **`POST /api/ingest`:** Verifies `X-Ingest-Token` against `INGEST_API_TOKEN` using constant-time `hmac.compare_digest`.
-- **Profession Resolution:** `get_or_create_card_variant` resolves `role` strictly against existing active `professions` rows and falls back to shared generic card text for unknown roles (zero auto-created `Profession` rows or AI calls from arbitrary query strings).
+- **Shared `CardVariant` Isolation:** `get_or_create_card_variant` resolves `role` strictly against existing active `professions` rows, generates variants solely from canonical `card` + `profession` (never writing `custom_prompt` or user free text into shared cache rows), and skips variant generation for unauthenticated/guest callers.
 - **CORS:** Restricted to explicit origins (`ALLOWED_ORIGINS`), explicit methods (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`), and explicit headers (`Authorization`, `Content-Type`, `Accept`, `X-Request-ID`, `X-Ingest-Token`).

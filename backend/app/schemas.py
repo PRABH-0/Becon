@@ -137,11 +137,15 @@ class UserMeResponse(BaseModel):
 
 class ChatMessage(BaseModel):
     role: str = Field(
-        ..., description="Role of the message author: 'user', 'assistant', or 'system'", examples=["user"]
+        ...,
+        max_length=32,
+        description="Role of the message author: 'user', 'assistant', or 'system'",
+        examples=["user"],
     )
     content: str = Field(
         ...,
-        description="Text content of the message",
+        max_length=1000,
+        description="Text content of the message (capped at 1000 characters)",
         examples=["Hi, I am a Senior Full Stack Engineer interested in Python and Cloud Architecture."],
     )
 
@@ -149,7 +153,8 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage] = Field(
         ...,
-        description="List of chronological chat messages for AI onboarding context",
+        max_length=20,
+        description="List of chronological chat messages for AI onboarding context (capped at 20 messages)",
         examples=[
             [
                 {
@@ -249,6 +254,10 @@ class BriefingSearchResponse(BaseModel):
     cards: List[BriefingCard] = Field(
         default_factory=list,
         description="Matching BriefingCard items in the same shape as GET /api/briefings",
+    )
+    message: str | None = Field(
+        default=None,
+        description="Optional status message (e.g. when no persisted matches exist yet)",
     )
 
 

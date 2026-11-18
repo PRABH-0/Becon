@@ -150,10 +150,14 @@ def generate_action_card(
     3. how_it_affects_you: Explain the direct practical impact specifically customized for someone working as a '{user_role}'.
     4. what_to_do_next: Provide tactical advice. Choose action_type from 'learn', 'apply', 'avoid', or 'prepare', and write 1 sentence of specific guidance strictly respecting their personalization directive.
     """
+    # Pre-flight quota check: fail fast before contacting Gemini without consuming quota
+    rate_limiter.check_gemini_quota(user_key=user_key)
+
     last_err = None
-    for attempt in range(2):
+    quota_recorded = False
+    max_retries = 1  # Initial attempt + at most 1 retry
+    for attempt in range(1 + max_retries):
         try:
-            rate_limiter.consume_gemini_quota(user_key=user_key)
             response = client.models.generate_content(
                 model=MODEL_NAME,
                 contents=prompt,
@@ -161,9 +165,13 @@ def generate_action_card(
                     response_mime_type="application/json",
                     response_schema=BriefingCardContent,
                     temperature=0.2,
-                    max_output_tokens=650,
+                    max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS_CARD,
                 ),
             )
+            # Reached Gemini: count daily quota AT MOST ONCE per logical request
+            if not quota_recorded:
+                rate_limiter.record_gemini_usage(user_key=user_key)
+                quota_recorded = True
 
             raw_json = response.text.strip()
             raw_json = raw_json.removeprefix("```json")
@@ -177,7 +185,8 @@ def generate_action_card(
             raise
         except Exception as e:
             last_err = e
-            time.sleep(0.5)
+            if attempt < max_retries:
+                time.sleep(0.5)
 
     logger.error(f"Failed to generate card for '{article_title}': {last_err}")
     return fallback_card
@@ -188,6 +197,7 @@ def ai_match_topics(
     available_topics: list[str] = None,
     max_results: int = 3,
     user_key: str | None = None,
+    is_guest: bool = False,
 ) -> list[str]:
     """
     Intelligent search autocomplete engine.
@@ -226,16 +236,18 @@ Examples:
 
 Return ONLY a valid JSON array of up to {max_results} strings. Each string must be a concise, title-cased topic name (max 45 characters). Do not return markdown, just raw JSON array."""
 
+    rate_limiter.check_gemini_quota(user_key=user_key, is_guest=is_guest)
     try:
-        rate_limiter.consume_gemini_quota(user_key=user_key)
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.2,
+                max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS,
             ),
         )
+        rate_limiter.record_gemini_usage(user_key=user_key, is_guest=is_guest)
         raw = response.text.strip()
         logger.debug(f"AI Topic autocomplete for query='{clean_q}'")
 
@@ -262,6 +274,7 @@ def ai_onboarding_chat(
     history: list[ChatMessage],
     available_topics: list[str],
     user_key: str | None = None,
+    is_guest: bool = False,
 ) -> ChatResponse:
     topics_list = ", ".join(available_topics)
 
@@ -291,8 +304,8 @@ def ai_onboarding_chat(
     for msg in history:
         prompt += f"{msg.role}: {msg.content}\n"
 
+    rate_limiter.check_gemini_quota(user_key=user_key, is_guest=is_guest)
     try:
-        rate_limiter.consume_gemini_quota(user_key=user_key)
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,
@@ -300,8 +313,10 @@ def ai_onboarding_chat(
                 response_mime_type="application/json",
                 response_schema=ChatResponse,
                 temperature=0.7,
+                max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS_CHAT,
             ),
         )
+        rate_limiter.record_gemini_usage(user_key=user_key, is_guest=is_guest)
 
         raw_json = response.text.strip()
         raw_json = raw_json.removeprefix("```json")
