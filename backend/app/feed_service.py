@@ -308,16 +308,21 @@ def _db_card_to_briefing_card(
     card: Card,
     rank: int,
     user_role: str = "Professional",
-    custom_prompt: str = "",
+    allow_variant_generation: bool = False,
+    user_key: str | None = None,
 ) -> BriefingCard:
-    """Transform an ORM Card row and its variant into the public BriefingCard DTO."""
+    """Transform an ORM Card row and its shared variant into the public BriefingCard DTO.
+
+    Never passes user free-text prompts into shared `CardVariant` cache rows.
+    """
     from app.ingestion import get_or_create_card_variant
 
     how_it_affects_you, action_type, action_guidance = get_or_create_card_variant(
         db=db,
         card=card,
         user_role=user_role,
-        custom_prompt=custom_prompt,
+        allow_generate=allow_variant_generation,
+        user_key=user_key,
     )
 
     if rank == 1:
@@ -522,7 +527,8 @@ def get_live_briefings(
             card=c,
             rank=start_rank + idx,
             user_role=user_role,
-            custom_prompt=custom_prompt,
+            allow_variant_generation=allow_variant_generation,
+            user_key=user_key,
         )
         results.append(card_dto)
 
@@ -626,6 +632,8 @@ def search_topic_briefings(
             card=c,
             rank=offset + idx + 1,
             user_role=user_role,
+            allow_variant_generation=allow_variant_generation,
+            user_key=user_key,
         )
         for idx, c in enumerate(matched_cards)
     ]

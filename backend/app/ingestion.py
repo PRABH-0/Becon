@@ -23,7 +23,8 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.ai_service import MODEL_NAME, client, generate_action_card
+import app.ai_service as ai_service
+from app.ai_service import MODEL_NAME, generate_action_card
 from app.models import (
     Card,
     CardVariant,
@@ -321,7 +322,7 @@ def process_raw_item_entry(
             action_guidance=card_content.what_to_do_next.guidance,
             source_url=event.canonical_url,
             source_text_hash=content_hash,
-            model_name="fallback-heuristic" if not client else MODEL_NAME,
+            model_name="fallback-heuristic" if not ai_service.client else MODEL_NAME,
             prompt_version="1.0",
             validation_status="passed",
             published_at=event.published_at or datetime.now(UTC),
@@ -452,13 +453,17 @@ def get_or_create_card_variant(
     db: Session,
     card: Card,
     user_role: str,
-    custom_prompt: str = "",
+    allow_generate: bool = True,
+    user_key: str | None = None,
 ) -> Tuple[str, str, str]:
     """Retrieve or generate lazy cached CardVariant for an existing Profession.
 
-    If `user_role` does not resolve to an existing active `Profession` row,
-    falls back directly to the shared generic card text without creating any
-    new `Profession` rows or triggering AI inference.
+    - Resolves `user_role` strictly against existing active `Profession` rows.
+    - Never passes `custom_prompt` or arbitrary user free text into shared `CardVariant` rows;
+      variants depend exclusively on the canonical `card` and the resolved `profession`.
+    - When `allow_generate=False` (unauthenticated or anonymous guest callers), returns an
+      already-cached shared variant if present, otherwise falls back to canonical card text
+      with zero Gemini calls and zero DB writes.
 
     Returns:
         (how_it_affects_you, action_type, action_guidance)
@@ -479,7 +484,10 @@ def get_or_create_card_variant(
     if variant:
         return variant.how_it_affects_you, variant.action_type, variant.action_guidance
 
-    # First request for a known profession: generate and cache variant in DB
+    if not allow_generate:
+        return card.how_it_affects_you, card.action_type, card.action_guidance
+
+    # First authenticated request for a known profession: generate shared variant from card + profession ONLY
     event_title = card.event.canonical_title if card.event else "Career Update"
     content = generate_action_card(
         article_title=event_title,
@@ -487,7 +495,8 @@ def get_or_create_card_variant(
         raw_summary=card.why_it_matters,
         tech_tag="General",
         user_role=profession.name,
-        custom_prompt=custom_prompt,
+        custom_prompt="",
+        user_key=user_key,
     )
 
     new_variant = CardVariant(
@@ -497,7 +506,7 @@ def get_or_create_card_variant(
         how_it_affects_you=content.how_it_affects_you,
         action_type=content.what_to_do_next.action_type,
         action_guidance=content.what_to_do_next.guidance,
-        model_name="fallback-heuristic" if not client else MODEL_NAME,
+        model_name="fallback-heuristic" if not ai_service.client else MODEL_NAME,
         prompt_version="1.0",
     )
     db.add(new_variant)

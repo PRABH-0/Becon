@@ -435,6 +435,7 @@ def search_briefings_endpoint(
         allow_live_fetch = True
 
     effective_role = current_user.role if (current_user and current_user.role) else role
+    is_authenticated_non_guest = bool(current_user and not current_user.is_anonymous)
     result = search_topic_briefings(
         query=q,
         user_role=effective_role,
@@ -442,6 +443,7 @@ def search_briefings_endpoint(
         limit=limit,
         offset=offset,
         allow_live_fetch=allow_live_fetch,
+        allow_variant_generation=is_authenticated_non_guest,
         user_key=str(current_user.id) if current_user else None,
     )
     return BriefingSearchResponse(**result)
