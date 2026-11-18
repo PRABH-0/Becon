@@ -72,6 +72,18 @@ docker compose up -d
 - Backend API & Docs: `http://localhost:8000/docs`
 - Health probe: `http://localhost:8000/health`
 
+## Vercel Deployment Notes (Frontend)
+
+When deploying the Next.js frontend to Vercel (Preview and Production):
+- **Root Directory:** Set to `frontend` in Vercel Project Settings.
+- **Node.js Version:** `24.x` (matches `frontend/Dockerfile` and local verification; Next.js `16.3.0` with Turbopack).
+- **Standalone Output Handling:** [`frontend/next.config.ts`](frontend/next.config.ts) sets `output: process.env.VERCEL ? undefined : "standalone"`. Vercel sets `VERCEL=1` automatically, disabling `output: "standalone"` so Vercel's Next.js 16 build adapter (`onBuildComplete`) bundles routes cleanly without hitting `ENOENT` on `.next/next-server.js.nft.json`, while Docker (`frontend/Dockerfile` / `docker-compose.yml`) and local builds retain `output: "standalone"`.
+- **Required Environment Variables (Preview & Production):**
+  - `NEXT_PUBLIC_SUPABASE_URL` — Bare Supabase project root URL (e.g. `https://<project-ref>.supabase.co`, **no trailing path** such as `/rest/v1` or `/auth/v1`).
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase project `anon` public key.
+  - `NEXT_PUBLIC_API_URL` — Public base URL of the deployed Becon FastAPI backend (e.g. `https://api.example.com`).
+- **Supabase Redirect URLs:** Add your Vercel Preview (`https://*.vercel.app/auth/callback`) and Production (`https://<your-domain>/auth/callback`, `/auth/reset-password`) URLs in Supabase Dashboard $\rightarrow$ Authentication $\rightarrow$ URL Configuration.
+
 ## Project Architecture & Tracking
 - **Project Tracking & Phases**: See [ROADMAP.md](ROADMAP.md) for current phase status, tasks, and change log.
 - **Agent Context & Guardrails**: See [CLAUDE.md](CLAUDE.md) for engineering guidelines, verified commands, and rules.
