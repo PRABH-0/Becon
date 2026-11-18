@@ -1,3 +1,4 @@
+import hmac
 import logging
 import re
 import time
@@ -39,6 +40,7 @@ from app.schemas import (
     HealthResponse,
     IngestCounts,
     IngestResponse,
+    MatchTopicsRequest,
     TopicSearchResponse,
     UserMeResponse,
     UserProfileCreate,
@@ -286,6 +288,15 @@ def get_briefings(
     Supports progressive loading (scope='top' then scope='remaining') and direct offset infinite scroll.
     Accepts optional Bearer token to personalize based on authenticated user preferences.
     """
+    if refresh:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required to force refresh briefings.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        enforce_auth_ai_rate_limit(current_user.id, scope="briefings_refresh")
+
     # Use authenticated profile preferences as defaults if available and not overridden
     effective_role = role
     effective_interests = interests
@@ -427,15 +438,25 @@ def search_topics_autocomplete(
     tags=["Onboarding"],
     summary="Semantic topic recommendation from user description",
     response_model=dict,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+        422: {"description": "Validation Error - Description exceeds max length (500 chars)"},
+        429: {"description": "Too Many Requests - Per-user rate limit or daily AI quota exceeded"},
+    },
 )
-def match_topics_endpoint(payload: dict):
+def match_topics_endpoint(
+    payload: MatchTopicsRequest,
+    current_user: UserProfile = Depends(get_current_user),
+):
     """
     Extracts relevant developer topics from free-form natural language text using Gemini.
+    Requires authentication, rate-limits per user, and caps input length at 500 characters.
     """
-    description = payload.get("description", "")
+    enforce_auth_ai_rate_limit(current_user.id, scope="match_topics")
+    description = payload.description.strip()
     if not description:
         return {"matched_topics": []}
-    matched = ai_match_topics(description, AVAILABLE_TOPICS)
+    matched = ai_match_topics(description, AVAILABLE_TOPICS, user_key=str(current_user.id))
     return {"matched_topics": matched}
 
 
@@ -455,7 +476,7 @@ def trigger_ingest(
 ):
     """
     Triggers feed ingestion pipeline and persists sources, raw items, events, and cards in the database.
-    Protected by a dedicated secret token header (`X-Ingest-Token`).
+    Protected by a dedicated secret token header (`X-Ingest-Token`) verified with constant-time comparison.
     """
     if not settings.INGEST_API_TOKEN or not settings.INGEST_API_TOKEN.strip():
         logger.error("Ingest triggered but INGEST_API_TOKEN is not configured on this server")
@@ -464,7 +485,9 @@ def trigger_ingest(
             detail="Ingestion endpoint is disabled because INGEST_API_TOKEN is not configured.",
         )
 
-    if not x_ingest_token or x_ingest_token.strip() != settings.INGEST_API_TOKEN.strip():
+    expected = settings.INGEST_API_TOKEN.strip().encode("utf-8")
+    provided = x_ingest_token.strip().encode("utf-8") if x_ingest_token else b""
+    if not x_ingest_token or not hmac.compare_digest(provided, expected):
         logger.warning("Unauthorized ingestion trigger attempt with invalid or missing token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

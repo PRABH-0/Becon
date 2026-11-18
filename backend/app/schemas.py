@@ -222,6 +222,14 @@ class HealthResponse(BaseModel):
     )
 
 
+class MatchTopicsRequest(BaseModel):
+    description: str = Field(
+        default="",
+        max_length=500,
+        description="Free-form user description capped at 500 characters for topic recommendation",
+    )
+
+
 class TopicSearchResponse(BaseModel):
     query: str = Field(..., description="The queried keyword or phrase", examples=["python"])
     matches: List[str] = Field(
