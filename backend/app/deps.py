@@ -54,11 +54,15 @@ def map_token_to_user(payload: dict, db: Session) -> UserProfile:
 
     provider = app_metadata.get("provider", "email") if not is_anonymous else "anonymous"
 
-    # Extract clean display name
-    name = (
-        user_metadata.get("full_name")
-        or user_metadata.get("name")
-        or ("Guest Reader" if is_anonymous else (email.split("@")[0].capitalize() if email else "User"))
+    # Extract clean display name (full_name -> name -> email prefix / fallback)
+    raw_full_name = user_metadata.get("full_name")
+    raw_meta_name = user_metadata.get("name")
+    meta_full_name = raw_full_name.strip() if isinstance(raw_full_name, str) else ""
+    meta_name = raw_meta_name.strip() if isinstance(raw_meta_name, str) else ""
+    token_name = meta_full_name or meta_name
+
+    name = token_name or (
+        "Guest Reader" if is_anonymous else (email.split("@")[0].capitalize() if email else "User")
     )
 
     picture_url = user_metadata.get("avatar_url") or user_metadata.get("picture")
@@ -71,13 +75,19 @@ def map_token_to_user(payload: dict, db: Session) -> UserProfile:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Account has been deleted.",
             )
-        # Update profile picture or name if newly provided
+        # Backfill empty profile fields from identity token (never overwrite existing non-empty values)
         updated = False
-        if picture_url and user.picture_url != picture_url:
+        if picture_url and not (user.picture_url or "").strip():
             user.picture_url = picture_url
             updated = True
-        if name and user.name in ("User", "", None):
+        if name and (not (user.name or "").strip() or user.name == "User"):
             user.name = name
+            updated = True
+        if not is_anonymous and email and not (user.email or "").strip():
+            user.email = email
+            updated = True
+        if not is_anonymous and user.is_anonymous:
+            user.is_anonymous = False
             updated = True
         if updated:
             try:
@@ -104,6 +114,8 @@ def map_token_to_user(payload: dict, db: Session) -> UserProfile:
                     existing.auth_provider = provider
                 if picture_url and not existing.picture_url:
                     existing.picture_url = picture_url
+                if name and (not (existing.name or "").strip() or existing.name == "User"):
+                    existing.name = name
                 try:
                     db.commit()
                     db.refresh(existing)

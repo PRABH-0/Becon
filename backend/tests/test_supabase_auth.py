@@ -72,7 +72,7 @@ def make_es256_token(
         "iat": now,
         "is_anonymous": is_anonymous,
         "app_metadata": app_metadata or {"provider": "email"},
-        "user_metadata": user_metadata or {"full_name": "Test User"},
+        "user_metadata": user_metadata if user_metadata is not None else {"full_name": "Test User"},
     }
     if email is not None:
         payload["email"] = email
@@ -392,6 +392,97 @@ def test_soft_deleted_user_returns_401(auth_client):
     res_legacy = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_legacy}"})
     assert res_legacy.status_code == 401
     assert "Account has been deleted" in res_legacy.json()["detail"]
+
+
+def test_user_mapping_identity_name_and_backfill_rules(auth_client):
+    """Verify full_name, name fallback, neither, non-overwrite backfill, and guest email=None."""
+    from app.database import SessionLocal
+
+    # 1. full_name present -> stored as name
+    sub_full = str(uuid.uuid4())
+    tok_full = make_es256_token(
+        sub=sub_full,
+        email="ada@example.com",
+        user_metadata={"full_name": "Ada Lovelace", "name": "Ada"},
+    )
+    res_full = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_full}"})
+    assert res_full.status_code == 200
+    assert res_full.json()["name"] == "Ada Lovelace"
+    assert res_full.json()["email"] == "ada@example.com"
+
+    # 2. only name present -> falls back to user_metadata.name
+    sub_name_only = str(uuid.uuid4())
+    tok_name_only = make_es256_token(
+        sub=sub_name_only,
+        email="grace@example.com",
+        user_metadata={"name": "Grace Hopper"},
+    )
+    res_name_only = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_name_only}"})
+    assert res_name_only.status_code == 200
+    assert res_name_only.json()["name"] == "Grace Hopper"
+
+    # 3. neither full_name nor name -> derives from email prefix
+    sub_neither = str(uuid.uuid4())
+    tok_neither = make_es256_token(
+        sub=sub_neither,
+        email="linus@example.com",
+        user_metadata={},
+    )
+    res_neither = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_neither}"})
+    assert res_neither.status_code == 200
+    assert res_neither.json()["name"] == "Linus"
+
+    # 4. Existing non-empty name/email are NEVER overwritten; empty name/email ARE backfilled
+    sub_existing_saved = str(uuid.uuid4())
+    sub_existing_empty = str(uuid.uuid4())
+    db = SessionLocal()
+    db.add(
+        UserProfile(
+            external_auth_id=sub_existing_saved,
+            name="Saved Custom Name",
+            email="saved@example.com",
+        )
+    )
+    db.add(
+        UserProfile(
+            external_auth_id=sub_existing_empty,
+            name="",
+            email=None,
+            is_anonymous=True,
+        )
+    )
+    db.commit()
+    db.close()
+
+    tok_saved = make_es256_token(
+        sub=sub_existing_saved,
+        email="different@example.com",
+        user_metadata={"full_name": "Token Overwrite Attempt"},
+    )
+    res_saved = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_saved}"})
+    assert res_saved.status_code == 200
+    assert res_saved.json()["name"] == "Saved Custom Name"
+    assert res_saved.json()["email"] == "saved@example.com"
+
+    tok_backfill = make_es256_token(
+        sub=sub_existing_empty,
+        email="backfilled@example.com",
+        is_anonymous=False,
+        user_metadata={"full_name": "Backfilled Name"},
+    )
+    res_backfill = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_backfill}"})
+    assert res_backfill.status_code == 200
+    assert res_backfill.json()["name"] == "Backfilled Name"
+    assert res_backfill.json()["email"] == "backfilled@example.com"
+    assert res_backfill.json()["is_anonymous"] is False
+
+    # 5. Guest gets email=None even if token lacks or ignores email
+    sub_guest = str(uuid.uuid4())
+    tok_guest = make_es256_token(sub=sub_guest, email=None, is_anonymous=True)
+    res_guest = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_guest}"})
+    assert res_guest.status_code == 200
+    assert res_guest.json()["email"] is None
+    assert res_guest.json()["is_anonymous"] is True
 
 
 def test_get_me_shape(auth_client):
