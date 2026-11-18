@@ -250,6 +250,10 @@ class BriefingSearchResponse(BaseModel):
         default_factory=list,
         description="Matching BriefingCard items in the same shape as GET /api/briefings",
     )
+    message: str | None = Field(
+        default=None,
+        description="Optional status message (e.g. when no persisted matches exist yet)",
+    )
 
 
 class IngestCounts(BaseModel):

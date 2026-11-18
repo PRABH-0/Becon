@@ -366,15 +366,44 @@ def search_briefings_endpoint(
         ge=0,
         description="Offset for search result pagination",
     ),
+    live: bool = Query(
+        default=False,
+        description="Allow live feed fetch on DB cache miss (requires authenticated non-guest account)",
+    ),
     db: Session = Depends(get_db),
     current_user: UserProfile | None = Depends(get_optional_user),
     _: None = Depends(enforce_public_rate_limit),
 ):
     """
     Searches persisted briefing cards and returns them in the same BriefingCard shape used by /api/briefings.
+    Unauthenticated callers read from persisted DB rows only (zero ingestion or AI calls).
     """
+    allow_live_fetch = False
+    if live:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required for live search ingestion.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if current_user.is_anonymous:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Sign in with a full account to trigger live search ingestion.",
+            )
+        enforce_auth_ai_rate_limit(current_user.id, scope="briefings_search_live")
+        allow_live_fetch = True
+
     effective_role = current_user.role if (current_user and current_user.role) else role
-    result = search_topic_briefings(query=q, user_role=effective_role, db=db, limit=limit, offset=offset)
+    result = search_topic_briefings(
+        query=q,
+        user_role=effective_role,
+        db=db,
+        limit=limit,
+        offset=offset,
+        allow_live_fetch=allow_live_fetch,
+        user_key=str(current_user.id) if current_user else None,
+    )
     return BriefingSearchResponse(**result)
 
 

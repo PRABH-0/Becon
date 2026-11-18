@@ -528,8 +528,15 @@ def search_topic_briefings(
     limit: int = 6,
     offset: int = 0,
     page: int = 1,
+    allow_live_fetch: bool = False,
+    allow_variant_generation: bool = False,
+    user_key: str | None = None,
 ) -> dict:
-    """Search persisted intelligence cards matching a specific query string."""
+    """Search persisted intelligence cards matching a specific query string.
+
+    By default (and always for unauthenticated callers), reads strictly from the DB
+    with zero feed ingestion, zero Source/FocusTopic row creation, and zero Gemini calls.
+    """
     if db is None:
         with SessionLocal() as local_db:
             return search_topic_briefings(
@@ -539,11 +546,14 @@ def search_topic_briefings(
                 limit=limit,
                 offset=offset,
                 page=page,
+                allow_live_fetch=allow_live_fetch,
+                allow_variant_generation=allow_variant_generation,
+                user_key=user_key,
             )
 
     clean_query = query.strip()
     if not clean_query:
-        return {"query": query, "matches": [], "cards": []}
+        return {"query": query, "matches": [], "cards": [], "message": "No matches yet for this topic."}
 
     from app.ingestion import run_ingestion_pipeline
 
@@ -569,10 +579,24 @@ def search_topic_briefings(
     )
 
     if matching_query.count() == 0:
-        logger.info("No matching cards in DB for search query '%s'; ingesting on demand...", clean_query)
+        if not allow_live_fetch:
+            return {
+                "query": clean_query,
+                "matches": [],
+                "cards": [],
+                "message": "No matches yet for this topic.",
+            }
+        logger.info("No matching cards in DB for authenticated live search '%s'; ingesting on demand...", clean_query)
         run_ingestion_pipeline(db=db, user_interests=clean_query, limit_per_source=10)
 
     matched_cards = matching_query.offset(offset).limit(limit).all()
+    if not matched_cards:
+        return {
+            "query": clean_query,
+            "matches": [],
+            "cards": [],
+            "message": "No matches yet for this topic.",
+        }
 
     # Resolve matching FocusTopic names
     matching_topics = (
@@ -602,4 +626,5 @@ def search_topic_briefings(
         "query": clean_query,
         "matches": matches_list,
         "cards": cards_dto,
+        "message": None,
     }
