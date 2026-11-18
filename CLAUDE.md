@@ -52,7 +52,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 | **Typecheck**| `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A | Verified |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` | Verified |
 | **Build** | `cd frontend && npm run build` | N/A | N/A | Verified |
-| **Test** | `cd frontend && npm test` *(63 unit tests via Vitest)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
+| **Test** | `cd frontend && npm test` *(72 unit tests via Vitest)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
 | **Docker** | `docker compose build && docker compose up -d` | `docker compose build && docker compose up -d` | N/A | Config Verified |
 
 ## 5. Environment Variables
