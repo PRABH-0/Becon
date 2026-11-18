@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Layers, Radio, Flame, Pin, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, X, Search, Loader2, Sparkles, LogOut, LogIn, CheckCircle2, ArrowRight } from "lucide-react";
+import { Layers, Radio, Flame, Pin, ChevronLeft, ChevronRight, ArrowUp, Sun, Moon, X, Search, Loader2, Sparkles, CheckCircle2, ArrowRight } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -12,8 +12,8 @@ import { apiFetch } from "@/lib/api";
 import { getBriefingsCacheKey, syncIdentityCache } from "@/lib/cache";
 import { resolveUserIdentity } from "@/lib/identity";
 import { GuestBanner } from "@/components/GuestBanner";
+import { HeaderActions } from "@/components/HeaderActions";
 import { RequireAuth } from "@/components/RequireAuth";
-import { UserAvatar, UserChip } from "@/components/UserAvatar";
 import { LeadCard, RectangleCard, SquareCard, BriefCard } from "@/components/cards";
 import { CardDrawer } from "@/components/CardDrawer";
 
@@ -156,7 +156,6 @@ export default function Home() {
   const [isSearchingTopic, setIsSearchingTopic] = useState<boolean>(false);
   const [searchedStories, setSearchedStories] = useState<BriefingCard[] | null>(null);
   const [searchError, setSearchError] = useState<string>("");
-  const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("Professional");
@@ -164,7 +163,6 @@ export default function Home() {
   const [isGuest, setIsGuest] = useState<boolean>(false);
   const [userInterests, setUserInterests] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState<string>("");
-  const profileMenuRef = useRef<HTMLDivElement>(null);
   const { hideLoader } = useLoader();
 
   const userIdentity = useMemo(
@@ -398,7 +396,6 @@ export default function Home() {
       } else if (diff > 8) {
         // Scrolling down -> hide header
         setHeaderVisible(false);
-        setShowProfileMenu(false);
       } else if (diff < -6) {
         // Scrolling up a little bit -> show header immediately
         setHeaderVisible(true);
@@ -414,21 +411,6 @@ export default function Home() {
       window.removeEventListener("scroll", handleScroll);
     };
   }, []);
-
-  // Close profile menu on outside click ("off screen")
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
-        setShowProfileMenu(false);
-      }
-    };
-    if (showProfileMenu) {
-      document.addEventListener("mousedown", handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
-  }, [showProfileMenu]);
   
   useEffect(() => {
     if (!user) return;
@@ -630,108 +612,23 @@ export default function Home() {
             </span>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-mono relative">
+          <div className="flex items-center gap-2 sm:gap-4 text-xs font-mono relative shrink-0">
             <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px] sm:text-xs hidden lg:inline">
               {todayDate}
             </span>
-            <span className="text-amber-300 dark:text-amber-400 font-bold hidden sm:inline border-l border-slate-700 pl-3 tracking-wider uppercase text-[11px]">
+            <span className="text-amber-300 dark:text-amber-400 font-bold hidden md:inline border-l border-slate-700 pl-3 tracking-wider uppercase text-[11px]">
               {briefings.length} updates, ~{readingTimeMinutes} min read
             </span>
 
-            {/* PROFILE MENU CONTAINER */}
-            <div ref={profileMenuRef} className="relative">
-              {/* PROFILE BUTTON */}
-              <button
-                type="button"
-                aria-label="Profile Menu"
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="group flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-500 text-white pl-1.5 pr-3 py-1 sm:pl-2 sm:pr-3.5 sm:py-1.5 rounded-full transition-all shadow-xs hover:shadow-md cursor-pointer select-none"
-              >
-                <UserAvatar
-                  src={userIdentity.avatarUrl}
-                  name={userIdentity.displayName}
-                  isGuest={userIdentity.isGuest}
-                  size="sm"
-                  className="ring-1 ring-white/10 border-transparent"
-                />
-                <span className="font-semibold text-xs sm:text-[13px] text-slate-200 tracking-tight hidden sm:inline font-sans">
-                  {userIdentity.firstName}
-                </span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 ease-in-out shrink-0 ${
-                    showProfileMenu ? "rotate-180 text-amber-400 group-hover:text-amber-400" : ""
-                  }`}
-                />
-              </button>
-
-              {/* PROFILE DROPDOWN MENU (CLASSIC & MINIMALIST) */}
-              {showProfileMenu && (
-                <div className="absolute right-0 top-full mt-2 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/10 dark:shadow-black/50 rounded-xl p-1.5 z-50 text-slate-800 dark:text-slate-200 font-sans animate-in fade-in zoom-in-95 duration-100 select-none">
-                  {/* USER INFO HEADER */}
-                  <div className="px-3 py-2.5">
-                    <UserChip
-                      name={userIdentity.displayName}
-                      subtitle={userIdentity.subtitle}
-                      avatarUrl={userIdentity.avatarUrl}
-                      isGuest={userIdentity.isGuest}
-                      size="md"
-                      showGuestBadge
-                    />
-                  </div>
-
-                  {/* DIVIDER */}
-                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
-
-                  {/* MENU ITEMS */}
-                  <div className="space-y-0.5">
-                    {isGuest && (
-                      <Link
-                        href="/login"
-                        onClick={() => setShowProfileMenu(false)}
-                        className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                      >
-                        <LogIn className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span>Sign In / Create Account</span>
-                      </Link>
-                    )}
-
-                    <Link
-                      href="/profile"
-                      onClick={() => setShowProfileMenu(false)}
-                      className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <User className="w-4 h-4 text-slate-400 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
-                      <span>Profile & Settings</span>
-                    </Link>
-
-                    <Link
-                      href="/about"
-                      onClick={() => setShowProfileMenu(false)}
-                      className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <BookOpen className="w-4 h-4 text-slate-400 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
-                      <span>About Becon</span>
-                    </Link>
-                  </div>
-
-                  {/* DIVIDER */}
-                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
-
-                  {/* LOGOUT */}
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await signOut();
-                      router.push("/login");
-                    }}
-                    className="group flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors text-left cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4 text-rose-500 dark:text-rose-400" />
-                    <span>{isGuest || isAnonymous ? "Exit Guest Mode" : "Logout"}</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <HeaderActions
+              identity={userIdentity}
+              email={userEmail || me?.email || user?.email}
+              currentPage="home"
+              onSignOut={async () => {
+                await signOut();
+                router.push("/login");
+              }}
+            />
           </div>
         </div>
       </header>

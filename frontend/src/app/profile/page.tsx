@@ -8,7 +8,6 @@ import {
   Shield,
   Save,
   Sparkles,
-  ArrowLeft,
   ArrowRight,
   AlertCircle,
   AlertTriangle,
@@ -19,15 +18,14 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch, deleteAccount, type UserMe } from "@/lib/api";
 import { clearBeconCaches, syncIdentityCache } from "@/lib/cache";
 import { resolveUserIdentity } from "@/lib/identity";
 import { supabase } from "@/lib/supabaseClient";
 import { GuestBanner } from "@/components/GuestBanner";
+import { HeaderActions } from "@/components/HeaderActions";
 import { RequireAuth } from "@/components/RequireAuth";
-import { UserChip } from "@/components/UserAvatar";
 
 const SUGGESTED_ROLES = [
   "Accountant / Finance",
@@ -391,47 +389,33 @@ export default function ProfilePage() {
     <RequireAuth>
       <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-20 transition-colors duration-200">
       {/* 1. HEADER BAR */}
-      <header className="bg-slate-950 text-slate-200 py-3.5 px-4 sm:px-6 border-b border-slate-800 shadow-sm sticky top-0 z-50">
-        <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="hover:opacity-85 transition-opacity">
-              <h1 className="font-serif text-2xl sm:text-3xl font-black tracking-widest text-white uppercase drop-shadow-xs">
+      <header className="bg-slate-950 text-slate-200 py-2.5 sm:py-3 px-3 sm:px-6 border-b border-slate-800 shadow-sm sticky top-0 z-50">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Link href="/" className="hover:opacity-85 transition-opacity shrink-0">
+              <h1 className="font-serif text-xl sm:text-2xl md:text-3xl font-black tracking-widest text-white uppercase drop-shadow-xs">
                 B E C O N
               </h1>
             </Link>
-            <span className="text-slate-400 font-bold text-xs border-l border-slate-700 pl-3 tracking-widest uppercase font-mono hidden sm:inline">
-              AI PERSONALIZATION & USER PROFILE
+            <span className="text-slate-400 font-bold text-xs border-l border-slate-700 pl-3 tracking-widest uppercase font-mono hidden md:inline truncate">
+              AI PERSONALIZATION &amp; USER PROFILE
             </span>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4 font-mono">
-            <UserChip
-              name={headerIdentity.displayName}
-              subtitle={headerIdentity.subtitle}
-              avatarUrl={headerIdentity.avatarUrl}
-              isGuest={headerIdentity.isGuest}
-              size="sm"
-              tone="dark"
-              showGuestBadge
-              className="hidden sm:flex max-w-[220px]"
-            />
-            <Link
-              href="/"
-              className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 font-bold px-3 sm:px-4 py-1.5 rounded-lg text-xs tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 shadow-xs cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" /><span className="hidden sm:inline">Return to Daily Gazette</span><span className="sm:hidden">Gazette</span>
-            </Link>
-            <ThemeToggle size="sm" />
-            <button
-              type="button"
-              onClick={async () => {
-                await signOut();
-                router.push("/login");
-              }}
-              className="bg-rose-900/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 border border-transparent hover:border-rose-900/50 font-bold px-4 py-1.5 rounded-lg text-xs tracking-wider transition-all cursor-pointer shadow-xs"
-            >
-              Sign Out
-            </button>
-          </div>
+
+          <HeaderActions
+            backLink={{
+              href: "/",
+              label: "Gazette",
+              ariaLabel: "Return to Daily Gazette",
+            }}
+            identity={headerIdentity}
+            email={email || me?.email || user?.email}
+            currentPage="profile"
+            onSignOut={async () => {
+              await signOut();
+              router.push("/login");
+            }}
+          />
         </div>
       </header>
 
