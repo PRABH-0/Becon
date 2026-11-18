@@ -534,11 +534,17 @@ def match_topics_endpoint(
     Extracts relevant developer topics from free-form natural language text using Gemini.
     Requires authentication, rate-limits per user, and caps input length at 500 characters.
     """
-    enforce_auth_ai_rate_limit(current_user.id, scope="match_topics")
+    is_guest = bool(current_user.is_anonymous)
+    enforce_auth_ai_rate_limit(current_user.id, scope="match_topics", is_guest=is_guest)
     description = payload.description.strip()
     if not description:
         return {"matched_topics": []}
-    matched = ai_match_topics(description, AVAILABLE_TOPICS, user_key=str(current_user.id))
+    matched = ai_match_topics(
+        description,
+        AVAILABLE_TOPICS,
+        user_key=str(current_user.id),
+        is_guest=is_guest,
+    )
     return {"matched_topics": matched}
 
 
@@ -744,8 +750,14 @@ def onboarding_chat_endpoint(
     """
     from app.ai_service import ai_onboarding_chat
 
-    enforce_auth_ai_rate_limit(current_user.id, scope="onboarding_chat")
-    response = ai_onboarding_chat(chat_request.messages, AVAILABLE_TOPICS, user_key=str(current_user.id))
+    is_guest = bool(current_user.is_anonymous)
+    enforce_auth_ai_rate_limit(current_user.id, scope="onboarding_chat", is_guest=is_guest)
+    response = ai_onboarding_chat(
+        chat_request.messages,
+        AVAILABLE_TOPICS,
+        user_key=str(current_user.id),
+        is_guest=is_guest,
+    )
 
     if response.onboarding_complete and response.extracted_data:
         if response.extracted_data.name:

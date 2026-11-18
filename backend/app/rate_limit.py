@@ -57,6 +57,7 @@ class InProcessRateLimiter:
         self._windows: dict[str, deque[float]] = defaultdict(deque)
         self._quota_day: str = datetime.now(UTC).strftime("%Y-%m-%d")
         self._global_gemini_count: int = 0
+        self._all_guests_gemini_count: int = 0
         self._user_gemini_counts: dict[str, int] = defaultdict(int)
 
     def reset(self) -> None:
@@ -65,6 +66,7 @@ class InProcessRateLimiter:
             self._windows.clear()
             self._quota_day = datetime.now(UTC).strftime("%Y-%m-%d")
             self._global_gemini_count = 0
+            self._all_guests_gemini_count = 0
             self._user_gemini_counts.clear()
 
     def _roll_day_if_needed(self) -> None:
@@ -72,6 +74,7 @@ class InProcessRateLimiter:
         if today != self._quota_day:
             self._quota_day = today
             self._global_gemini_count = 0
+            self._all_guests_gemini_count = 0
             self._user_gemini_counts.clear()
 
     def check_sliding_window(self, bucket_key: str, limit: int, window_seconds: int = 60) -> None:
@@ -97,7 +100,7 @@ class InProcessRateLimiter:
 
             q.append(now)
 
-    def _assert_quota_available_locked(self, user_key: str | None = None) -> None:
+    def _assert_quota_available_locked(self, user_key: str | None = None, is_guest: bool = False) -> None:
         self._roll_day_if_needed()
 
         if self._global_gemini_count >= settings.GEMINI_DAILY_CAP_GLOBAL:
@@ -107,7 +110,20 @@ class InProcessRateLimiter:
                 retry_after=retry_after,
             )
 
-        if user_key is not None:
+        if is_guest:
+            if self._all_guests_gemini_count >= settings.GEMINI_DAILY_CAP_ALL_GUESTS:
+                retry_after = seconds_until_utc_midnight()
+                raise GeminiQuotaExceededError(
+                    detail="Daily guest AI capacity has been reached. Create a free account to continue.",
+                    retry_after=retry_after,
+                )
+            if user_key is not None and self._user_gemini_counts[user_key] >= settings.GEMINI_DAILY_CAP_GUEST:
+                retry_after = seconds_until_utc_midnight()
+                raise GeminiQuotaExceededError(
+                    detail="Guest daily AI request quota reached. Create a free account for higher limits.",
+                    retry_after=retry_after,
+                )
+        elif user_key is not None:
             if self._user_gemini_counts[user_key] >= settings.GEMINI_DAILY_CAP_PER_USER:
                 retry_after = seconds_until_utc_midnight()
                 raise GeminiQuotaExceededError(
@@ -115,14 +131,14 @@ class InProcessRateLimiter:
                     retry_after=retry_after,
                 )
 
-    def check_gemini_quota(self, user_key: str | None = None) -> None:
+    def check_gemini_quota(self, user_key: str | None = None, is_guest: bool = False) -> None:
         """Pre-flight check that daily Gemini quota is available without incrementing counters."""
         if not settings.RATE_LIMIT_ENABLED:
             return
         with self._lock:
-            self._assert_quota_available_locked(user_key=user_key)
+            self._assert_quota_available_locked(user_key=user_key, is_guest=is_guest)
 
-    def record_gemini_usage(self, user_key: str | None = None) -> None:
+    def record_gemini_usage(self, user_key: str | None = None, is_guest: bool = False) -> None:
         """Record one completed/reached Gemini logical request against daily caps."""
         if not settings.RATE_LIMIT_ENABLED:
             return
@@ -130,17 +146,21 @@ class InProcessRateLimiter:
             self._roll_day_if_needed()
             if user_key is not None:
                 self._user_gemini_counts[user_key] += 1
+            if is_guest:
+                self._all_guests_gemini_count += 1
             self._global_gemini_count += 1
 
-    def consume_gemini_quota(self, user_key: str | None = None) -> None:
-        """Enforce hard UTC-day per-user and global Gemini call caps; raise GeminiQuotaExceededError."""
+    def consume_gemini_quota(self, user_key: str | None = None, is_guest: bool = False) -> None:
+        """Enforce hard UTC-day per-user, guest-pool, and global Gemini call caps; raise GeminiQuotaExceededError."""
         if not settings.RATE_LIMIT_ENABLED:
             return
 
         with self._lock:
-            self._assert_quota_available_locked(user_key=user_key)
+            self._assert_quota_available_locked(user_key=user_key, is_guest=is_guest)
             if user_key is not None:
                 self._user_gemini_counts[user_key] += 1
+            if is_guest:
+                self._all_guests_gemini_count += 1
             self._global_gemini_count += 1
 
 
@@ -157,10 +177,11 @@ def enforce_public_rate_limit(request: Request) -> None:
     )
 
 
-def enforce_auth_ai_rate_limit(user_id: int, scope: str = "ai") -> None:
-    """Enforce per-user rate limit on authenticated AI-triggering endpoints."""
+def enforce_auth_ai_rate_limit(user_id: int, scope: str = "ai", is_guest: bool = False) -> None:
+    """Enforce per-user rate limit on authenticated AI-triggering endpoints (stricter for guests)."""
+    limit = settings.GUEST_AI_PER_MIN if is_guest else settings.RATE_LIMIT_AUTH_AI_PER_MIN
     rate_limiter.check_sliding_window(
         bucket_key=f"auth_ai:{scope}:user:{user_id}",
-        limit=settings.RATE_LIMIT_AUTH_AI_PER_MIN,
+        limit=limit,
         window_seconds=60,
     )
