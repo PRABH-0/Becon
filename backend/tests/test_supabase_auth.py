@@ -354,6 +354,46 @@ def test_user_mapping_email_conflict_returns_409(auth_client):
     assert "already registered to a different identity" in res.json()["detail"]
 
 
+def test_soft_deleted_user_returns_401(auth_client):
+    """Soft-deleted accounts (deleted_at IS NOT NULL) must be rejected with 401."""
+    from datetime import UTC, datetime
+
+    from app.database import SessionLocal
+
+    # 1. Direct external_auth_id match on a soft-deleted account
+    deleted_sub = str(uuid.uuid4())
+    db = SessionLocal()
+    db.add(
+        UserProfile(
+            name="Deleted User",
+            email="deleted_direct@example.com",
+            external_auth_id=deleted_sub,
+            deleted_at=datetime.now(UTC),
+        )
+    )
+    # 2. Legacy email row (external_auth_id IS NULL) that was soft-deleted
+    db.add(
+        UserProfile(
+            name="Deleted Legacy",
+            email="deleted_legacy@example.com",
+            external_auth_id=None,
+            deleted_at=datetime.now(UTC),
+        )
+    )
+    db.commit()
+    db.close()
+
+    tok_direct = make_es256_token(sub=deleted_sub, email="deleted_direct@example.com")
+    res_direct = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_direct}"})
+    assert res_direct.status_code == 401
+    assert "Account has been deleted" in res_direct.json()["detail"]
+
+    tok_legacy = make_es256_token(sub=str(uuid.uuid4()), email="deleted_legacy@example.com")
+    res_legacy = auth_client.get("/api/me", headers={"Authorization": f"Bearer {tok_legacy}"})
+    assert res_legacy.status_code == 401
+    assert "Account has been deleted" in res_legacy.json()["detail"]
+
+
 def test_get_me_shape(auth_client):
     sub = str(uuid.uuid4())
     tok = make_es256_token(sub=sub, email="me_shape@becon.dev")
