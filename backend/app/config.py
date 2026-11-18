@@ -1,8 +1,38 @@
+import logging
 import os
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger("becon.config")
+
+SUPABASE_URL_PATH_ERROR = (
+    "SUPABASE_URL must be the project root like https://<ref>.supabase.co, remove the path"
+)
+
+
+def normalize_supabase_url(raw_url: str | None) -> tuple[str | None, str | None]:
+    """Validate and normalize SUPABASE_URL to bare project root (scheme + host, no trailing slash or path).
+
+    Returns:
+        (normalized_url, error_message). On success, error_message is None.
+    """
+    trimmed = (raw_url or "").strip()
+    if not trimmed:
+        return None, "SUPABASE_URL is empty or unset."
+
+    parsed = urlparse(trimmed)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None, "SUPABASE_URL must be a valid http(s) project root like https://<ref>.supabase.co"
+
+    if (parsed.path and parsed.path != "/") or parsed.query or parsed.fragment:
+        return None, SUPABASE_URL_PATH_ERROR
+
+    normalized = f"{parsed.scheme}://{parsed.netloc}"
+    return normalized, None
+
 
 # Resolve backend directory for .env location
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -55,10 +85,20 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
-        if self.ENVIRONMENT.lower() == "production":
-            url = (self.SUPABASE_URL or "").strip()
-            if not url:
+        raw_url = (self.SUPABASE_URL or "").strip()
+        if not raw_url:
+            if self.ENVIRONMENT.lower() == "production":
                 raise ValueError("Production safety violation: SUPABASE_URL must be configured in production.")
+            return self
+
+        normalized, err = normalize_supabase_url(raw_url)
+        if err:
+            if self.ENVIRONMENT.lower() == "production":
+                raise ValueError(f"Production safety violation: {err}")
+            logger.error(err)
+            return self
+
+        self.SUPABASE_URL = normalized
         return self
 
 

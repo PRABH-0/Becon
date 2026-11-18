@@ -16,7 +16,11 @@ import {
 } from "lucide-react";
 import { AuthShell } from "@/components/AuthShell";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabaseClient";
+import {
+  getSupabaseUrlConfigError,
+  isSupabaseMisconfiguredError,
+  supabase,
+} from "@/lib/supabaseClient";
 import { getSafeRedirectUrl } from "@/lib/redirect";
 
 export type AuthMode = "login" | "signup" | "upgrade";
@@ -49,7 +53,15 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(() => (urlError ? decodeURIComponent(urlError) : ""));
+  const [errorMessage, setErrorMessage] = useState(() => {
+    if (urlError) return decodeURIComponent(urlError);
+    const configErr = getSupabaseUrlConfigError();
+    if (configErr) {
+      console.error(configErr);
+      return "Auth is misconfigured. Please check your Supabase project URL configuration.";
+    }
+    return "";
+  });
   const [clientErrors, setClientErrors] = useState<{ email?: string; password?: string }>({});
 
   // Confirmation email sent state
@@ -98,6 +110,9 @@ export function AuthForm({ mode }: AuthFormProps) {
   };
 
   const mapSupabaseError = (err: Error): string => {
+    if (isSupabaseMisconfiguredError(err)) {
+      return "Auth is misconfigured. Please check your Supabase project URL configuration.";
+    }
     const msg = err.message.toLowerCase();
     if (msg.includes("invalid login credentials")) {
       return "Invalid email or password. Please verify your credentials.";
@@ -155,7 +170,9 @@ export function AuthForm({ mode }: AuthFormProps) {
         setResendCooldown(60);
       }
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to process request.");
+      setErrorMessage(
+        err instanceof Error ? mapSupabaseError(err) : "Failed to process request."
+      );
     } finally {
       setIsSubmitting(false);
     }

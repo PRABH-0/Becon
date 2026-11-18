@@ -28,7 +28,7 @@ from jwt.exceptions import (
     PyJWKError,
 )
 
-from app.config import settings
+from app.config import normalize_supabase_url, settings
 
 logger = logging.getLogger("becon.auth")
 
@@ -51,13 +51,23 @@ class SupabaseAuthNotConfiguredError(SupabaseAuthError):
     """Raised when authentication is attempted but SUPABASE_URL is not configured."""
 
 
+def _get_validated_supabase_url() -> str:
+    """Return normalized SUPABASE_URL root or log error and raise SupabaseAuthNotConfiguredError."""
+    raw_url = (settings.SUPABASE_URL or "").strip()
+    if not raw_url:
+        raise SupabaseAuthNotConfiguredError("Supabase authentication is not configured on this server.")
+    normalized, err = normalize_supabase_url(raw_url)
+    if err or not normalized:
+        logger.error(err)
+        raise SupabaseAuthNotConfiguredError(f"Auth is misconfigured: {err}")
+    return normalized
+
+
 def get_jwk_client() -> jwt.PyJWKClient:
     """Return or initialize the cached PyJWKClient for the configured SUPABASE_URL."""
     global _jwk_client, _jwk_client_url
-    if not settings.SUPABASE_URL:
-        raise SupabaseAuthNotConfiguredError("Supabase authentication is not configured on this server.")
-
-    jwks_url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
+    base_url = _get_validated_supabase_url()
+    jwks_url = f"{base_url}/auth/v1/.well-known/jwks.json"
 
     with _jwks_lock:
         if _jwk_client is None or _jwk_client_url != jwks_url:
@@ -132,7 +142,7 @@ def verify_supabase_token(token: str) -> Dict[str, Any]:
         if not settings.SUPABASE_JWT_SECRET:
             raise InvalidTokenError("HS256 tokens are rejected: SUPABASE_JWT_SECRET is not configured on this server.")
 
-        expected_issuer = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1" if settings.SUPABASE_URL else None
+        expected_issuer = f"{_get_validated_supabase_url()}/auth/v1" if settings.SUPABASE_URL else None
 
         try:
             payload = jwt.decode(
@@ -161,12 +171,11 @@ def verify_supabase_token(token: str) -> Dict[str, Any]:
 
     # Path 2: Asymmetric JWKS Path (ES256, RS256)
     elif alg in ALLOWED_ASYMMETRIC_ALGORITHMS:
-        if not settings.SUPABASE_URL:
-            raise SupabaseAuthNotConfiguredError("Supabase authentication is not configured on this server.")
+        base_url = _get_validated_supabase_url()
 
         kid = unverified_header.get("kid")
         signing_key = get_jwks_signing_key(token, kid)
-        expected_issuer = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1"
+        expected_issuer = f"{base_url}/auth/v1"
 
         try:
             payload = jwt.decode(
@@ -222,7 +231,8 @@ async def delete_supabase_user_admin(user_sub: str) -> None:
             "Account deletion is not available: Supabase service role key is not configured."
         )
 
-    admin_url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{user_sub}"
+    base_url = _get_validated_supabase_url()
+    admin_url = f"{base_url}/auth/v1/admin/users/{user_sub}"
     headers = {
         "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
         "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
@@ -240,7 +250,11 @@ def log_verification_modes() -> None:
     """Log active Supabase token verification modes at startup. Never log keys."""
     modes = []
     if settings.SUPABASE_URL:
-        modes.append(f"Asymmetric JWKS ({', '.join(ALLOWED_ASYMMETRIC_ALGORITHMS)})")
+        _, url_err = normalize_supabase_url(settings.SUPABASE_URL)
+        if url_err:
+            logger.error(url_err)
+        else:
+            modes.append(f"Asymmetric JWKS ({', '.join(ALLOWED_ASYMMETRIC_ALGORITHMS)})")
     if settings.SUPABASE_JWT_SECRET:
         modes.append("Legacy Symmetric HS256")
 
