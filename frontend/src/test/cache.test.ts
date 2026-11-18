@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   clearBeconCaches,
+  syncIdentityCache,
   syncUserCache,
   resetUserCacheTracker,
   getBriefingsCacheKey,
@@ -43,11 +44,38 @@ describe("cache helpers", () => {
     expect(syncUserCache("user-1")).toBe(false);
     expect(localStorage.getItem("becon_user_name")).toBe("User 1");
 
-    // Different user login triggers purge
+    // Different user login triggers purge (including old avatar photo)
+    localStorage.setItem("becon_user_avatar", "https://lh3.googleusercontent.com/user-1-photo");
     const purged = syncUserCache("user-2");
     expect(purged).toBe(true);
     expect(localStorage.getItem("becon_user_name")).toBeNull();
+    expect(localStorage.getItem("becon_user_avatar")).toBeNull();
     expect(localStorage.getItem("becon_theme")).toBe("light");
+  });
+
+  it("syncUserCache clears old avatar even after full page reload (in-memory tracker reset)", () => {
+    syncUserCache("user-a");
+    syncIdentityCache("Alice", "https://lh3.googleusercontent.com/alice");
+    expect(localStorage.getItem("becon_user_avatar")).toBe("https://lh3.googleusercontent.com/alice");
+
+    // Simulate reload: reset in-memory tracker while localStorage still holds becon_active_user_id
+    resetUserCacheTracker(null);
+
+    // Account B signs in -> must clear Account A's cached avatar and name
+    const purged = syncUserCache("user-b");
+    expect(purged).toBe(true);
+    expect(localStorage.getItem("becon_user_name")).toBeNull();
+    expect(localStorage.getItem("becon_user_avatar")).toBeNull();
+  });
+
+  it("syncIdentityCache stores https avatars only and removes stale photo when unset", () => {
+    syncIdentityCache("Ada", "https://lh3.googleusercontent.com/ada");
+    expect(localStorage.getItem("becon_user_name")).toBe("Ada");
+    expect(localStorage.getItem("becon_user_avatar")).toBe("https://lh3.googleusercontent.com/ada");
+
+    // Non-https or empty avatar clears previous cached avatar
+    syncIdentityCache("Ada", "http://insecure.example.com/pic.png");
+    expect(localStorage.getItem("becon_user_avatar")).toBeNull();
   });
 
   it("getBriefingsCacheKey formats keys safely for guests vs authenticated users", () => {

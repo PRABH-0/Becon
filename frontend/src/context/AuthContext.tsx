@@ -11,7 +11,8 @@ import React, {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { getMe, type UserMe } from "@/lib/api";
-import { clearBeconCaches, syncUserCache } from "@/lib/cache";
+import { clearBeconCaches, syncIdentityCache, syncUserCache } from "@/lib/cache";
+import { resolveUserIdentity } from "@/lib/identity";
 
 export interface AuthContextType {
   session: Session | null;
@@ -76,9 +77,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         syncUserCache(initialSession?.user?.id || null);
 
         if (initialSession?.user) {
-          await loadMe();
+          const meData = await loadMe();
+          const resolved = resolveUserIdentity({
+            me: meData,
+            user: initialSession.user,
+            isAnonymous: Boolean(initialSession.user.is_anonymous || meData?.is_anonymous),
+          });
+          syncIdentityCache(resolved.isGuest ? null : resolved.displayName, resolved.avatarUrl);
         } else {
           setMe(null);
+          syncIdentityCache(null, null);
         }
       })
       .catch((err) => {
@@ -109,9 +117,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (newUser) {
-        await loadMe();
+        const meData = await loadMe();
+        const resolved = resolveUserIdentity({
+          me: meData,
+          user: newUser,
+          isAnonymous: Boolean(newUser.is_anonymous || meData?.is_anonymous),
+        });
+        syncIdentityCache(resolved.isGuest ? null : resolved.displayName, resolved.avatarUrl);
       } else {
         setMe(null);
+        syncIdentityCache(null, null);
       }
       setIsLoading(false);
     });
