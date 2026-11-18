@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     GEMINI_DAILY_CAP_GUEST: int = Field(default=3, ge=1)
     GEMINI_DAILY_CAP_ALL_GUESTS: int = Field(default=30, ge=1)
     GEMINI_DAILY_CAP_GLOBAL: int = Field(default=200, ge=1)
+    INGEST_MAX_GEMINI_CALLS_PER_RUN: int = Field(default=25, ge=0)
     # Output token ceilings for every Gemini call
     GEMINI_MAX_OUTPUT_TOKENS_CARD: int = Field(default=650, ge=64, le=4096)
     GEMINI_MAX_OUTPUT_TOKENS_CHAT: int = Field(default=400, ge=64, le=4096)

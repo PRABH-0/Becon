@@ -454,7 +454,7 @@ def get_live_briefings(
             total_published,
             force_refresh,
         )
-        run_ingestion_pipeline(db=db, user_interests=user_interests)
+        run_ingestion_pipeline(db=db, user_interests=user_interests, user_key=user_key)
     elif allow_ingestion and total_published > 0:
         # 2. Stale-while-revalidate check (authenticated non-guests only)
         newest = (
@@ -601,7 +601,7 @@ def search_topic_briefings(
                 "message": "No matches yet for this topic.",
             }
         logger.info("No matching cards in DB for authenticated live search '%s'; ingesting on demand...", clean_query)
-        run_ingestion_pipeline(db=db, user_interests=clean_query, limit_per_source=10)
+        run_ingestion_pipeline(db=db, user_interests=clean_query, limit_per_source=10, user_key=user_key)
 
     matched_cards = matching_query.offset(offset).limit(limit).all()
     if not matched_cards:
