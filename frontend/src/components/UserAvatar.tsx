@@ -68,6 +68,8 @@ export function UserAvatar({
 export interface UserChipProps {
   name: string;
   subtitle?: string | null;
+  nameTitle?: string;
+  subtitleTitle?: string;
   avatarUrl?: string | null;
   isGuest?: boolean;
   size?: "sm" | "md";
@@ -78,11 +80,13 @@ export interface UserChipProps {
 
 /**
  * Compact user identity chip (UserAvatar + display name + subtitle).
- * Renders all identity strings strictly as plain text.
+ * Renders all identity strings strictly as plain text with ellipsis truncation.
  */
 export function UserChip({
   name,
   subtitle,
+  nameTitle,
+  subtitleTitle,
   avatarUrl,
   isGuest = false,
   size = "md",
@@ -104,7 +108,9 @@ export function UserChip({
       <UserAvatar src={avatarUrl} name={name} isGuest={isGuest} size={size} />
       <div className="min-w-0 flex-1">
         <div className={`font-semibold text-xs truncate flex items-center gap-1.5 ${nameClass}`}>
-          <span className="truncate">{name}</span>
+          <span className="min-w-0 truncate" title={nameTitle ?? name}>
+            {name}
+          </span>
           {showGuestBadge && isGuest && (
             <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-400/15 text-amber-600 dark:text-amber-400 border border-amber-400/30 uppercase font-bold tracking-wide shrink-0">
               Guest
@@ -112,7 +118,10 @@ export function UserChip({
           )}
         </div>
         {subtitle && (
-          <div className={`text-[11px] truncate ${subtitleClass}`}>
+          <div
+            className={`text-[11px] min-w-0 truncate ${subtitleClass}`}
+            title={subtitleTitle ?? subtitle}
+          >
             {subtitle}
           </div>
         )}
