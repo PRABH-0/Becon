@@ -22,6 +22,7 @@ import {
   supabase,
 } from "@/lib/supabaseClient";
 import { getSafeRedirectUrl } from "@/lib/redirect";
+import { PASSWORD_MIN_LENGTH } from "@/lib/constants";
 
 export type AuthMode = "login" | "signup" | "upgrade";
 
@@ -101,8 +102,8 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     if (!password) {
       errors.password = "Password is required.";
-    } else if (password.length < 8) {
-      errors.password = "Password must be at least 8 characters.";
+    } else if (mode !== "login" && password.length < PASSWORD_MIN_LENGTH) {
+      errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
     }
 
     setClientErrors(errors);
@@ -124,7 +125,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       return "Too many attempts. Please wait a minute and try again.";
     }
     if (msg.includes("password should be at least")) {
-      return "Password must be at least 8 characters long.";
+      return `Password must be at least ${PASSWORD_MIN_LENGTH} characters long.`;
     }
     return err.message || "An unexpected authentication error occurred. Please try again.";
   };
@@ -397,7 +398,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isSubmitting}
-                placeholder="••••••••"
+                placeholder={mode === "login" ? "••••••••" : `At least ${PASSWORD_MIN_LENGTH} characters`}
                 className={`w-full pl-9 pr-10 py-1.5 sm:py-2 rounded-xl border text-xs sm:text-sm bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
                   clientErrors.password
                     ? "border-rose-500 dark:border-rose-500"

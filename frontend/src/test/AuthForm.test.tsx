@@ -71,10 +71,10 @@ describe("AuthForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("validates form fields: rejects empty email, invalid email, and password under 8 chars", async () => {
-    render(<AuthForm mode="login" />);
+  it("validates signup form fields: rejects empty email, invalid email, and password under 6 chars", async () => {
+    render(<AuthForm mode="signup" />);
 
-    const submitBtn = screen.getByRole("button", { name: /^Sign In$/i });
+    const submitBtn = screen.getByRole("button", { name: /^Create Account$/i });
     fireEvent.click(submitBtn);
 
     expect(await screen.findByText(/Email address is required\./i)).toBeInTheDocument();
@@ -88,8 +88,44 @@ describe("AuthForm", () => {
     fireEvent.click(submitBtn);
 
     expect(await screen.findByText(/Please enter a valid email address\./i)).toBeInTheDocument();
-    expect(await screen.findByText(/Password must be at least 8 characters\./i)).toBeInTheDocument();
-    expect(mockSignInWithPassword).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Password must be at least 6 characters\./i)).toBeInTheDocument();
+    expect(mockSignUpWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("allows login with short existing passwords while still requiring non-empty password", async () => {
+    mockSignInWithPassword.mockResolvedValue({ error: null });
+
+    render(<AuthForm mode="login" />);
+
+    const emailInput = screen.getByLabelText(/Email address/i);
+    const passwordInput = screen.getByLabelText(/^Password$/i);
+    const submitBtn = screen.getByRole("button", { name: /^Sign In$/i });
+
+    fireEvent.change(emailInput, { target: { value: "existing@becon.dev" } });
+    fireEvent.change(passwordInput, { target: { value: "1234" } });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockSignInWithPassword).toHaveBeenCalledWith("existing@becon.dev", "1234");
+    });
+  });
+
+  it("surfaces friendly 'Auth is misconfigured' error on PGRST125 / bad Supabase URL", async () => {
+    mockSignUpWithPassword.mockResolvedValue({
+      error: new Error("404 PGRST125 Invalid path /rest/v1/auth/v1/signup"),
+    });
+
+    render(<AuthForm mode="signup" />);
+
+    fireEvent.change(screen.getByLabelText(/Email address/i), {
+      target: { value: "newuser@becon.dev" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Password$/i), {
+      target: { value: "abc123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Create Account$/i }));
+
+    expect(await screen.findByText(/Auth is misconfigured/i)).toBeInTheDocument();
   });
 
   it("shows neutral confirmation message on successful signup", async () => {

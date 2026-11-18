@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle2, Eye, EyeOff, Lock, ArrowRight } from "lucide
 import { AuthShell } from "@/components/AuthShell";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
+import { PASSWORD_MIN_LENGTH } from "@/lib/constants";
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -59,8 +60,8 @@ function ResetPasswordContent() {
 
     if (!password) {
       errors.password = "New password is required.";
-    } else if (password.length < 8) {
-      errors.password = "Password must be at least 8 characters.";
+    } else if (password.length < PASSWORD_MIN_LENGTH) {
+      errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
     }
 
     if (password !== confirmPassword) {
@@ -106,7 +107,7 @@ function ResetPasswordContent() {
   return (
     <AuthShell
       heading="Set new password"
-      subheading="Create a secure password with at least 8 characters"
+      subheading={`Create a secure password with at least ${PASSWORD_MIN_LENGTH} characters`}
     >
       {!isLinkValid ? (
         <div className="text-center py-2 sm:py-3 space-y-2.5 sm:space-y-3">
