@@ -134,12 +134,23 @@ app = FastAPI(
     redoc_url="/redoc" if settings.ENABLE_DOCS else None,
 )
 
+CORS_ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+CORS_ALLOWED_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "Accept",
+    "X-Request-ID",
+    "X-Ingest-Token",
+]
+CORS_EXPOSED_HEADERS = ["X-Request-ID", "Retry-After"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=CORS_ALLOWED_METHODS,
+    allow_headers=CORS_ALLOWED_HEADERS,
+    expose_headers=CORS_EXPOSED_HEADERS,
 )
 
 

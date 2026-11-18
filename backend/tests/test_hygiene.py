@@ -69,3 +69,50 @@ def test_ingest_endpoint_token_protection(client, monkeypatch):
     assert resp_valid.status_code == 200
     assert resp_valid.json()["status"] in ("success", "processing")
     assert "sources_fetched" in resp_valid.json()
+
+
+def test_cors_explicit_origin_method_and_headers(client):
+    # 1. Allowed origin, method, and headers -> 200 preflight with explicit echo
+    ok_preflight = client.options(
+        "/api/me",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "Authorization, Content-Type, X-Request-ID",
+        },
+    )
+    assert ok_preflight.status_code == 200
+    assert ok_preflight.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert "*" not in ok_preflight.headers.get("access-control-allow-methods", "")
+
+    # 2. Disallowed origin -> 400 and no ACAO header
+    bad_origin = client.options(
+        "/api/me",
+        headers={
+            "Origin": "https://evil.example.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert bad_origin.status_code == 400
+    assert "access-control-allow-origin" not in bad_origin.headers
+
+    # 3. Disallowed method (TRACE) -> 400
+    bad_method = client.options(
+        "/api/me",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "TRACE",
+        },
+    )
+    assert bad_method.status_code == 400
+
+    # 4. Disallowed custom header -> 400
+    bad_header = client.options(
+        "/api/me",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "X-Disallowed-Custom-Header",
+        },
+    )
+    assert bad_header.status_code == 400
