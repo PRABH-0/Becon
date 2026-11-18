@@ -189,10 +189,11 @@ flowchart TD
 4. **`RequireAuth` (`components/RequireAuth.tsx`)**: Higher-order route wrapper and `useRequireAuth` hook that redirects unauthenticated users to `/login?next=<encodedPath>` while rendering a calm loader during credential checks.
 5. **Cache Hygiene (`lib/cache.ts`)**: Ensures all user preferences and briefings caches (`becon_cached_briefings_*`, `becon_user_name`, `becon_user_avatar`) are purged upon sign-out, account deletion, or account switching, while strictly preserving `becon_theme`.
 
-### Identity Prefill on `/profile` & OAuth Account Selection (Task 1.9)
-- **Backend Backfill (`app/deps.py`):** On login, `map_token_to_user` stores `user_metadata.full_name` (falling back to `user_metadata.name`) for new users and backfills empty `name`/`email` columns on existing rows without ever overwriting saved non-empty values. Guest accounts (`is_anonymous=True`) always keep `email=None`.
+### Identity Display and Prefill (Task 1.9)
+- **Backend Backfill & Avatar Hygiene (`app/deps.py`, `app/main.py`):** On login, `map_token_to_user` stores `user_metadata.full_name` (falling back to `user_metadata.name`) for new users, enforces `https://`-only avatar URLs (`avatar_url`/`picture` exposed as `picture_url` in `GET /api/me`), and backfills empty `name`/`email` columns on existing rows without ever overwriting saved non-empty values. Guest accounts (`is_anonymous=True`) always keep `email=None`.
+- **Shared Identity Display (`components/UserAvatar.tsx`, `lib/identity.ts`):** Header profile menus (`/` and `/profile`) render `<UserAvatar />` and `<UserChip />` using resolved display name (`saved profile name -> /api/me -> full_name -> name -> email prefix`; guests `"Guest Reader"`), subtitle (`saved profession -> email`; guests `"Exploring as guest"`), and `https://`-only photo with `referrerPolicy="no-referrer"` and React-state fallback to initials (or generic icon for guests).
 - **Frontend Prefill (`app/profile/page.tsx`):** After `GET /api/profile` loads, empty `Full Name` and `Email` fields are prefilled in priority order: **(1) saved profile values (always win)** $\rightarrow$ **(2) `GET /api/me` data** $\rightarrow$ **(3) `AuthContext` `user.user_metadata.full_name || name` and `user.email`**. Anonymous guests receive no prefill, and prefill never auto-saves (`POST /api/profile` runs only when the user clicks Save).
-- **Google OAuth Account Chooser:** `signInWithGoogle()` passes `queryParams: { prompt: "select_account" }` so users can reliably choose or switch Google accounts.
+- **Cache Hygiene & Google Account Chooser:** `becon_user_name` and `becon_user_avatar` are refreshed from the active session and purged on sign-out and across account switches (tracked via `becon_active_user_id` across reloads). `signInWithGoogle()` passes `queryParams: { prompt: "select_account" }` so users can reliably choose or switch Google accounts.
 
 ---
 
