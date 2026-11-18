@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH_AI_PER_MIN: int = Field(default=10, ge=1)
     GEMINI_DAILY_CAP_PER_USER: int = Field(default=25, ge=1)
     GEMINI_DAILY_CAP_GLOBAL: int = Field(default=200, ge=1)
+    # Output token ceilings for every Gemini call
+    GEMINI_MAX_OUTPUT_TOKENS_CARD: int = Field(default=650, ge=64, le=4096)
+    GEMINI_MAX_OUTPUT_TOKENS_CHAT: int = Field(default=400, ge=64, le=4096)
+    GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS: int = Field(default=200, ge=32, le=2048)
     # Comma-separated trusted reverse proxy IPs allowed to supply X-Forwarded-For (empty = ignore XFF)
     TRUSTED_PROXIES: str = Field(default="")
 

@@ -161,7 +161,7 @@ def generate_action_card(
                     response_mime_type="application/json",
                     response_schema=BriefingCardContent,
                     temperature=0.2,
-                    max_output_tokens=650,
+                    max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS_CARD,
                 ),
             )
 
@@ -234,6 +234,7 @@ Return ONLY a valid JSON array of up to {max_results} strings. Each string must 
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.2,
+                max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS,
             ),
         )
         raw = response.text.strip()
@@ -300,6 +301,7 @@ def ai_onboarding_chat(
                 response_mime_type="application/json",
                 response_schema=ChatResponse,
                 temperature=0.7,
+                max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS_CHAT,
             ),
         )
 
