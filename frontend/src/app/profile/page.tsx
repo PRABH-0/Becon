@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
-import { apiFetch, deleteAccount } from "@/lib/api";
+import { apiFetch, deleteAccount, type UserMe } from "@/lib/api";
 import { clearBeconCaches } from "@/lib/cache";
 import { supabase } from "@/lib/supabaseClient";
 import { GuestBanner } from "@/components/GuestBanner";
@@ -95,7 +95,11 @@ export default function ProfilePage() {
   const [validationError, setValidationError] = useState("");
   const router = useRouter();
   const { showLoader, hideLoader } = useLoader();
-  const { isAnonymous, signOut } = useAuth();
+  const { isAnonymous, signOut, user, me } = useAuth();
+  const authSnapshotRef = useRef({ isAnonymous, user, me });
+  useEffect(() => {
+    authSnapshotRef.current = { isAnonymous, user, me };
+  }, [isAnonymous, user, me]);
 
   // Danger zone delete account state
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -214,30 +218,74 @@ export default function ProfilePage() {
       }
     }
 
-    // Load saved profile from backend API
+    // Load saved profile from backend API, then prefill empty name/email from Supabase identity (non-guests only)
     const fetchProfile = async () => {
       showLoader("Loading User Profile...", "Retrieving your profile & topic interests from database...");
+      let savedName = "";
+      let savedEmail = "";
+
+      const cleanCandidateName = (val: unknown): string => {
+        if (typeof val !== "string") return "";
+        const trimmed = val.trim();
+        if (!trimmed || trimmed === "Developer" || trimmed === "User" || trimmed === "Guest Reader") {
+          return "";
+        }
+        return trimmed;
+      };
+
       try {
         const parsed = await apiFetch<any>("/api/profile");
-        if (parsed.name && parsed.name !== "Developer" && parsed.name !== "User") {
-          setName(parsed.name);
-        } else if (parsed.email) {
-          const prefix = parsed.email.split("@")[0];
-          setName(prefix.charAt(0).toUpperCase() + prefix.slice(1));
-        }
-        if (parsed.role) setRole(parsed.role);
-        if (parsed.email) setEmail(parsed.email);
-        if (parsed.experience) setExperience(parsed.experience);
-        if (parsed.interests && parsed.interests.trim().length > 0) {
+        savedName = cleanCandidateName(parsed?.name);
+        savedEmail = typeof parsed?.email === "string" ? parsed.email.trim() : "";
+
+        if (savedName) setName(savedName);
+        if (savedEmail) setEmail(savedEmail);
+        if (parsed?.role) setRole(parsed.role);
+        if (parsed?.experience) setExperience(parsed.experience);
+        if (parsed?.interests && parsed.interests.trim().length > 0) {
           setInterests(parsed.interests.split(",").map((i: string) => i.trim()).filter(Boolean));
         }
-        if (parsed.customPrompt) setCustomPrompt(parsed.customPrompt);
-        if (parsed.aiTone) setAiTone(parsed.aiTone);
+        if (parsed?.customPrompt) setCustomPrompt(parsed.customPrompt);
+        if (parsed?.aiTone) setAiTone(parsed.aiTone);
       } catch (err) {
         console.error("Failed to load profile from backend", err);
-      } finally {
-        hideLoader();
       }
+
+      // Prefill empty name/email from (a) GET /api/me then (b) AuthContext user metadata; guests get no prefill
+      const { isAnonymous: isGuest, user: authUser, me: authMe } = authSnapshotRef.current;
+      const isGuestAccount = Boolean(isGuest || authMe?.is_anonymous || authUser?.is_anonymous);
+
+      if (!isGuestAccount && (!savedName || !savedEmail)) {
+        let meData: UserMe | null = authMe;
+        if (!meData) {
+          try {
+            meData = await apiFetch<UserMe>("/api/me");
+          } catch {
+            meData = null;
+          }
+        }
+
+        if (!meData?.is_anonymous) {
+          const meta = (authUser?.user_metadata || {}) as Record<string, unknown>;
+          const metaName =
+            cleanCandidateName(meta.full_name) || cleanCandidateName(meta.name);
+          const meName = cleanCandidateName(meData?.name);
+          const meEmail = typeof meData?.email === "string" ? meData.email.trim() : "";
+          const authEmail = typeof authUser?.email === "string" ? authUser.email.trim() : "";
+
+          const prefillEmail = savedEmail || meEmail || authEmail;
+          const prefillName = savedName || meName || metaName;
+
+          if (!savedName && prefillName) {
+            setName((prev) => (prev.trim() ? prev : prefillName));
+          }
+          if (!savedEmail && prefillEmail) {
+            setEmail((prev) => (prev.trim() ? prev : prefillEmail));
+          }
+        }
+      }
+
+      hideLoader();
     };
     fetchProfile();
   }, [hideLoader, showLoader]);
