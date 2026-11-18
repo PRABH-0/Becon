@@ -6,24 +6,11 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Sparkles,
   ArrowRight,
-  ShieldCheck,
   CheckCircle2,
   XCircle,
   ExternalLink,
-  Layers,
-  Cpu,
-  Zap,
-  Clock,
   Compass,
-  Database,
-  Terminal,
-  BookOpen,
-  ArrowUpRight,
-  Filter,
-  Check,
-  Flame,
-  Pin,
-  Bot
+  Pin
 } from "lucide-react";
 
 type RoleCardKey = "frontend" | "devops" | "dotnet" | "finance";
@@ -206,7 +193,7 @@ export default function AboutPage() {
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black tracking-wider uppercase transition-all shadow-lg hover:shadow-amber-400/20 cursor-pointer"
               id="hero-read-gazette"
             >
-              <span>Explore Today's Gazette</span>
+              <span>Explore Today&apos;s Gazette</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
@@ -282,7 +269,7 @@ export default function AboutPage() {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="text-rose-500 font-bold shrink-0">✕</span>
-                  <span><strong>Critical advisories missed:</strong> A deprecation notice or critical CVE gets buried because it didn't go viral.</span>
+                  <span><strong>Critical advisories missed:</strong> A deprecation notice or critical CVE gets buried because it didn&apos;t go viral.</span>
                 </li>
               </ul>
             </div>
@@ -564,7 +551,7 @@ export default function AboutPage() {
                 1. Action Over Information
               </div>
               <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
-                A briefing card without a concrete next step is unfinished. We don't just report what
+                A briefing card without a concrete next step is unfinished. We don&apos;t just report what
                 happened; we provide guidance on what to do next.
               </p>
             </div>
@@ -574,7 +561,7 @@ export default function AboutPage() {
                 2. Signal Over Volume
               </div>
               <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
-                Fewer items, exponentially higher relevance. You don't need 100 links; you need the
+                Fewer items, exponentially higher relevance. You don&apos;t need 100 links; you need the
                 five updates that affect your sprint.
               </p>
             </div>
@@ -689,7 +676,7 @@ export default function AboutPage() {
               className="text-slate-300 hover:text-amber-300 transition-colors font-bold"
               id="footer-home"
             >
-              Today's Gazette
+              Today&apos;s Gazette
             </Link>
             <Link
               href="/onboarding"

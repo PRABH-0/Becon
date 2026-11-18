@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Bot, User, ArrowRight, Sparkles } from "lucide-react";
+import { Bot, ArrowRight, Sparkles } from "lucide-react";
 import { useLoader } from "@/context/LoadingContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RequireAuth } from "@/components/RequireAuth";

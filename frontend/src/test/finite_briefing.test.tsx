@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import Home, { BRIEFING_MAX_CARDS } from "@/app/page";
 import * as apiModule from "@/lib/api";
 

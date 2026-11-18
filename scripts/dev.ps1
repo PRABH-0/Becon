@@ -81,6 +81,14 @@ switch ($Command) {
         } finally {
             Pop-Location
         }
+
+        Write-Host "`n==> Running Frontend Test Suite..." -ForegroundColor Cyan
+        Push-Location "$RepoRoot\frontend"
+        try {
+            npm test
+        } finally {
+            Pop-Location
+        }
     }
 
     "lint" {

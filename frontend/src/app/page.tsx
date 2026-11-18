@@ -1,13 +1,12 @@
 "use client";
 
-import { User, Layers, Radio, Flame, Pin, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, X, Search, Loader2, Sparkles, Calendar, LogOut, LogIn, CheckCircle2, ArrowRight } from "lucide-react";
+import { User, Layers, Radio, Flame, Pin, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, X, Search, Loader2, Sparkles, LogOut, LogIn, CheckCircle2, ArrowRight } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
 import { useTheme } from "@/context/ThemeContext";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import { getBriefingsCacheKey } from "@/lib/cache";
@@ -16,7 +15,6 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { LeadCard, RectangleCard, SquareCard, BriefCard } from "@/components/cards";
 import { CardDrawer } from "@/components/CardDrawer";
 
-const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 export const BRIEFING_MAX_CARDS = 10;
 
 interface ActionGuidance {
@@ -164,7 +162,7 @@ export default function Home() {
   const [userInterests, setUserInterests] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState<string>("");
   const profileMenuRef = useRef<HTMLDivElement>(null);
-  const { showLoader, hideLoader } = useLoader();
+  const { hideLoader } = useLoader();
 
   // First name extraction for top-bar profile button
   const userFirstName = userName && userName.trim() && userName.trim() !== "User"
@@ -917,7 +915,7 @@ export default function Home() {
                     <span className="font-serif font-black tracking-widest text-sm sm:text-base text-slate-950 dark:text-white">
                       BECON
                     </span>
-                    <span className="text-slate-400 font-mono font-bold">//</span>
+                    <span className="text-slate-400 font-mono font-bold">{"//"}</span>
                     <span className="font-mono font-black text-slate-900 dark:text-slate-100 text-xs sm:text-[13px] tracking-wide truncate">
                       {dailyHeading}
                     </span>
@@ -986,7 +984,7 @@ export default function Home() {
                   <div className="flex items-center gap-2 text-amber-950 dark:text-amber-200 font-bold">
                     <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                     <span>
-                      AI Synthesized News for: <strong className="text-slate-950 dark:text-amber-100 underline underline-offset-2">"{activeSearchTopic}"</strong>
+                      AI Synthesized News for: <strong className="text-slate-950 dark:text-amber-100 underline underline-offset-2">&quot;{activeSearchTopic}&quot;</strong>
                     </span>
                     {searchedStories && (
                       <span className="text-[10px] bg-amber-200/90 dark:bg-amber-900 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded font-black">
@@ -1097,7 +1095,7 @@ export default function Home() {
                 ) : searchedStories !== null ? (
                   <div className="col-span-1 md:col-span-2 xl:col-span-3 p-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-center font-mono space-y-3 shadow-xs">
                     <p className="text-slate-900 dark:text-slate-100 font-bold text-sm">
-                      No live news articles found for "{activeSearchTopic}".
+                      No live news articles found for &quot;{activeSearchTopic}&quot;.
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 text-xs">
                       Try searching another technology keyword (e.g. Docker, Kubernetes, PostgreSQL, Rust, Go).
