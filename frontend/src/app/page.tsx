@@ -9,9 +9,11 @@ import { useLoader } from "@/context/LoadingContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
-import { getBriefingsCacheKey } from "@/lib/cache";
+import { getBriefingsCacheKey, syncIdentityCache } from "@/lib/cache";
+import { resolveUserIdentity } from "@/lib/identity";
 import { GuestBanner } from "@/components/GuestBanner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { UserAvatar, UserChip } from "@/components/UserAvatar";
 import { LeadCard, RectangleCard, SquareCard, BriefCard } from "@/components/cards";
 import { CardDrawer } from "@/components/CardDrawer";
 
@@ -156,6 +158,7 @@ export default function Home() {
   const [searchError, setSearchError] = useState<string>("");
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("Professional");
   const [userAvatar, setUserAvatar] = useState<string>("");
   const [isGuest, setIsGuest] = useState<boolean>(false);
@@ -164,10 +167,21 @@ export default function Home() {
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const { hideLoader } = useLoader();
 
-  // First name extraction for top-bar profile button
-  const userFirstName = userName && userName.trim() && userName.trim() !== "User"
-    ? userName.trim().split(/\s+/)[0]
-    : (userName && userName.trim() ? userName.trim() : "Profile");
+  const userIdentity = useMemo(
+    () =>
+      resolveUserIdentity({
+        profile: {
+          name: userName,
+          role: userRole,
+          email: userEmail,
+          picture_url: userAvatar,
+        },
+        me,
+        user,
+        isAnonymous: isAnonymous || isGuest,
+      }),
+    [userName, userRole, userEmail, userAvatar, me, user, isAnonymous, isGuest]
+  );
 
   // Finite Search Pagination States (10 items, explicit button)
   const [searchOffset, setSearchOffset] = useState<number>(0);
@@ -430,26 +444,26 @@ export default function Home() {
       try {
         const profile = await apiFetch<any>("/api/profile");
         if (profile) {
-          if (profile.name) {
-            setUserName(profile.name);
-            localStorage.setItem("becon_user_name", profile.name);
-          } else if (profile.email) {
-            const prefix = profile.email.split("@")[0];
-            const clean = prefix.charAt(0).toUpperCase() + prefix.slice(1);
-            setUserName(clean);
-            localStorage.setItem("becon_user_name", clean);
-          }
+          if (profile.name) setUserName(profile.name);
+          if (profile.email) setUserEmail(profile.email);
           if (profile.role) setUserRole(profile.role);
-          if (profile.picture_url) {
-            setUserAvatar(profile.picture_url);
-            localStorage.setItem("becon_user_avatar", profile.picture_url);
-          } else {
-            const cached = localStorage.getItem("becon_user_avatar");
-            if (cached) setUserAvatar(cached);
-          }
-          if (profile.auth_provider === "guest" || isAnonymous) {
+          if (profile.picture_url) setUserAvatar(profile.picture_url);
+          const guestFlag = profile.auth_provider === "guest" || isAnonymous;
+          if (guestFlag) {
             setIsGuest(true);
           }
+          const resolved = resolveUserIdentity({
+            profile: {
+              name: profile.name,
+              role: profile.role,
+              email: profile.email,
+              picture_url: profile.picture_url,
+            },
+            me,
+            user,
+            isAnonymous: guestFlag,
+          });
+          syncIdentityCache(resolved.isGuest ? null : resolved.displayName, resolved.avatarUrl);
           if (profile.interests) {
             const list = profile.interests.split(",").map((i: string) => i.trim()).filter(Boolean);
             setUserInterests(list);
@@ -633,15 +647,15 @@ export default function Home() {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="group flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-500 text-white pl-1.5 pr-3 py-1 sm:pl-2 sm:pr-3.5 sm:py-1.5 rounded-full transition-all shadow-xs hover:shadow-md cursor-pointer select-none"
               >
-                <div className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center shadow-xs ring-1 ring-white/10 shrink-0 overflow-hidden">
-                  {userAvatar ? (
-                    <img src={userAvatar} alt={userFirstName} className="w-full h-full object-cover rounded-full" onError={() => setUserAvatar("")} />
-                  ) : (
-                    <User className="w-3.5 h-3.5" />
-                  )}
-                </div>
+                <UserAvatar
+                  src={userIdentity.avatarUrl}
+                  name={userIdentity.displayName}
+                  isGuest={userIdentity.isGuest}
+                  size="sm"
+                  className="ring-1 ring-white/10 border-transparent"
+                />
                 <span className="font-semibold text-xs sm:text-[13px] text-slate-200 tracking-tight hidden sm:inline font-sans">
-                  {userFirstName}
+                  {userIdentity.firstName}
                 </span>
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 ease-in-out shrink-0 ${
@@ -654,27 +668,15 @@ export default function Home() {
               {showProfileMenu && (
                 <div className="absolute right-0 top-full mt-2 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/10 dark:shadow-black/50 rounded-xl p-1.5 z-50 text-slate-800 dark:text-slate-200 font-sans animate-in fade-in zoom-in-95 duration-100 select-none">
                   {/* USER INFO HEADER */}
-                  <div className="px-3 py-2.5 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-100 border border-slate-700/50 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden">
-                      {userAvatar ? (
-                        <img src={userAvatar} alt={userName} className="w-full h-full object-cover rounded-full" onError={() => setUserAvatar("")} />
-                      ) : (
-                        <span>{userFirstName && userFirstName[0] ? userFirstName[0].toUpperCase() : "U"}</span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate flex items-center gap-1.5">
-                        <span className="truncate">{userName || "Reader"}</span>
-                        {isGuest && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-400/15 text-amber-600 dark:text-amber-400 border border-amber-400/30 uppercase font-bold tracking-wide">
-                            Guest
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        {userRole || "Member"}
-                      </div>
-                    </div>
+                  <div className="px-3 py-2.5">
+                    <UserChip
+                      name={userIdentity.displayName}
+                      subtitle={userIdentity.subtitle}
+                      avatarUrl={userIdentity.avatarUrl}
+                      isGuest={userIdentity.isGuest}
+                      size="md"
+                      showGuestBadge
+                    />
                   </div>
 
                   {/* DIVIDER */}

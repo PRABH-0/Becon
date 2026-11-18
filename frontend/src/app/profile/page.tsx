@@ -22,10 +22,12 @@ import { useLoader } from "@/context/LoadingContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch, deleteAccount, type UserMe } from "@/lib/api";
-import { clearBeconCaches } from "@/lib/cache";
+import { clearBeconCaches, syncIdentityCache } from "@/lib/cache";
+import { resolveUserIdentity } from "@/lib/identity";
 import { supabase } from "@/lib/supabaseClient";
 import { GuestBanner } from "@/components/GuestBanner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { UserChip } from "@/components/UserAvatar";
 
 const SUGGESTED_ROLES = [
   "Accountant / Finance",
@@ -100,6 +102,13 @@ export default function ProfilePage() {
   useEffect(() => {
     authSnapshotRef.current = { isAnonymous, user, me };
   }, [isAnonymous, user, me]);
+
+  const headerIdentity = resolveUserIdentity({
+    profile: { name, role, email },
+    me,
+    user,
+    isAnonymous,
+  });
 
   // Danger zone delete account state
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -333,6 +342,7 @@ export default function ProfilePage() {
         },
         body: JSON.stringify(profileData),
       });
+      syncIdentityCache(isAnonymous ? null : finalName, headerIdentity.avatarUrl);
       // Pre-warm and regenerate personalized briefing cards with the new focus areas
       const params = new URLSearchParams({
         role: finalRole,
@@ -394,11 +404,16 @@ export default function ProfilePage() {
             </span>
           </div>
           <div className="flex items-center gap-3 sm:gap-4 font-mono">
-            {isAnonymous && (
-              <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline">
-                Guest Reader
-              </span>
-            )}
+            <UserChip
+              name={headerIdentity.displayName}
+              subtitle={headerIdentity.subtitle}
+              avatarUrl={headerIdentity.avatarUrl}
+              isGuest={headerIdentity.isGuest}
+              size="sm"
+              tone="dark"
+              showGuestBadge
+              className="hidden sm:flex max-w-[220px]"
+            />
             <Link
               href="/"
               className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 font-bold px-3 sm:px-4 py-1.5 rounded-lg text-xs tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 shadow-xs cursor-pointer"

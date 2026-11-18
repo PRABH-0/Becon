@@ -1,6 +1,7 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
+import Home from "@/app/page";
 import ProfilePage from "@/app/profile/page";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import * as apiModule from "@/lib/api";
@@ -244,6 +245,57 @@ describe("Profile identity prefill & Google OAuth prompt (Task 1.9)", () => {
     const callArg = mockSignInWithOAuth.mock.calls[0][0];
     expect(callArg.provider).toBe("google");
     expect(callArg.options.queryParams).toEqual({ prompt: "select_account" });
+  });
+
+  it("Home header button and profile dropdown display Google user's real name and photo (not Reader/Professional/P)", async () => {
+    mockAuthState.isAnonymous = false;
+    mockAuthState.me = {
+      id: 20,
+      email: "ada@gmail.com",
+      name: "Ada Lovelace",
+      picture_url: "https://lh3.googleusercontent.com/a/ada",
+      is_anonymous: false,
+      profession: null,
+      timezone: "UTC",
+      delivery_time: "07:00",
+      email_digest_enabled: true,
+      has_completed_setup: true,
+    };
+    mockAuthState.user = {
+      id: "google-sub-home",
+      email: "ada@gmail.com",
+      is_anonymous: false,
+      user_metadata: {
+        full_name: "Ada Lovelace",
+        avatar_url: "https://lh3.googleusercontent.com/a/ada",
+      },
+    };
+
+    vi.spyOn(apiModule, "apiFetch").mockImplementation(async (path: string) => {
+      if (path === "/api/profile") {
+        return {
+          name: "",
+          email: "ada@gmail.com",
+          role: "Staff Engineer",
+          interests: "Python",
+          picture_url: null,
+        };
+      }
+      return [];
+    });
+
+    render(<Home />);
+
+    const profileBtn = await screen.findByRole("button", { name: /Profile Menu/i });
+    expect(profileBtn).toHaveTextContent("Ada");
+    expect(profileBtn.querySelector("img")?.getAttribute("src")).toBe(
+      "https://lh3.googleusercontent.com/a/ada"
+    );
+
+    fireEvent.click(profileBtn);
+    expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
+    expect(screen.getByText("Staff Engineer")).toBeInTheDocument();
+    expect(screen.queryByText("Reader")).toBeNull();
   });
 });
 
