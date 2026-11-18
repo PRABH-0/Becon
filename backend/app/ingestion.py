@@ -423,52 +423,70 @@ def run_ingestion_pipeline(
     return stats
 
 
+def resolve_existing_profession(db: Session, user_role: str) -> Profession | None:
+    """Resolve a requested role string to an existing active Profession row.
+
+    Never auto-creates Profession rows from request parameters.
+    Matches by exact slug, exact case-insensitive name, or normalized slug alias.
+    """
+    clean_role = (user_role or "").strip()
+    if not clean_role:
+        return None
+
+    role_lower = clean_role.lower()
+    role_slug = re.sub(r"[^a-z0-9]+", "-", role_lower).strip("-")
+    if not role_slug:
+        return None
+
+    return (
+        db.query(Profession)
+        .filter(
+            Profession.is_active.is_(True),
+            (Profession.slug == role_slug) | (func.lower(Profession.name) == role_lower),
+        )
+        .first()
+    )
+
+
 def get_or_create_card_variant(
     db: Session,
     card: Card,
     user_role: str,
     custom_prompt: str = "",
 ) -> Tuple[str, str, str]:
-    """Retrieve or generate lazy cached CardVariant for this card and user role.
+    """Retrieve or generate lazy cached CardVariant for an existing Profession.
+
+    If `user_role` does not resolve to an existing active `Profession` row,
+    falls back directly to the shared generic card text without creating any
+    new `Profession` rows or triggering AI inference.
 
     Returns:
         (how_it_affects_you, action_type, action_guidance)
     """
-    clean_role = user_role.strip() if user_role else "Professional"
-    role_slug = re.sub(r"[^a-z0-9]+", "-", clean_role.lower()).strip("-")
-
-    # Match or create profession dynamically
-    profession = None
-    if role_slug:
-        profession = db.query(Profession).filter(
-            (Profession.slug == role_slug) | (func.lower(Profession.name) == clean_role.lower())
-        ).first()
-
+    profession = resolve_existing_profession(db, user_role)
     if not profession:
-        profession = Profession(
-            slug=role_slug or "professional",
-            name=clean_role,
-            is_active=True,
-        )
-        db.add(profession)
-        db.flush()
+        return card.how_it_affects_you, card.action_type, card.action_guidance
 
-    variant = db.query(CardVariant).filter(
-        CardVariant.card_id == card.id,
-        CardVariant.profession_id == profession.id,
-    ).first()
+    variant = (
+        db.query(CardVariant)
+        .filter(
+            CardVariant.card_id == card.id,
+            CardVariant.profession_id == profession.id,
+        )
+        .first()
+    )
 
     if variant:
         return variant.how_it_affects_you, variant.action_type, variant.action_guidance
 
-    # First request: generate and cache variant in DB
+    # First request for a known profession: generate and cache variant in DB
     event_title = card.event.canonical_title if card.event else "Career Update"
     content = generate_action_card(
         article_title=event_title,
         source_url=card.source_url,
         raw_summary=card.why_it_matters,
         tech_tag="General",
-        user_role=clean_role,
+        user_role=profession.name,
         custom_prompt=custom_prompt,
     )
 

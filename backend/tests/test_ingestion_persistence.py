@@ -31,7 +31,9 @@ from app.ingestion import (
 from app.main import app
 from app.models import (
     Card,
+    CardVariant,
     Event,
+    Profession,
     RawItem,
     Source,
 )
@@ -260,8 +262,17 @@ def test_briefings_persisted_across_restarts(test_client, db_session, monkeypatc
 
 
 def test_card_personalization_and_variant_caching(db_session, monkeypatch):
-    """Verify different roles receive different variants and variants are cached in DB."""
+    """Verify known professions receive cached variants and unknown roles fall back without creating Profession rows."""
     import app.ingestion as ing
+
+    # Ensure two known Profession rows exist (never auto-created from free text)
+    for slug, name in [
+        ("frontend-developer", "Frontend Developer"),
+        ("cloud-security-architect", "Cloud Security Architect"),
+    ]:
+        if not db_session.query(Profession).filter(Profession.slug == slug).first():
+            db_session.add(Profession(slug=slug, name=name, is_active=True))
+    db_session.commit()
 
     # Ensure a card exists
     card = db_session.query(Card).first()
@@ -281,30 +292,44 @@ def test_card_personalization_and_variant_caching(db_session, monkeypatch):
         db_session.commit()
         card = db_session.query(Card).first()
 
-    # Request variant for Frontend Developer
+    prof_count_before = db_session.query(Profession).count()
+
+    # Request variant for known role (by name)
     v1_how, v1_type, v1_guidance = get_or_create_card_variant(
         db_session, card, user_role="Frontend Developer"
     )
 
-    # Request variant for Cloud Security Architect
+    # Request variant for known role (by slug)
     v2_how, v2_type, v2_guidance = get_or_create_card_variant(
-        db_session, card, user_role="Cloud Security Architect"
+        db_session, card, user_role="cloud-security-architect"
     )
 
     assert "Frontend Developer" in v1_how or "Frontend" in v1_guidance
     assert "Cloud Security Architect" in v2_how or "Cloud" in v2_guidance
+    assert db_session.query(Profession).count() == prof_count_before
 
-    # Spy on generate_action_card to prove caching
+    # Spy on generate_action_card to prove caching & zero AI calls for unknown roles
     spy_generator = MagicMock(side_effect=ing.generate_action_card)
     monkeypatch.setattr(ing, "generate_action_card", spy_generator)
 
-    # Request Frontend Developer variant again
+    # Request Frontend Developer variant again -> cached
     v1_cached_how, _, _ = get_or_create_card_variant(
         db_session, card, user_role="Frontend Developer"
     )
-
     assert v1_cached_how == v1_how
     assert spy_generator.call_count == 0  # Zero AI calls! Served from DB variant row!
+
+    # Unknown free-text role -> falls back to generic card text, creates ZERO Profession rows, 0 AI calls
+    variants_before = db_session.query(CardVariant).count()
+    unknown_how, unknown_type, unknown_guidance = get_or_create_card_variant(
+        db_session, card, user_role="Arbitrary Unseeded Role XYZ 999"
+    )
+    assert unknown_how == card.how_it_affects_you
+    assert unknown_type == card.action_type
+    assert unknown_guidance == card.action_guidance
+    assert db_session.query(Profession).count() == prof_count_before
+    assert db_session.query(CardVariant).count() == variants_before
+    assert spy_generator.call_count == 0
 
 
 def test_briefing_card_schema_conformance(test_client):
