@@ -72,8 +72,12 @@ sequenceDiagram
 
 > [!IMPORTANT]
 > - **Never** expose `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_JWT_SECRET` to the frontend or git.
-> - In `production`, `SUPABASE_URL` is mandatory on the backend; the backend fails fast at startup if it is missing.
-> - In `development`, if `SUPABASE_URL` is unset, protected backend endpoints return `503 Service Unavailable` with a clear actionable error message.
+> - In `production`, `SUPABASE_URL` is mandatory on the backend and must be a bare project root URL; the backend fails fast at startup if it is missing or contains a path.
+> - In `development`, if `SUPABASE_URL` is unset or misconfigured, protected backend endpoints return `503 Service Unavailable` with a clear actionable error message.
+
+### Common Setup Mistakes
+- **Including a path in `SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL`:** Both variables **must** be the bare project root (e.g. `https://<ref>.supabase.co`, no `/rest/v1`, `/auth/v1`, or other path). Copying the Data API URL (`.../rest/v1`) causes Supabase Auth to request `.../rest/v1/auth/v1/signup` (`404 PGRST125`) and breaks Google OAuth (`No API key found in request`). Trailing slashes are stripped automatically; any non-root path is rejected with a clear error.
+- **Forgetting to restart dev servers after editing `.env` / `.env.local`:** Next.js (`npm run dev`) and FastAPI (`uvicorn`) read environment files at startup. Always restart both dev servers after modifying `frontend/.env.local` or `backend/.env`.
 
 ---
 
@@ -193,7 +197,7 @@ Run this checklist against a live Supabase project to verify end-to-end function
 
 - [ ] **1. Email/password sign-up**:
   - Navigate to `/register`.
-  - Enter valid email and password (>= 8 chars).
+  - Enter valid email and password (>= 6 chars).
   - Submit: Verify calm confirmation message appears ("Check your email").
   - Click confirmation link in email: Redirects to `/profile?setup=true` (or `/auth/callback`).
 - [ ] **2. Email/password sign-in**:
@@ -211,7 +215,7 @@ Run this checklist against a live Supabase project to verify end-to-end function
 - [ ] **6. Password reset**:
   - Navigate to `/forgot-password`, enter registered email, and submit.
   - Open email link: Redirected to `/auth/reset-password`.
-  - Enter new password (>= 8 chars) and save: Verify successful login with new password.
+  - Enter new password (>= 6 chars) and save: Verify successful login with new password.
 - [ ] **7. Danger zone account deletion**:
   - Navigate to `/profile`, scroll to "Danger Zone".
   - Type `DELETE` into the confirmation field and click "Permanently Delete Account".
