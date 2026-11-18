@@ -3,8 +3,8 @@
 Single source of truth for where the project stands. Lives in the repo root. Maintained by the project lead (Claude chat) and updated by Antigravity after each approved task.
 
 Last updated: 2026-11-18  
-Current phase: 1 (Stabilization & Pre-Phase-2 Hardening)  
-Current task: 1.7 (Pre-Phase-2 hardening — pending approval; next: Phase 2 or 6.1 compact-card fix & 1.8)  
+Current phase: 1 (Foundation & Documentation Consolidation)  
+Current task: 1.8a (Documentation consolidation — pending approval; next = 1.7b)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -37,35 +37,41 @@ Becon is a career update companion (not a news app): a 3-5 minute daily briefing
 
 ## Audit baseline (2026-11-17)
 
-Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks served), nothing persisted (in-memory cache only), sources are Google News/dev.to not official, main feed omits "How it affects you" and "What to do next", infinite scroll present, unauthenticated ingest/guest endpoints, no migrations, no tests/CI/Docker/scheduler, duplicate user rows, two auth systems.
+Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
+- **Runtime:** Python 3.12 / FastAPI + SQLAlchemy (SQLite `becon.db`), Node 24 / Next.js 16.3 + React 19 + Tailwind CSS v4.
+- **Working at baseline:** Local FastAPI + Next.js dev servers ran, Bento Grid UI and light/dark theme worked, `tsc` clean.
+- **Data & AI gaps:** `GEMINI_API_KEY` inactive (heuristic fallback templates served), zero card persistence (in-memory dict cache only), no Alembic migrations, no unique email constraint (duplicate `user_profiles` rows), no semantic dedup, feeds relied on Google News & dev.to instead of official sources.
+- **Product & UI gaps:** Main feed cards omitted *How it affects you* and *What to do next*, no card detail drawer, infinite scroll + page-lift violated time-boxed briefing vision, no email/password UI.
+- **Security & tooling gaps:** Unauthenticated `/api/ingest` and `/api/auth/guest`, custom JWT expiry bug (`15m` vs `7d`), unsanitized `custom_prompt`, wildcard CORS, two auth systems, zero automated tests, CI, Docker, or background scheduler.
 
 ---
 
 ## PHASE 0: Discovery (DONE)
-- [x] 0.1 Repo audit (`AUDIT_REPORT.md`)
-- [x] 0.2 UI audit (`UI_DESIGN.md`)
-- [x] 0.3 Repo `CLAUDE.md` for agents
+- [x] 0.1 Repo audit *(retired `AUDIT_REPORT.md`; baseline folded above)*
+- [x] 0.2 UI audit ([`docs/UI_DESIGN.md`](docs/UI_DESIGN.md))
+- [x] 0.3 Repo [`CLAUDE.md`](CLAUDE.md) for agents
 
 ---
 
 ## PHASE 1: Foundation
 - [x] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
-- [~] 1.1b Remote secrets scan and local history rewrite *(remote history/UI_DESIGN drift unverified)*
+- [~] 1.1b Remote secrets scan and local history rewrite *(remote history scrub unverified)*
 - [x] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
 - [x] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
 - [x] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages
-- [~] 1.4c Post-auth cleanup and docs drift: docker-compose cleanup, .env.example matching CLAUDE.md, UI_DESIGN.md and README.md updated, CI PostgreSQL service container job added *(remote history/UI_DESIGN drift unverified)*
+- [~] 1.4c Post-auth cleanup and docs drift: docker-compose cleanup, .env.example matching CLAUDE.md, docs/UI_DESIGN.md and README.md updated, CI PostgreSQL service container job added *(remote history verification still open under 1.1b)*
 - [x] 1.4d Viewport fitting: auth pages fit within one viewport without scrollbars via AuthShell and responsive height queries
 - [x] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
 - [x] 1.6 Pre-push stabilization: back up and discard dirty `page.tsx` diff, verify green `tsc`/`test`/`build`, fix trivial ESLint errors, update `dev.ps1 test` to run frontend + backend tests, fix high-priority doc drift, commit & push *(approved; commits `74dccc7`, `695ed3e`, `d35c4dd`)*
-- [~] 1.6b Supabase URL misconfiguration handling (normalize trailing slash, reject non-root paths like `/rest/v1` & `/auth/v1`, fail fast in prod, friendly `AuthForm` error) + lower signup/reset password min length to 6 via shared `PASSWORD_MIN_LENGTH` constant (login allows short existing passwords) *(done, pending approval)*
-- [~] 1.7 Pre-Phase-2 hardening: fix `/api/search-topic` and `/api/topic-search` vs `/api/briefings/search` contract (`TopicSearchResponse` strips `cards`), rate limiting on unauthenticated endpoints, `hmac.compare_digest` for ingest token, gate `refresh=true` and `/api/ai/match-topics`, tighten CORS, test for soft-delete 401, cap auto-created `Profession` rows *(done, pending approval)*
-- [ ] 1.8 Docs drift cleanup: refresh `UI_DESIGN.md` Sections 6–9 & 12, update `CLAUDE.md` Section 3 component inventory, and resolve remaining 12 ESLint hook/`any` errors (remove CI `continue-on-error: true` once at 0 errors)
-- [~] 1.9 Show real user identity (prefill + avatar + name) from Supabase: backend backfills empty `name`/`email` without overwriting saved values and enforces `https://`-only `picture_url`; shared `UserAvatar`/`UserChip` + `resolveUserIdentity` replace hardcoded `"Reader"`/`"Professional"`/`"P"` headers on `/` and `/profile`; `/profile` prefills empty fields (non-guests only, no auto-save); `becon_user_name`/`becon_user_avatar` refresh & cross-reload purge on account switch; Google OAuth uses `prompt=select_account` *(done, pending approval)*
-- [~] 1.10 Header cleanup: shared accessible `UserMenu` (`aria-haspopup`, `aria-expanded`, `role="menu"`/`menuitem`, Escape refocus, click-outside, arrow-key/Home/End/Tab nav, `max-w-[280px]` email truncation with `title`, guest `"Create account"` -> `/register?upgrade=1`, quiet rose `Sign out`) and shared `HeaderActions` right-side cluster (`[backLink] [ThemeToggle] [UserMenu]`, uniform `h-9` / `rounded-lg` / `gap-2`, zero overflow at 360px) adopted on `/` and `/profile` *(done, pending approval)*
-- [~] 1.10b Remove duplicate `ThemeToggle` from `/` coverage ribbon; right-align Prev/Next scroll buttons and add `min-w-0` on horizontal pill track *(done, pending approval)*
-- [~] 1.11 Fix Vercel preview build failure (`ENOENT` on `.next/next-server.js.nft.json` in `onBuildComplete`): make `output: "standalone"` conditional on `!process.env.VERCEL` in `frontend/next.config.ts` so Vercel builds cleanly while Docker keeps standalone output; add Vercel deployment notes to `README.md` *(done, pending approval)*
-- [~] 1.12 Self-host fonts via `next/font/local`: bundle Latin `.woff2` files + OFL licenses under `frontend/src/app/fonts/` for `Space Grotesk` (`500, 600, 700`), `Plus Jakarta Sans` (`400, 500, 600, 700`), and editorial serif `Source Serif 4` (`400, 600, 700, 900`, resolving Task `6.6`'s missing serif); eliminates build-time Google Fonts fetches on Vercel *(done, pending approval)*
+- [x] 1.6b Supabase URL misconfiguration handling (normalize trailing slash, reject non-root paths like `/rest/v1` & `/auth/v1`, fail fast in prod, friendly `AuthForm` error) + lower signup/reset password min length to 6 via shared `PASSWORD_MIN_LENGTH` constant (login allows short existing passwords) *(merged in `a59f089`)*
+- [x] 1.7 Pre-Phase-2 hardening: fix `/api/search-topic` and `/api/topic-search` vs `/api/briefings/search` contract, add `/api/topics/search`, in-process rate limiting & daily Gemini caps with `TRUSTED_PROXIES`, `hmac.compare_digest` for ingest token, gate `refresh=true` and `/api/ai/match-topics`, tighten CORS, test for soft-delete 401, stop auto-creating `Profession` rows *(merged in `a59f089`)*
+- [ ] 1.8 Frontend ESLint cleanup: resolve remaining pre-existing React hook & explicit `any` errors across `page.tsx`, `profile/page.tsx`, `onboarding/page.tsx`, and `ThemeContext.tsx`, then remove CI `continue-on-error: true` *(docs consolidation split into `1.8a`)*
+- [~] 1.8a Documentation consolidation: fold concise baseline into `ROADMAP.md`, remove superseded report files (`AUDIT_REPORT.md`, `docs/COMPLETION_REPORT.md`, `docs/MERGE_READINESS_REPORT.md`, `frontend/README.md`), move & refresh `UI_DESIGN.md` -> `docs/UI_DESIGN.md`, replace `file:///` links with relative links, deduplicate env vars/auth setup/hardcoded counts, add doc guardrails to `CLAUDE.md` *(done, pending approval)*
+- [x] 1.9 Show real user identity (prefill + avatar + name) from Supabase: backend backfills empty `name`/`email` without overwriting saved values and enforces `https://`-only `picture_url`; shared `UserAvatar`/`UserChip` + `resolveUserIdentity` replace hardcoded `"Reader"`/`"Professional"`/`"P"` headers on `/` and `/profile`; `/profile` prefills empty fields (non-guests only, no auto-save); `becon_user_name`/`becon_user_avatar` refresh & cross-reload purge on account switch; Google OAuth uses `prompt=select_account` *(merged in `a59f089`)*
+- [x] 1.10 Header cleanup: shared accessible `UserMenu` (`aria-haspopup`, `aria-expanded`, `role="menu"`/`menuitem`, Escape refocus, click-outside, arrow-key/Home/End/Tab nav, `max-w-[280px]` email truncation with `title`, guest `"Create account"` -> `/register?upgrade=1`, quiet rose `Sign out`) and shared `HeaderActions` right-side cluster (`[backLink] [ThemeToggle] [UserMenu]`, uniform `h-9` / `rounded-lg` / `gap-2`, zero overflow at 360px) adopted on `/` and `/profile` *(merged in `a59f089`)*
+- [x] 1.10b Remove duplicate `ThemeToggle` from `/` coverage ribbon; right-align Prev/Next scroll buttons and add `min-w-0` on horizontal pill track *(merged in `a59f089`)*
+- [x] 1.11 Fix Vercel preview build standalone failure (`ENOENT` on `.next/next-server.js.nft.json` in `onBuildComplete`): make `output: "standalone"` conditional on `!process.env.VERCEL` in `frontend/next.config.ts` while Docker keeps standalone output; add Vercel deployment notes to `README.md` *(merged in `a59f089`; note: the Vercel build works end-to-end with `1.11` plus `1.12` together)*
+- [x] 1.12 Self-host fonts via `next/font/local`: bundle Latin `.woff2` files + OFL licenses under `frontend/src/app/fonts/` for `Space Grotesk` (`500, 600, 700`), `Plus Jakarta Sans` (`400, 500, 600, 700`), and editorial serif `Source Serif 4` (`400, 600, 700, 900`, resolving Task `6.6`'s missing serif); eliminates build-time Google Fonts fetches so the Vercel build works cleanly with `1.11` plus `1.12` *(merged in `a59f089`)*
 
 *Pending manual QA (to be done post-push): email signup + verification, Google OAuth, guest upgrade, forgot/reset password, account deletion, token refresh, and `alembic upgrade head` against the Supabase dev project (RLS role check).*
 
@@ -120,7 +126,7 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 - [x] 6.2 Remove infinite scroll and page-lift (D12); finite briefing with "you're done" end state *(committed `4afb33f`)*
 - [ ] 6.3 Remove ~1,300 lines of mock fallback generators from `page.tsx`; split `page.tsx` into components
 - [ ] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles)
-- [ ] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive
+- [ ] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive; drop deprecated legacy `saved_briefings` table once `saved_cards` UI ships
 - [ ] 6.6 Typography (load editorial serif — *resolved in `1.12` via self-hosted Source Serif 4*), token cleanup, accessibility fixes (focus, Escape, contrast, aria; *note: Profile Menu dropdown Escape/`aria-expanded`/keyboard a11y resolved in `1.10`*)
 - [ ] 6.7 Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow
 
@@ -198,3 +204,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-18 | 1.10b | Pending Approval | Removed duplicate inline theme toggle from `/` coverage ribbon (`task-1.10b-remove-ribbon-toggle`), right-aligned Prev/Next scroll controls with `min-w-0` pill track, added single-switch & `becon_theme` persistence tests |
 | 2026-11-18 | 1.11 | Pending Approval | Fixed Vercel preview build failure (`task-1.11-vercel-build`): made `output: "standalone"` conditional (`process.env.VERCEL ? undefined : "standalone"`) in `frontend/next.config.ts` so Vercel's Next 16 adapter succeeds while Docker retains standalone output; added Vercel deployment notes to `README.md` |
 | 2026-11-18 | 1.12 | Pending Approval | Self-hosted fonts via `next/font/local` (`task-1.12-self-host-fonts`): bundled Latin `.woff2` files + OFL 1.1 licenses under `frontend/src/app/fonts/` for `Space Grotesk`, `Plus Jakarta Sans`, and editorial serif `Source Serif 4` (also closing Task `6.6`'s missing editorial serif) so Vercel builds make zero Google Fonts fetches |
+| 2026-11-18 | 1.8a | Pending Approval | Documentation consolidation (`task-1.8a-docs`): folded <=10-line audit baseline into `ROADMAP.md`, removed `AUDIT_REPORT.md`, `docs/COMPLETION_REPORT.md`, untracked `docs/MERGE_READINESS_REPORT.md`, and `frontend/README.md`, moved & refreshed `UI_DESIGN.md` -> `docs/UI_DESIGN.md`, eliminated all `file:///` links & duplicated env/count prose, added no-new-`.md`/chat-report rules to `CLAUDE.md`, ticked merged Phase 1 tasks (`1.6b`–`1.12`) |

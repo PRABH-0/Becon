@@ -61,14 +61,7 @@ sequenceDiagram
 
 ## 2. Environment Variables & Secret Storage
 
-| Variable | Scope | Where Configured | Secret? | Purpose |
-| :--- | :--- | :--- | :--- | :--- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Frontend | `frontend/.env.local` | No (Public) | Supabase project endpoint for auth SDK |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Frontend | `frontend/.env.local` | No (Public) | Browser publishable API key |
-| `SUPABASE_URL` | Backend | `backend/.env` | No (Internal) | Supabase project endpoint for JWKS & Admin API |
-| `SUPABASE_JWT_AUDIENCE` | Backend | `backend/.env` | No | Expected JWT audience (defaults to `authenticated`) |
-| `SUPABASE_JWT_SECRET` | Backend | `backend/.env` | **Yes (Secret)** | Optional fallback secret for legacy HS256 verification |
-| `SUPABASE_SERVICE_ROLE_KEY` | Backend | `backend/.env` | **Yes (Secret)** | Required for `DELETE /api/account` (Admin API) |
+For the canonical list of backend and frontend environment variables (names, scope, and defaults), see [`CLAUDE.md` — Section 5](../CLAUDE.md#5-environment-variables).
 
 > [!IMPORTANT]
 > - **Never** expose `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_JWT_SECRET` to the frontend or git.
@@ -137,7 +130,7 @@ Per GDPR/privacy rights and technical hygiene:
 ## 5. Row Level Security (RLS) on PostgreSQL
 
 The Supabase project exposes a PostgREST Data API on `/rest/v1`. Because the Supabase anon key is public in the browser:
-- Migration `0003_supabase_auth_rls` executes `ALTER TABLE <table_name> ENABLE ROW LEVEL SECURITY;` on all 21 tables in PostgreSQL.
+- Migration `0003_supabase_auth_rls` executes `ALTER TABLE <table_name> ENABLE ROW LEVEL SECURITY;` on all application tables and `alembic_version` in PostgreSQL (see [DATA_MODEL.md](DATA_MODEL.md)).
 - With zero policies defined, **all direct queries via PostgREST using the anon or authenticated roles are denied by default**.
 - The Becon backend connects directly using the PostgreSQL connection string (`DATABASE_URL`) as the database owner, which **bypasses RLS by default**.
 - This guarantees that client applications cannot bypass FastAPI business logic or read/write arbitrary tables directly via Supabase.
@@ -243,23 +236,18 @@ Run this checklist against a live Supabase project to verify end-to-end function
 
 ---
 
-## 9. Rate Limits & Abuse Controls (Task 1.7)
+## 9. Rate Limits & Abuse Controls
 
-Becon enforces lightweight, zero-dependency in-process sliding-window rate limits and hard UTC-day Gemini quotas in [`backend/app/rate_limit.py`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/rate_limit.py).
+Becon enforces lightweight, zero-dependency in-process sliding-window rate limits and hard UTC-day Gemini quotas in [`backend/app/rate_limit.py`](../backend/app/rate_limit.py).
 
 > [!NOTE]
 > **Scaling Caveat:** The current limiter stores sliding windows and daily counters in process memory. When running multiple Uvicorn workers or horizontally scaled backend containers, replace the backing store with a shared store (e.g., Redis) so quotas are enforced globally across instances.
 
-### Configured Defaults (Environment-Overridable)
-
-| Env Variable | Default | Scope & Behavior |
-| :--- | :--- | :--- |
-| `RATE_LIMIT_ENABLED` | `true` | Master toggle for rate limits and daily Gemini quotas |
-| `RATE_LIMIT_PUBLIC_PER_MIN` | `30` | Per-IP sliding 60s window on public endpoints (`/api/briefings`, `/api/briefings/search`, `/api/topics/search`) |
-| `RATE_LIMIT_AUTH_AI_PER_MIN` | `10` | Per-user sliding 60s window on authenticated AI/refresh triggers (`/api/onboarding/chat`, `/api/ai/match-topics`, `/api/briefings?refresh=true`) |
-| `GEMINI_DAILY_CAP_PER_USER` | `25` | Hard UTC-day Gemini API call cap per authenticated user |
-| `GEMINI_DAILY_CAP_GLOBAL` | `200` | Hard UTC-day Gemini API call cap globally per process |
-| `TRUSTED_PROXIES` | `""` *(empty)* | Comma-separated reverse proxy IPs allowed to supply `X-Forwarded-For`; when empty, `X-Forwarded-For` is ignored and the direct socket peer address is used |
+### Enforcement Scopes
+Environment variable names and defaults are owned by [`CLAUDE.md` — Section 5](../CLAUDE.md#5-environment-variables):
+- **Public endpoints** (`/api/briefings`, `/api/briefings/search`, `/api/topics/search`): per-IP 60s sliding window (`RATE_LIMIT_PUBLIC_PER_MIN`). `X-Forwarded-For` is ignored unless the direct socket peer matches `TRUSTED_PROXIES`.
+- **Authenticated AI/refresh triggers** (`/api/onboarding/chat`, `/api/ai/match-topics`, `/api/briefings?refresh=true`): per-user 60s sliding window (`RATE_LIMIT_AUTH_AI_PER_MIN`).
+- **Daily Gemini quotas:** Hard UTC-day per-user (`GEMINI_DAILY_CAP_PER_USER`) and global per-process (`GEMINI_DAILY_CAP_GLOBAL`) call caps, toggled via `RATE_LIMIT_ENABLED`.
 
 All limit and quota rejections return **HTTP `429 Too Many Requests`** with a standard **`Retry-After`** header (seconds).
 
