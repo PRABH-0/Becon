@@ -1,0 +1,383 @@
+[
+  {
+    "slug": "dotnet",
+    "name": ".NET",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": [".net", "dotnet-core"]
+  },
+  {
+    "slug": "csharp",
+    "name": "C#",
+    "kind": "language",
+    "parent_slug": "dotnet",
+    "professions": ["software-development"],
+    "aliases": ["c#", "csharp"]
+  },
+  {
+    "slug": "aspnet-core",
+    "name": "ASP.NET Core",
+    "kind": "technology",
+    "parent_slug": "dotnet",
+    "professions": ["software-development"],
+    "aliases": ["asp.net", "aspnetcore", "asp.net core"]
+  },
+  {
+    "slug": "nextjs",
+    "name": "Next.js",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["next", "nextjs", "next.js"]
+  },
+  {
+    "slug": "react",
+    "name": "React",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["reactjs", "react.js"]
+  },
+  {
+    "slug": "typescript",
+    "name": "TypeScript",
+    "kind": "language",
+    "professions": ["software-development"],
+    "aliases": ["ts", "typescript"]
+  },
+  {
+    "slug": "javascript",
+    "name": "JavaScript",
+    "kind": "language",
+    "professions": ["software-development"],
+    "aliases": ["js", "es6", "ecmascript"]
+  },
+  {
+    "slug": "python",
+    "name": "Python",
+    "kind": "language",
+    "professions": ["software-development"],
+    "aliases": ["py", "python3"]
+  },
+  {
+    "slug": "fastapi",
+    "name": "FastAPI",
+    "kind": "technology",
+    "parent_slug": "python",
+    "professions": ["software-development"],
+    "aliases": ["fast-api", "fastapi"]
+  },
+  {
+    "slug": "nodejs",
+    "name": "Node.js",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": ["node", "node.js"]
+  },
+  {
+    "slug": "golang",
+    "name": "Go",
+    "kind": "language",
+    "professions": ["software-development"],
+    "aliases": ["go", "golang"]
+  },
+  {
+    "slug": "rust",
+    "name": "Rust",
+    "kind": "language",
+    "professions": ["software-development"],
+    "aliases": ["rustlang", "rust-lang"]
+  },
+  {
+    "slug": "java",
+    "name": "Java",
+    "kind": "language",
+    "professions": ["software-development"],
+    "aliases": ["openjdk", "jdk"]
+  },
+  {
+    "slug": "cpp",
+    "name": "C++",
+    "kind": "language",
+    "professions": ["software-development"],
+    "aliases": ["c++", "cpp"]
+  },
+  {
+    "slug": "docker",
+    "name": "Docker",
+    "kind": "tool",
+    "professions": ["software-development"],
+    "aliases": ["dockerfile", "containerd"]
+  },
+  {
+    "slug": "kubernetes",
+    "name": "Kubernetes",
+    "kind": "tool",
+    "professions": ["software-development"],
+    "aliases": ["k8s", "k8"]
+  },
+  {
+    "slug": "postgresql",
+    "name": "PostgreSQL",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["postgres", "pgsql"]
+  },
+  {
+    "slug": "redis",
+    "name": "Redis",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["redis-server"]
+  },
+  {
+    "slug": "sqlite",
+    "name": "SQLite",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["sqlite3"]
+  },
+  {
+    "slug": "mongodb",
+    "name": "MongoDB",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["mongo"]
+  },
+  {
+    "slug": "aws",
+    "name": "AWS",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": ["amazon web services", "amazon-aws"]
+  },
+  {
+    "slug": "azure",
+    "name": "Microsoft Azure",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": ["ms-azure", "microsoft-azure"]
+  },
+  {
+    "slug": "gcp",
+    "name": "Google Cloud",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": ["google cloud platform", "google-cloud"]
+  },
+  {
+    "slug": "cloudflare-workers",
+    "name": "Cloudflare Workers",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": ["cloudflare", "workers"]
+  },
+  {
+    "slug": "github-actions",
+    "name": "GitHub Actions",
+    "kind": "tool",
+    "professions": ["software-development"],
+    "aliases": ["gh-actions", "gha"]
+  },
+  {
+    "slug": "terraform",
+    "name": "Terraform",
+    "kind": "tool",
+    "professions": ["software-development"],
+    "aliases": ["tf", "opentofu"]
+  },
+  {
+    "slug": "git",
+    "name": "Git",
+    "kind": "tool",
+    "professions": ["software-development"],
+    "aliases": ["version-control"]
+  },
+  {
+    "slug": "vite",
+    "name": "Vite",
+    "kind": "tool",
+    "professions": ["software-development"],
+    "aliases": ["vitejs"]
+  },
+  {
+    "slug": "owasp-security",
+    "name": "OWASP & AppSec",
+    "kind": "standard",
+    "professions": ["software-development"],
+    "aliases": ["owasp", "appsec"]
+  },
+  {
+    "slug": "cve-security",
+    "name": "Vulnerabilities & CVEs",
+    "kind": "standard",
+    "professions": ["software-development"],
+    "aliases": ["cve", "vulnerabilities"]
+  },
+  {
+    "slug": "ai-llm-tooling",
+    "name": "AI & LLM Tooling",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["llm-tooling", "langchain", "llamaindex"]
+  },
+  {
+    "slug": "angular",
+    "name": "Angular",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["angularjs", "ng"]
+  },
+  {
+    "slug": "vuejs",
+    "name": "Vue.js",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["vue", "vue.js", "vue3"]
+  },
+  {
+    "slug": "svelte",
+    "name": "Svelte",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["sveltekit"]
+  },
+  {
+    "slug": "tailwindcss",
+    "name": "Tailwind CSS",
+    "kind": "tool",
+    "professions": ["software-development"],
+    "aliases": ["tailwind", "tailwind-css"]
+  },
+  {
+    "slug": "graphql",
+    "name": "GraphQL",
+    "kind": "standard",
+    "professions": ["software-development"],
+    "aliases": ["gql"]
+  },
+  {
+    "slug": "rest-api",
+    "name": "REST APIs",
+    "kind": "standard",
+    "professions": ["software-development"],
+    "aliases": ["restful", "rest"]
+  },
+  {
+    "slug": "linux",
+    "name": "Linux",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": ["ubuntu", "debian", "alpine"]
+  },
+  {
+    "slug": "ci-cd",
+    "name": "CI/CD",
+    "kind": "domain",
+    "professions": ["software-development"],
+    "aliases": ["continuous-integration", "cicd"]
+  },
+  {
+    "slug": "webassembly",
+    "name": "WebAssembly",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["wasm"]
+  },
+  {
+    "slug": "apache-kafka",
+    "name": "Kafka",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["kafka"]
+  },
+  {
+    "slug": "system-design",
+    "name": "System Design & Architecture",
+    "kind": "domain",
+    "professions": ["software-development"],
+    "aliases": ["software-architecture", "distributed-systems"]
+  },
+  {
+    "slug": "ifrs",
+    "name": "IFRS Standards",
+    "kind": "standard",
+    "professions": ["accounting"],
+    "aliases": ["international financial reporting standards", "ifrs-standards"]
+  },
+  {
+    "slug": "us-gaap",
+    "name": "US GAAP",
+    "kind": "standard",
+    "professions": ["accounting"],
+    "aliases": ["gaap", "generally accepted accounting principles"]
+  },
+  {
+    "slug": "gst-vat",
+    "name": "GST & VAT Compliance",
+    "kind": "regulation",
+    "professions": ["accounting"],
+    "aliases": ["gst", "vat", "value-added-tax"]
+  },
+  {
+    "slug": "corporate-tax",
+    "name": "Tax Filing & Tax Law Changes",
+    "kind": "regulation",
+    "professions": ["accounting"],
+    "aliases": ["tax-filing", "corporate-tax-law", "tax-law"]
+  },
+  {
+    "slug": "audit-standards",
+    "name": "Audit & Assurance Standards",
+    "kind": "standard",
+    "professions": ["accounting"],
+    "aliases": ["auditing", "isa-standards", "audit"]
+  },
+  {
+    "slug": "payroll-compliance",
+    "name": "Payroll Compliance & Labor Laws",
+    "kind": "regulation",
+    "professions": ["accounting"],
+    "aliases": ["payroll", "wage-compliance", "labor-compliance"]
+  },
+  {
+    "slug": "accounting-software",
+    "name": "Accounting Software & ERPs",
+    "kind": "tool",
+    "professions": ["accounting"],
+    "aliases": ["quickbooks", "xero", "netsuite", "tally"]
+  },
+  {
+    "slug": "e-invoicing",
+    "name": "E-Invoicing Regulations",
+    "kind": "regulation",
+    "professions": ["accounting"],
+    "aliases": ["electronic-invoicing", "peppol"]
+  },
+  {
+    "slug": "transfer-pricing",
+    "name": "Transfer Pricing & OECD Guidelines",
+    "kind": "regulation",
+    "professions": ["accounting"],
+    "aliases": ["transfer-pricing", "oecd-beps"]
+  },
+  {
+    "slug": "financial-reporting",
+    "name": "Financial Reporting & Analysis",
+    "kind": "domain",
+    "professions": ["accounting"],
+    "aliases": ["financial-statements", "annual-reports"]
+  },
+  {
+    "slug": "sox-compliance",
+    "name": "SOX & Internal Controls",
+    "kind": "regulation",
+    "professions": ["accounting"],
+    "aliases": ["sox", "sarbanes-oxley", "internal-controls"]
+  },
+  {
+    "slug": "aml-compliance",
+    "name": "Anti-Money Laundering & KYC",
+    "kind": "regulation",
+    "professions": ["accounting"],
+    "aliases": ["aml", "kyc", "fincen"]
+  }
+]

@@ -1,0 +1,100 @@
+# Becon Orchestration (Local Dev & Production Parity)
+#
+# Environment Configuration:
+# - backend reads from backend/.env if present, with defaults configured below.
+# - frontend reads from frontend/.env.local if present.
+#
+# Variables required for full functionality:
+# - GEMINI_API_KEY: Google Gemini API key (from https://aistudio.google.com/)
+# - INGEST_API_TOKEN: Secret token for triggering POST /api/ingest
+# - SUPABASE_URL: Supabase Project URL (required for registered users and anonymous guest sign-ins)
+# - SUPABASE_JWT_AUDIENCE: Expected JWT audience claim (defaults to "authenticated")
+# - SUPABASE_JWT_SECRET: Legacy secret for projects using symmetric HS256 signing (optional)
+# - SUPABASE_SERVICE_ROLE_KEY: Service role secret for Supabase Admin API / account deletion (optional)
+# - NEXT_PUBLIC_SUPABASE_URL: Supabase Project URL (required for frontend auth and guest mode)
+# - NEXT_PUBLIC_SUPABASE_ANON_KEY: Supabase Anon/Public Key (required for frontend auth and guest mode)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: becon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-becon}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-becon}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: becon-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/becon}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      ENABLE_DOCS: ${ENABLE_DOCS:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FEED_CACHE_TTL_SECONDS: ${FEED_CACHE_TTL_SECONDS:-1800}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_PUBLIC_PER_MIN: ${RATE_LIMIT_PUBLIC_PER_MIN:-30}
+      RATE_LIMIT_AUTH_AI_PER_MIN: ${RATE_LIMIT_AUTH_AI_PER_MIN:-10}
+      GEMINI_DAILY_CAP_PER_USER: ${GEMINI_DAILY_CAP_PER_USER:-25}
+      GEMINI_DAILY_CAP_GLOBAL: ${GEMINI_DAILY_CAP_GLOBAL:-200}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      INGEST_API_TOKEN: ${INGEST_API_TOKEN:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_JWT_AUDIENCE: ${SUPABASE_JWT_AUDIENCE:-authenticated}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    container_name: becon-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+    name: becon_postgres_data

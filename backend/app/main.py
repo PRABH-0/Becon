@@ -1,106 +1,120 @@
-import os
+import hmac
+import logging
+import re
+import time
 import uuid
-from typing import List, Any, Dict
-from fastapi import FastAPI, Query, BackgroundTasks, Depends
+
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
+
+from app.ai_service import ai_match_topics
+from app.config import settings
 from app.database import get_db
-from app.models import UserProfile
-from fastapi import HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from app.auth import get_password_hash, verify_password, create_access_token
-from jose import JWTError, jwt
-from app.auth import SECRET_KEY, ALGORITHM
+from app.deps import get_current_user, get_optional_user, sanitize_https_avatar_url
+from app.feed_service import get_live_briefings, search_topic_briefings
+from app.ingestion import run_ingestion_pipeline
+from app.logging_config import request_id_ctx_var, setup_logging
+from app.models import FocusTopic, TopicAlias, UserProfile
+from app.rate_limit import (
+    GeminiQuotaExceededError,
+    enforce_auth_ai_rate_limit,
+    enforce_public_rate_limit,
+)
 from app.schemas import (
     BriefingCard,
-    UserProfileCreate,
-    UserProfileResponse,
-    UserRegister,
-    SupabaseAuthSync,
-    Token,
+    BriefingSearchResponse,
     ChatRequest,
     ChatResponse,
     HealthResponse,
-    TopicSearchResponse,
+    IngestCounts,
     IngestResponse,
+    MatchTopicsRequest,
+    TopicSearchResponse,
+    UserMeResponse,
+    UserProfileCreate,
+    UserProfileResponse,
 )
-from app.feed_service import get_live_briefings, search_topic_briefings
-from app.ai_service import ai_match_topics
+from app.supabase_auth import (
+    SupabaseAuthNotConfiguredError,
+    delete_supabase_user_admin,
+    log_verification_modes,
+)
+
+setup_logging(environment=settings.ENVIRONMENT, log_level=settings.LOG_LEVEL)
+log_verification_modes()
+logger = logging.getLogger("becon.api")
+
+REQUEST_ID_REGEX = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 AVAILABLE_TOPICS = [
-    "Tax Regulations & GST Compliance",
-    "Retail & Shop Inventory Management",
-    "Small Business Growth & Finance",
-    "E-Commerce & Digital Sales",
-    "Corporate Accounting & Audit Standards",
-    "Artificial Intelligence & Productivity Tools",
-    "Customer Retention & Retail POS",
-    "Financial Forecasting & Cash Flow",
-    "Digital Marketing & Social Selling",
-    "Software Engineering & Web Apps",
-    "Python, Data & Analytics",
-    "Cloud Tools & Cyber Security",
-    "Supply Chain & Vendor Management",
-    "Banking, Payments & Fintech",
-    "Business Law & Regulatory Filings",
-    "Modern Cloud & Systems Architecture",
-    ".NET Core & Minimal APIs",
-    "C# Architecture & Microservices",
-    "Angular & Web Frameworks",
-    "React & Next.js Systems",
-    "Python & FastAPI Setup",
-    "Rust Programming Language",
-    "Go & High-Performance Services",
-    "Docker & Containerization",
-    "Google Gemini & Generative AI",
-    "Kubernetes & DevOps Pipelines",
-    "Cloud Infrastructure & Azure",
-    "TypeScript & Modern Tooling",
-    "SQL & Vector Databases",
-    "Micro-Frontends & Module Federation",
-    "Zero-Trust Cloud Security",
-    "eBPF & System Observability"
+    "AI & Generative Models",
+    "Cloud Architecture & AWS",
+    "Kubernetes & Containers",
+    "Full-Stack Development (React, Next.js, Node)",
+    "Systems Programming (Rust, Go)",
+    "Backend & Distributed Systems (.NET, Java, Python)",
+    "DevOps & Platform Engineering",
+    "Security & Vulnerabilities (CVE, OWASP)",
+    "Data Engineering & Databases",
+    "System Design & Scalability",
 ]
 
 API_DESCRIPTION = """
-## Overview
-**Becon AI** delivers hyper-personalized, executive-density intelligence briefings tailored to the reader's exact professional role, focus stacks, and industry sectors.
+### Becon AI Intelligence Briefing Engine (API v1.0)
+Becon is an editorial-first, newspaper-style intelligence briefing web application for engineers.
+It aggregates, clusters, deduplicates, and synthesizes developer news into high-signal,
+action-oriented cards with four consistent dimensions:
+1. **What Happened** (concise summary bullets)
+2. **Why It Matters** (macro industry & professional impact)
+3. **How It Affects You** (hyper-personalized relevance based on role & stack)
+4. **What To Do Next** (specific tactical guidance categorized as *learn*, *apply*, *avoid*, or *prepare*)
 
-## Authentication Workflow
-1. **Register**: Create an account via [`POST /api/register`](#/Auth/register_api_register_post) with your email and password.
-2. **Authorize**: Click the green **Authorize** button at the top right of this Swagger UI page.
-3. **Login Credentials**: Enter your registered email into the **username** field and your password into the **password** field, then click **Authorize**.
-4. **Access Protected Endpoints**: Endpoints under the **Profile** and **Onboarding** tags will now automatically send your Bearer JWT access token.
+---
+### Authentication Model
+Authentication is delegated entirely to **Supabase Auth**.
+- The browser authenticates via Supabase Auth (email/password, OAuth, or anonymous exploration).
+- Pass the issued Supabase JWT as `Authorization: Bearer <token>` to protected endpoints.
+- The backend verifies tokens asymmetrically using Supabase JWKS (ES256/RS256) or via legacy HS256 secret.
 """
 
 OPENAPI_TAGS = [
     {
         "name": "Health",
-        "description": "System health and operational telemetry status endpoints."
+        "description": "System health, readiness probes, and core operational metrics.",
     },
     {
         "name": "Briefings",
-        "description": "Real-time AI briefings, customized subject search, and broadsheet feed generation."
+        "description": "Personalized 4-part intelligence cards derived from live official tech feeds.",
     },
     {
         "name": "Auth",
-        "description": "User registration and OAuth2 password-bearer authentication."
+        "description": "Supabase identity verification, user account management, and profile state.",
     },
     {
         "name": "Profile",
-        "description": "Authenticated user profile management and personalized intelligence preferences."
+        "description": "User profile settings, engineering stack, custom prompt directives, and tone preference.",
     },
     {
         "name": "Onboarding",
-        "description": "Conversational AI assistant for progressive profile extraction and setup."
+        "description": "Conversational AI assistant for progressive profile extraction and setup.",
     },
     {
         "name": "Ingestion",
-        "description": "Background RSS multi-feed ingestion and cache pre-warming triggers."
-    }
+        "description": "Background RSS multi-feed ingestion and cache pre-warming triggers.",
+    },
 ]
-
-enable_docs = os.getenv("ENABLE_DOCS", "true").strip().lower() in ("true", "1", "yes")
 
 app = FastAPI(
     title="Becon AI Intelligence Briefing API",
@@ -110,31 +124,105 @@ app = FastAPI(
     contact={
         "name": "Becon Intelligence Team",
         "url": "https://becon.dev",
-        "email": "support@becon.dev"
+        "email": "support@becon.dev",
     },
     license_info={
         "name": "MIT License",
-        "url": "https://opensource.org/licenses/MIT"
+        "url": "https://opensource.org/licenses/MIT",
     },
-    docs_url="/docs" if enable_docs else None,
-    redoc_url="/redoc" if enable_docs else None
+    docs_url="/docs" if settings.ENABLE_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_DOCS else None,
 )
 
-origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",") if o.strip()]
+CORS_ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+CORS_ALLOWED_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "Accept",
+    "X-Request-ID",
+    "X-Ingest-Token",
+]
+CORS_EXPOSED_HEADERS = ["X-Request-ID", "Retry-After"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=CORS_ALLOWED_METHODS,
+    allow_headers=CORS_ALLOWED_HEADERS,
+    expose_headers=CORS_EXPOSED_HEADERS,
 )
+
+
+@app.exception_handler(GeminiQuotaExceededError)
+async def gemini_quota_exceeded_handler(request: Request, exc: GeminiQuotaExceededError):
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": exc.detail},
+        headers={"Retry-After": str(exc.retry_after)},
+    )
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    incoming_id = request.headers.get("x-request-id")
+    if incoming_id and REQUEST_ID_REGEX.match(incoming_id):
+        request_id = incoming_id
+    else:
+        request_id = uuid.uuid4().hex
+
+    token = request_id_ctx_var.set(request_id)
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        logger.info(
+            f"{request.method} {request.url.path} {response.status_code} - {duration_ms:.2f}ms",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
+    except Exception as exc:
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        logger.error(
+            f"{request.method} {request.url.path} 500 - {duration_ms:.2f}ms - Error: {exc}",
+            exc_info=True,
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": 500,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+        raise
+    finally:
+        request_id_ctx_var.reset(token)
+
+
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Liveness and health check endpoint",
+    response_model=dict,
+)
+def health_check():
+    """
+    Returns ok status for container health checks and orchestrator probes.
+    Does not touch database or external services.
+    """
+    return {"status": "ok"}
+
 
 @app.get(
     "/",
     tags=["Health"],
     summary="System health status",
-    response_model=HealthResponse
+    response_model=HealthResponse,
 )
 def read_root():
     """
@@ -143,181 +231,384 @@ def read_root():
     return {
         "status": "online",
         "app": "Becon AI Intelligence Briefing",
-        "engine": "Becon AI Intelligence (Personalized & Structured)"
+        "engine": "Becon AI Intelligence (Personalized & Structured)",
     }
+
 
 @app.get(
     "/api/briefings",
     tags=["Briefings"],
     summary="Fetch personalized intelligence cards",
-    response_model=List[BriefingCard]
+    response_model=list[BriefingCard],
 )
 def get_briefings(
     stack: str = Query(
         default="All",
         description="Filter by topic or category tag",
-        examples=["All", "Python, Data & Analytics", "React & Next.js Systems"]
+        examples=["All", "Python, Data & Analytics", "React & Next.js Systems"],
     ),
     role: str = Query(
         default="Professional",
         description="Target role or profession of reading user",
-        examples=["Senior Full Stack Engineer", "Accountant / Finance", "Retail Store Owner"]
+        examples=["Senior Full Stack Engineer", "Accountant / Finance", "Retail Store Owner"],
     ),
     interests: str = Query(
         default="",
         description="Comma-separated list of focus areas, technologies, and industry interests",
-        examples=[".NET Core, Angular, Python", "Tax Regulations, GST, Accounting"]
+        examples=[".NET Core, Angular, Python", "Tax Regulations, GST, Accounting"],
     ),
     custom_prompt: str = Query(
         default="",
         description="Custom user editorial instruction for Gemini AI personalization",
-        examples=["Focus on architectural trade-offs, security, and scalability."]
+        examples=["Focus on architectural trade-offs, security, and scalability."],
     ),
     refresh: bool = Query(
         default=False,
-        description="Force re-fetch from live RSS feeds and regenerate AI cards"
+        description="Force re-fetch from live RSS feeds and regenerate AI cards",
     ),
     page: int = Query(
         default=1,
         ge=1,
         description="Page number for pagination",
-        examples=[1, 2]
+        examples=[1, 2],
     ),
     limit: int = Query(
         default=16,
         ge=1,
         le=50,
         description="Maximum number of briefing cards to return per page",
-        examples=[6, 16]
+        examples=[6, 16],
     ),
     scope: str = Query(
         default="all",
         description="Scope of briefings: 'top' (top 5 for fast initial render), 'remaining' (lazy-loaded remaining cards), or 'all'",
-        examples=["all", "top", "remaining"]
+        examples=["all", "top", "remaining"],
     ),
     offset: int = Query(
         default=None,
-        description="Direct card offset for continuous infinite scroll pagination",
-        examples=[0, 6, 12]
-    )
+        description="Direct card offset for explicit pagination slicing",
+        examples=[0, 6, 12],
+    ),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_optional_user),
+    _: None = Depends(enforce_public_rate_limit),
 ):
     """
-    Returns real-time intelligence cards tailored to the user's specific profession, interests, and preferences.
-    Supports progressive loading (scope='top' then scope='remaining') and direct offset infinite scroll.
+    Returns finite daily briefing cards tailored to the user's profession, interests, and preferences.
+    Supports two-phase loading (scope='top' then scope='remaining') and explicit offset pagination.
+    Accepts optional Bearer token to personalize based on authenticated user preferences (required for refresh=true).
     """
+    if refresh:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required to force refresh briefings.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        enforce_auth_ai_rate_limit(current_user.id, scope="briefings_refresh")
+
+    # Use authenticated profile preferences as defaults if available and not overridden
+    effective_role = role
+    effective_interests = interests
+    effective_prompt = custom_prompt
+
+    if current_user:
+        if effective_role in ("Professional", "Developer") and current_user.role:
+            effective_role = current_user.role
+        if not effective_interests and current_user.interests:
+            effective_interests = current_user.interests
+        if not effective_prompt and current_user.customPrompt:
+            effective_prompt = current_user.customPrompt
+
     return get_live_briefings(
+        db=db,
+        background_tasks=background_tasks,
         force_refresh=refresh,
-        user_role=role,
-        user_interests=interests,
-        custom_prompt=custom_prompt,
+        user_role=effective_role,
+        user_interests=effective_interests,
+        custom_prompt=effective_prompt,
         page=page,
         limit=limit,
         scope=scope,
-        offset=offset
+        offset=offset,
     )
 
+
 @app.get(
-    "/api/search-topic",
+    "/api/briefings/search",
     tags=["Briefings"],
-    summary="Synthesize live cards for a custom topic",
-    response_model=List[BriefingCard]
+    summary="Search persisted briefing cards by topic or keyword",
+    response_model=BriefingSearchResponse,
 )
-def get_search_topic_briefings(
-    query: str = Query(
+def search_briefings_endpoint(
+    q: str = Query(
         ...,
-        min_length=1,
-        description="Topic or favorite subject to search and synthesize into briefing cards",
-        examples=["punjabi", "generative ai", "retail inventory", "rust programming"]
+        min_length=2,
+        max_length=200,
+        description="Search query string or specific topic name",
+        examples=["Docker", "Rust memory safety", "PostgreSQL indexes"],
     ),
     role: str = Query(
-        default="Professional",
-        description="Target professional role of reading user",
-        examples=["Professional", "Data Engineer", "Founder"]
+        default="Software Engineer",
+        max_length=120,
+        description="Target professional role for relevance evaluation",
+        examples=["Senior Backend Engineer"],
     ),
     limit: int = Query(
-        default=6,
+        default=10,
         ge=1,
-        le=12,
-        description="Number of synthesized cards to return",
-        examples=[6]
+        le=50,
+        description="Maximum number of briefing cards to return",
     ),
     offset: int = Query(
         default=0,
         ge=0,
-        description="Offset for infinite scroll pagination across search results",
-        examples=[0, 6, 12]
+        description="Offset for search result pagination",
     ),
-    page: int = Query(
-        default=1,
-        ge=1,
-        description="Page number for pagination tracking",
-        examples=[1, 2]
-    )
+    db: Session = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_optional_user),
+    _: None = Depends(enforce_public_rate_limit),
 ):
     """
-    Synthesizes real-time intelligence cards tailored to any specific favorite subject or topic using Gemini AI.
-    Paginates dynamically across live RSS items.
+    Searches persisted briefing cards and returns them in the same BriefingCard shape used by /api/briefings.
     """
-    return search_topic_briefings(topic=query, user_role=role, limit=limit, offset=offset, page=page)
+    effective_role = current_user.role if (current_user and current_user.role) else role
+    result = search_topic_briefings(query=q, user_role=effective_role, db=db, limit=limit, offset=offset)
+    return BriefingSearchResponse(**result)
+
 
 @app.get(
-    "/api/topic-search",
-    tags=["Briefings"],
-    summary="Semantic topic search & catalog autocomplete",
-    response_model=TopicSearchResponse
+    "/api/topics/search",
+    tags=["Profile"],
+    summary="Autocomplete canonical focus topics using focus_topics and topic_aliases",
+    response_model=TopicSearchResponse,
 )
-def search_topics(
+def search_topics_autocomplete(
     q: str = Query(
         ...,
         min_length=1,
-        description="Search query to match against predefined topics",
-        examples=["python", "cloud", "taxes", "angular"]
+        max_length=100,
+        description="Topic prefix, name, slug, or alias to match",
+        examples=["pyt", "k8s", "nextjs"],
     ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=20,
+        description="Maximum number of canonical topics to return (default 10)",
+    ),
+    db: Session = Depends(get_db),
+    _: None = Depends(enforce_public_rate_limit),
 ):
     """
-    Uses Gemini AI to semantically match a search query against available topics.
-    Returns up to 3 related topics from the predefined catalog.
+    Public topic autocomplete backed by focus_topics and topic_aliases.
+    Prioritizes prefix and exact alias matches, returning deduplicated canonical topic names.
     """
-    matched = ai_match_topics(query=q, available_topics=AVAILABLE_TOPICS, max_results=3)
-    return {"query": q, "matches": matched}
+    clean_q = q.strip()
+    if not clean_q:
+        return TopicSearchResponse(query=q, matches=[])
+
+    q_lower = clean_q.lower()
+    substr_pat = f"%{q_lower}%"
+
+    # Find active focus_topics matching by name, slug, or any TopicAlias
+    rows = (
+        db.query(FocusTopic)
+        .outerjoin(TopicAlias, TopicAlias.topic_id == FocusTopic.id)
+        .filter(
+            FocusTopic.is_active.is_(True),
+            or_(
+                func.lower(FocusTopic.name).like(substr_pat),
+                func.lower(FocusTopic.slug).like(substr_pat),
+                func.lower(TopicAlias.alias).like(substr_pat),
+            ),
+        )
+        .distinct()
+        .all()
+    )
+
+    # Rank: exact name/slug/alias match (0), prefix match (1), substring match (2), then alphabetical
+    def _rank_topic(topic: FocusTopic) -> tuple[int, str]:
+        name_l = topic.name.lower()
+        slug_l = topic.slug.lower()
+        aliases_l = [a.alias.lower() for a in (topic.aliases or [])]
+        if q_lower == name_l or q_lower == slug_l or q_lower in aliases_l:
+            return (0, name_l)
+        if name_l.startswith(q_lower) or slug_l.startswith(q_lower) or any(a.startswith(q_lower) for a in aliases_l):
+            return (1, name_l)
+        return (2, name_l)
+
+    ranked = sorted(rows, key=_rank_topic)
+    matches = [t.name for t in ranked[:limit]]
+    return TopicSearchResponse(query=clean_q, matches=matches)
+
+
+@app.post(
+    "/api/ai/match-topics",
+    tags=["Onboarding"],
+    summary="Semantic topic recommendation from user description",
+    response_model=dict,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+        422: {"description": "Validation Error - Description exceeds max length (500 chars)"},
+        429: {"description": "Too Many Requests - Per-user rate limit or daily AI quota exceeded"},
+    },
+)
+def match_topics_endpoint(
+    payload: MatchTopicsRequest,
+    current_user: UserProfile = Depends(get_current_user),
+):
+    """
+    Extracts relevant developer topics from free-form natural language text using Gemini.
+    Requires authentication, rate-limits per user, and caps input length at 500 characters.
+    """
+    enforce_auth_ai_rate_limit(current_user.id, scope="match_topics")
+    description = payload.description.strip()
+    if not description:
+        return {"matched_topics": []}
+    matched = ai_match_topics(description, AVAILABLE_TOPICS, user_key=str(current_user.id))
+    return {"matched_topics": matched}
+
 
 @app.post(
     "/api/ingest",
     tags=["Ingestion"],
-    summary="Trigger background feed ingestion",
-    response_model=IngestResponse
+    summary="Trigger immediate feed fetch and database persistence pipeline",
+    response_model=IngestResponse,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid X-Ingest-Token"},
+        503: {"description": "Service Unavailable - INGEST_API_TOKEN is not configured"},
+    },
 )
-def trigger_ingestion(background_tasks: BackgroundTasks):
+def trigger_ingest(
+    db: Session = Depends(get_db),
+    x_ingest_token: str | None = Header(default=None, alias="X-Ingest-Token"),
+):
     """
-    Triggers asynchronous polling and synthesis across all configured RSS feeds in the background.
+    Triggers feed ingestion pipeline and persists sources, raw items, events, and cards in the database.
+    Protected by a dedicated secret token header (`X-Ingest-Token`) verified with constant-time comparison.
     """
-    background_tasks.add_task(get_live_briefings, force_refresh=True)
-    return {
-        "message": "Real-time AI feed ingestion triggered in background",
-        "status": "processing"
-    }
+    if not settings.INGEST_API_TOKEN or not settings.INGEST_API_TOKEN.strip():
+        logger.error("Ingest triggered but INGEST_API_TOKEN is not configured on this server")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ingestion endpoint is disabled because INGEST_API_TOKEN is not configured.",
+        )
 
+    expected = settings.INGEST_API_TOKEN.strip().encode("utf-8")
+    provided = x_ingest_token.strip().encode("utf-8") if x_ingest_token else b""
+    if not x_ingest_token or not hmac.compare_digest(provided, expected):
+        logger.warning("Unauthorized ingestion trigger attempt with invalid or missing token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Ingest-Token header.",
+        )
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+    stats = run_ingestion_pipeline(db=db)
+    return IngestResponse(
+        message="Feed ingestion completed successfully",
+        status="success",
+        sources_fetched=stats.sources_fetched,
+        raw_items_new=stats.raw_items_new,
+        raw_items_duplicate=stats.raw_items_duplicate,
+        events_created=stats.events_created,
+        cards_created=stats.cards_created,
+        errors=stats.errors,
+        counts=IngestCounts(
+            sources_fetched=stats.sources_fetched,
+            raw_items_new=stats.raw_items_new,
+            raw_items_duplicate=stats.raw_items_duplicate,
+            events_created=stats.events_created,
+            cards_created=stats.cards_created,
+            errors=stats.errors,
+        ),
     )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    
-    user = db.query(UserProfile).filter(UserProfile.email == email).first()
-    if user is None:
-        raise credentials_exception
-    return user
+
+
+# =============================================================================
+# User Identity & Account Endpoints (Supabase Auth)
+# =============================================================================
+
+
+@app.get(
+    "/api/me",
+    tags=["Auth"],
+    summary="Get current user identity and profile state",
+    response_model=UserMeResponse,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+        503: {"description": "Service Unavailable - Supabase authentication not configured"},
+    },
+)
+def get_me(current_user: UserProfile = Depends(get_current_user)):
+    """
+    Returns the authenticated user's profile, authentication metadata, and setup completion status.
+    """
+    has_completed_setup = bool((current_user.role and current_user.interests) or current_user.profession_id is not None)
+    profession_slug = current_user.profession.slug if current_user.profession else None
+
+    return UserMeResponse(
+        id=current_user.id,
+        email=current_user.email,
+        name=current_user.name or "",
+        picture_url=sanitize_https_avatar_url(current_user.picture_url),
+        is_anonymous=current_user.is_anonymous,
+        profession=profession_slug,
+        timezone=current_user.timezone or "UTC",
+        delivery_time=current_user.delivery_time or "07:00",
+        email_digest_enabled=current_user.email_digest_enabled,
+        has_completed_setup=has_completed_setup,
+    )
+
+
+@app.delete(
+    "/api/account",
+    tags=["Auth"],
+    summary="Permanently delete user account and all personal data",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        204: {"description": "Account successfully deleted"},
+        401: {"description": "Unauthorized - Missing or invalid Bearer token"},
+        502: {"description": "Bad Gateway - Identity provider deletion failed"},
+        503: {"description": "Service Unavailable - Admin deletion key not configured"},
+    },
+)
+async def delete_account(
+    current_user: UserProfile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Permanently deletes the user's account from Supabase Auth and the local Becon database.
+    Cascades remove all follows, bookmarks, and feedback.
+    """
+    if not settings.SUPABASE_SERVICE_ROLE_KEY or not settings.SUPABASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account deletion is not available: Supabase service role key is not configured.",
+        )
+
+    # 1. Delete user from Supabase Auth via Admin API
+    if current_user.external_auth_id:
+        try:
+            await delete_supabase_user_admin(current_user.external_auth_id)
+        except SupabaseAuthNotConfiguredError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            ) from e
+        except Exception as e:
+            logger.error(f"Supabase Admin API account deletion failed: {type(e).__name__}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to delete account from identity provider.",
+            ) from e
+
+    # 2. Delete local user_profiles row in one transaction
+    db.delete(current_user)
+    db.commit()
+    return None
+
 
 @app.get(
     "/api/profile",
@@ -325,14 +616,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     summary="Get authenticated user profile",
     response_model=UserProfileResponse,
     responses={
-        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"}
-    }
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+    },
 )
 def get_profile(current_user: UserProfile = Depends(get_current_user)):
     """
     Retrieves the authenticated user's profile, including role, experience, focus topics, and custom AI prompt.
     """
     return current_user
+
 
 @app.post(
     "/api/profile",
@@ -341,167 +633,24 @@ def get_profile(current_user: UserProfile = Depends(get_current_user)):
     response_model=UserProfileResponse,
     responses={
         401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
-        422: {"description": "Validation Error - Invalid profile payload"}
-    }
+        422: {"description": "Validation Error - Invalid profile payload"},
+    },
 )
 def update_profile(
     profile_data: UserProfileCreate,
     current_user: UserProfile = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Updates the authenticated user's profile settings and preferences in the database.
     """
-    for key, value in profile_data.model_dump().items():
-        setattr(current_user, key, value)
+    for key, value in profile_data.model_dump(exclude_unset=True).items():
+        if key != "id":
+            setattr(current_user, key, value)
     db.commit()
     db.refresh(current_user)
     return current_user
 
-@app.post(
-    "/api/register",
-    tags=["Auth"],
-    summary="Register a new user account",
-    response_model=Token,
-    responses={
-        400: {"description": "Email already registered"},
-        422: {"description": "Validation Error - Invalid registration data"}
-    }
-)
-def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    """
-    Registers a new user account with bcrypt password hashing and returns an initial access token.
-    """
-    existing_user = db.query(UserProfile).filter(UserProfile.email == user_data.email).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    hashed_password = get_password_hash(user_data.password)
-    
-    new_user = UserProfile(
-        name=user_data.name if user_data.name else "User",
-        email=user_data.email,
-        password_hash=hashed_password,
-        role="",
-        experience="",
-        interests=""
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    access_token = create_access_token(data={"sub": new_user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@app.post(
-    "/api/login",
-    tags=["Auth"],
-    summary="OAuth2 password login & token generation",
-    response_model=Token,
-    responses={
-        401: {"description": "Incorrect email or password"},
-        422: {"description": "Validation Error - Invalid login form data"}
-    }
-)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """
-    Authenticates user credentials (email entered in username field) and returns an OAuth2 Bearer JWT.
-    """
-    user = db.query(UserProfile).filter(UserProfile.email == form_data.username).first()
-    if not user or not user.password_hash or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@app.post(
-    "/api/auth/supabase-sync",
-    tags=["Auth"],
-    summary="Sync Supabase OAuth (Google) user with Becon backend",
-    response_model=Token,
-    responses={
-        400: {"description": "Invalid sync payload"},
-        422: {"description": "Validation Error"}
-    }
-)
-def supabase_auth_sync(payload: SupabaseAuthSync, db: Session = Depends(get_db)):
-    """
-    Syncs user authenticated via Supabase Google OAuth into the Becon database.
-    Stores/updates their real Gmail profile picture (picture_url), name, and issues a Becon JWT.
-    """
-    email = payload.email.strip().lower()
-    user = db.query(UserProfile).filter(UserProfile.email == email).first()
-    
-    clean_name = payload.name.strip() if payload.name else email.split("@")[0].capitalize()
-    
-    if not user:
-        user = UserProfile(
-            name=clean_name,
-            email=email,
-            picture_url=payload.picture_url,
-            auth_provider=payload.provider or "google",
-            role="Software Engineer",
-            interests="AI & ML, Cloud Architecture, Full-Stack",
-            experience="Senior (5+ Years)",
-            customPrompt="",
-            aiTone="Architectural Analysis (Deep Tech)"
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        updated = False
-        if payload.picture_url and user.picture_url != payload.picture_url:
-            user.picture_url = payload.picture_url
-            updated = True
-        if payload.name and user.name in ("User", "", None):
-            user.name = clean_name
-            updated = True
-        if payload.provider and user.auth_provider != payload.provider:
-            user.auth_provider = payload.provider
-            updated = True
-        if updated:
-            db.commit()
-            db.refresh(user)
-            
-    access_token = create_access_token(data={"sub": user.email, "provider": user.auth_provider or "google"})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@app.post(
-    "/api/auth/guest",
-    tags=["Auth"],
-    summary="Instant guest exploration mode",
-    response_model=Token,
-    responses={
-        422: {"description": "Validation Error"}
-    }
-)
-def guest_auth(db: Session = Depends(get_db)):
-    """
-    Creates an instant guest session with default engineering intelligence preferences.
-    Requires zero credentials or personal data.
-    """
-    guest_uuid = uuid.uuid4().hex[:8]
-    guest_email = f"guest_{guest_uuid}@guest.becon.local"
-    
-    guest_user = UserProfile(
-        name="Guest Reader",
-        email=guest_email,
-        role="Technology Explorer",
-        interests="AI & Generative Models, Cloud Architecture, Full-Stack Development",
-        experience="Curious",
-        auth_provider="guest",
-        picture_url=None
-    )
-    db.add(guest_user)
-    db.commit()
-    db.refresh(guest_user)
-    
-    access_token = create_access_token(data={"sub": guest_user.email, "provider": "guest"})
-    return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post(
     "/api/onboarding/chat",
@@ -510,27 +659,32 @@ def guest_auth(db: Session = Depends(get_db)):
     response_model=ChatResponse,
     responses={
         401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
-        422: {"description": "Validation Error - Invalid chat history format"}
-    }
+        422: {"description": "Validation Error - Invalid chat history format"},
+    },
 )
 def onboarding_chat_endpoint(
     chat_request: ChatRequest,
     current_user: UserProfile = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Processes chat messages with the onboarding conversational agent.
     When onboarding completes, automatically updates the user profile in the database.
     """
     from app.ai_service import ai_onboarding_chat
-    
-    response = ai_onboarding_chat(chat_request.messages, AVAILABLE_TOPICS)
-    
+
+    enforce_auth_ai_rate_limit(current_user.id, scope="onboarding_chat")
+    response = ai_onboarding_chat(chat_request.messages, AVAILABLE_TOPICS, user_key=str(current_user.id))
+
     if response.onboarding_complete and response.extracted_data:
-        if response.extracted_data.name: current_user.name = response.extracted_data.name
-        if response.extracted_data.role: current_user.role = response.extracted_data.role
-        if response.extracted_data.experience: current_user.experience = response.extracted_data.experience
-        if response.extracted_data.interests: current_user.interests = response.extracted_data.interests
+        if response.extracted_data.name:
+            current_user.name = response.extracted_data.name
+        if response.extracted_data.role:
+            current_user.role = response.extracted_data.role
+        if response.extracted_data.experience:
+            current_user.experience = response.extracted_data.experience
+        if response.extracted_data.interests:
+            current_user.interests = response.extracted_data.interests
         db.commit()
-        
+
     return response

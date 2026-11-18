@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Bot, User, ArrowRight, Sparkles } from "lucide-react";
+import { Bot, ArrowRight, Sparkles } from "lucide-react";
 import { useLoader } from "@/context/LoadingContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
-
-const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+import { RequireAuth } from "@/components/RequireAuth";
+import { apiFetch } from "@/lib/api";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -43,24 +43,17 @@ export default function OnboardingPage() {
 
   const sendChat = async (chatHistory: ChatMessage[]) => {
     setIsTyping(true);
-    const token = localStorage.getItem("becon_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
 
     try {
-      const res = await fetch(`${API}/api/onboarding/chat`, {
+      const data = await apiFetch<any>("/api/onboarding/chat", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ messages: chatHistory })
+        body: JSON.stringify({ messages: chatHistory }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      if (data && data.reply_text) {
         setMessages([...chatHistory, { role: "assistant", content: data.reply_text }]);
         if (data.onboarding_complete) {
           setOnboardingComplete(true);
@@ -73,9 +66,12 @@ export default function OnboardingPage() {
           }, 3000);
         }
       } else {
-        setMessages([...chatHistory, { role: "assistant", content: "I'm having trouble connecting to my servers right now." }]);
+        setMessages([
+          ...chatHistory,
+          { role: "assistant", content: "I'm having trouble connecting to my servers right now." },
+        ]);
       }
-    } catch (err) {
+    } catch {
       setMessages([...chatHistory, { role: "assistant", content: "Network error. Please try again." }]);
     } finally {
       setIsTyping(false);
@@ -95,7 +91,8 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans flex flex-col transition-colors duration-200">
+    <RequireAuth>
+      <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans flex flex-col transition-colors duration-200">
       {/* Header */}
       <header className="bg-slate-950 text-slate-200 py-3.5 px-4 sm:px-6 border-b border-slate-800 shadow-sm sticky top-0 z-50">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -181,5 +178,6 @@ export default function OnboardingPage() {
         </div>
       </main>
     </div>
+    </RequireAuth>
   );
 }

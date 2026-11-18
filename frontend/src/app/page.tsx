@@ -1,15 +1,22 @@
 "use client";
 
-import { User, Layers, LayoutGrid, Radio, Flame, Wrench, ClipboardList, Pin, Lightbulb, Target, Ruler, BarChart2, Shield, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, BookOpen, Sun, Moon, ExternalLink, Maximize2, X, Search, Loader2, Sparkles, Calendar, LogOut, LogIn } from "lucide-react";
+import { Layers, Radio, Flame, Pin, ChevronLeft, ChevronRight, ArrowUp, X, Search, Loader2, Sparkles, CheckCircle2, ArrowRight } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLoader } from "@/context/LoadingContext";
-import { useTheme } from "@/context/ThemeContext";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
+import { getBriefingsCacheKey, syncIdentityCache } from "@/lib/cache";
+import { resolveUserIdentity } from "@/lib/identity";
+import { GuestBanner } from "@/components/GuestBanner";
+import { HeaderActions } from "@/components/HeaderActions";
+import { RequireAuth } from "@/components/RequireAuth";
+import { LeadCard, RectangleCard, SquareCard, BriefCard } from "@/components/cards";
+import { CardDrawer } from "@/components/CardDrawer";
 
-const API = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+export const BRIEFING_MAX_CARDS = 10;
 
 interface ActionGuidance {
   action_type: "learn" | "apply" | "avoid" | "prepare";
@@ -135,8 +142,10 @@ function getDailyBeconHeading(interests?: string[], role?: string): string {
 }
 
 export default function Home() {
+  const { user, me, isAnonymous, signOut } = useAuth();
   const [dailyHeading, setDailyHeading] = useState<string>("Personalized Intelligence Gazette");
   const [briefings, setBriefings] = useState<BriefingCard[]>([]);
+  const [drawerCard, setDrawerCard] = useState<BriefingCard | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingRemaining, setLoadingRemaining] = useState<boolean>(false);
 
@@ -146,37 +155,60 @@ export default function Home() {
   const [isSearchingTopic, setIsSearchingTopic] = useState<boolean>(false);
   const [searchedStories, setSearchedStories] = useState<BriefingCard[] | null>(null);
   const [searchError, setSearchError] = useState<string>("");
-  const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("Professional");
   const [userAvatar, setUserAvatar] = useState<string>("");
   const [isGuest, setIsGuest] = useState<boolean>(false);
   const [userInterests, setUserInterests] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState<string>("");
-  const profileMenuRef = useRef<HTMLDivElement>(null);
-  const { showLoader, hideLoader } = useLoader();
+  const { hideLoader } = useLoader();
 
-  // First name extraction for top-bar profile button
-  const userFirstName = userName && userName.trim() && userName.trim() !== "User"
-    ? userName.trim().split(/\s+/)[0]
-    : (userName && userName.trim() ? userName.trim() : "Profile");
+  const userIdentity = useMemo(
+    () =>
+      resolveUserIdentity({
+        profile: {
+          name: userName,
+          role: userRole,
+          email: userEmail,
+          picture_url: userAvatar,
+        },
+        me,
+        user,
+        isAnonymous: isAnonymous || isGuest,
+      }),
+    [userName, userRole, userEmail, userAvatar, me, user, isAnonymous, isGuest]
+  );
 
-  // Infinite Scroll & 20% Page Lift Reveal States
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
-  const [editionNumber, setEditionNumber] = useState<number>(1);
-  const isLoadingMoreRef = useRef<boolean>(false);
-  const canTriggerRef = useRef<boolean>(true);
-  const pageNumberRef = useRef<number>(1);
-  const activeSearchTopicRef = useRef<string>("");
-  const searchedStoriesRef = useRef<BriefingCard[] | null>(null);
+  // Finite Search Pagination States (10 items, explicit button)
+  const [searchOffset, setSearchOffset] = useState<number>(0);
+  const [hasMoreSearch, setHasMoreSearch] = useState<boolean>(false);
+  const [isLoadingMoreSearch, setIsLoadingMoreSearch] = useState<boolean>(false);
 
-  useEffect(() => {
-    activeSearchTopicRef.current = activeSearchTopic;
-  }, [activeSearchTopic]);
-
-  useEffect(() => {
-    searchedStoriesRef.current = searchedStories;
-  }, [searchedStories]);
+  // Dynamic Reading Time Estimate across active cards (~200 words per minute)
+  const readingTimeMinutes = useMemo(() => {
+    const cardsToCount = searchedStories !== null ? searchedStories : briefings;
+    if (!cardsToCount || cardsToCount.length === 0) return 1;
+    let totalWords = 0;
+    for (const card of cardsToCount) {
+      totalWords += (card.title || "").split(/\s+/).filter(Boolean).length;
+      if (card.card_content) {
+        if (Array.isArray(card.card_content.what_happened)) {
+          totalWords += card.card_content.what_happened.join(" ").split(/\s+/).filter(Boolean).length;
+        }
+        if (card.card_content.why_it_matters) {
+          totalWords += card.card_content.why_it_matters.split(/\s+/).filter(Boolean).length;
+        }
+        if (card.card_content.how_it_affects_you) {
+          totalWords += card.card_content.how_it_affects_you.split(/\s+/).filter(Boolean).length;
+        }
+        if (card.card_content.what_to_do_next?.guidance) {
+          totalWords += card.card_content.what_to_do_next.guidance.split(/\s+/).filter(Boolean).length;
+        }
+      }
+    }
+    return Math.max(1, Math.ceil(totalWords / 200));
+  }, [searchedStories, briefings]);
 
   // Smart Auto-Hide Header (Hide on scroll down, reveal on scroll up)
   const [headerVisible, setHeaderVisible] = useState<boolean>(true);
@@ -184,9 +216,6 @@ export default function Home() {
 
   // Floating Back to Top Arrow Button State
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
-
-  // Dark / Light Mode Theme State from Global Context
-  const { isDarkMode, toggleTheme } = useTheme();
 
   const scrollToTop = () => {
     window.scrollTo({
@@ -235,7 +264,7 @@ export default function Home() {
     setDailyHeading(getDailyBeconHeading());
     const cachedName = localStorage.getItem("becon_user_name");
     if (cachedName) setUserName(cachedName);
-    const cachedCards = localStorage.getItem("becon_cached_briefings");
+    const cachedCards = localStorage.getItem(getBriefingsCacheKey(user?.id));
     if (cachedCards) {
       try {
         const parsed = JSON.parse(cachedCards);
@@ -245,212 +274,11 @@ export default function Home() {
         }
       } catch {}
     }
-  }, [hideLoader]);
+  }, [hideLoader, user?.id]);
 
   const router = useRouter();
 
-  // Load More Next Edition Function
-  const triggerLoadMore = useCallback(async () => {
-    if (isLoadingMoreRef.current || !canTriggerRef.current || loading) return;
-    isLoadingMoreRef.current = true;
-    canTriggerRef.current = false;
-    setIsLoadingMore(true);
-
-    const nextPage = pageNumberRef.current + 1;
-    // Guaranteed presentation time so user sees the 20% lift & loader animation
-    const minDelay = new Promise((resolve) => setTimeout(resolve, 1400));
-
-    try {
-      const activeRole = userRole;
-      const activeInterests = userInterests.length > 0 ? userInterests.join(", ") : "";
-      const activePrompt = customPrompt;
-      const currentSearchTopic = activeSearchTopicRef.current.trim();
-      const isSearchActive = Boolean(currentSearchTopic && searchedStoriesRef.current !== null);
-
-      if (isSearchActive) {
-        // --- 1. SEARCH CONTINUOUS PAGINATION ---
-        const currentOffset = searchedStoriesRef.current ? searchedStoriesRef.current.length : 0;
-        const searchParams = new URLSearchParams({
-          query: currentSearchTopic,
-          role: activeRole,
-          limit: "6",
-          offset: String(currentOffset),
-          page: String(nextPage),
-        });
-
-        let incomingCards: BriefingCard[] = [];
-
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 9000);
-          const res = await fetch(`${API}/api/search-topic?${searchParams.toString()}`, {
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          if (res.ok) {
-            const data: BriefingCard[] = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-              incomingCards = data.map((c) => ({
-                ...c,
-                rank: undefined,
-              }));
-            }
-          }
-        } catch (fetchErr) {
-          console.error("Backend error fetching next search edition:", fetchErr);
-        }
-
-        // If backend returned no cards (e.g. backend offline or end of feed), generate continuous themed search cards
-        if (!incomingCards || incomingCards.length === 0) {
-          const topicSlug = currentSearchTopic.toLowerCase().replace(/[^a-z0-9]/g, "") || "topic";
-          incomingCards = [
-            {
-              id: `search-${topicSlug}-ed${nextPage}-1`,
-              title: `${currentSearchTopic.toUpperCase()}: Market Developments & Strategic Shifts (Edition ${nextPage})`,
-              source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
-              target_role: activeRole,
-              target_stack: [currentSearchTopic.toUpperCase(), "ANALYSIS"],
-              priority: "major",
-              card_content: {
-                what_happened: [
-                  `Expanded regional developments and ecosystem adoption reported across ${currentSearchTopic} commercial networks.`,
-                  `New regulatory guidelines and institutional investments accelerate cross-border integration.`
-                ],
-                why_it_matters: `Directly impacts operational workflows, market trends, and consumer standards within the ${currentSearchTopic} domain.`,
-                how_it_affects_you: `Requires validation of ongoing operational roadmaps and alignment with emerging market expectations.`,
-                what_to_do_next: {
-                  action_type: "apply",
-                  guidance: `Incorporate updated intelligence protocols for ${currentSearchTopic} initiatives.`
-                }
-              }
-            },
-            {
-              id: `search-${topicSlug}-ed${nextPage}-2`,
-              title: `Global Infrastructure & Supply Modernization in ${currentSearchTopic.toUpperCase()}`,
-              source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
-              target_role: activeRole,
-              target_stack: [currentSearchTopic.toUpperCase(), "INNOVATION"],
-              priority: "major",
-              card_content: {
-                what_happened: [
-                  `Infrastructure modernization and digital transformation milestones reached for ${currentSearchTopic} operations.`,
-                  `Independent benchmarks confirm significant efficiency gains through modernized toolchains.`
-                ],
-                why_it_matters: `Lowers operational latency and unlocks sustained long-term competitive leverage.`,
-                how_it_affects_you: `Benchmark internal capabilities against industry best practices to identify optimization opportunities.`,
-                what_to_do_next: {
-                  action_type: "learn",
-                  guidance: `Review latest reference implementations and case studies on ${currentSearchTopic}.`
-                }
-              }
-            },
-            {
-              id: `search-${topicSlug}-ed${nextPage}-3`,
-              title: `Regulatory Compliance, Risk Mitigation & Governance in ${currentSearchTopic.toUpperCase()}`,
-              source_url: `https://news.google.com/search?q=${encodeURIComponent(currentSearchTopic)}`,
-              target_role: activeRole,
-              target_stack: [currentSearchTopic.toUpperCase(), "SECURITY"],
-              priority: "major",
-              card_content: {
-                what_happened: [
-                  `Updated security standards and governance policies published for ${currentSearchTopic} stakeholder groups.`,
-                  `Compliance verification processes must be audited prior to multi-region rollout.`
-                ],
-                why_it_matters: `Ensures legal adherence and prevents vulnerability exposure in critical systems.`,
-                how_it_affects_you: `Review third-party integrations and supplier commitments for standard compliance.`,
-                what_to_do_next: {
-                  action_type: "prepare",
-                  guidance: `Audit current systems against revised governance standards for ${currentSearchTopic}.`
-                }
-              }
-            }
-          ];
-        }
-
-        await minDelay;
-
-        // Append directly to searchedStories so the UI Bento Deck immediately renders them!
-        setSearchedStories((prev) => {
-          const prevList = prev || [];
-          const existingIds = new Set(prevList.map((c) => c.id));
-          const existingTitles = new Set(prevList.map((c) => c.title.toLowerCase().trim()));
-          let unique = incomingCards.filter(
-            (c) => !existingIds.has(c.id) && !existingTitles.has(c.title.toLowerCase().trim())
-          );
-          if (unique.length === 0) {
-            unique = incomingCards.map((c, i) => ({
-              ...c,
-              id: `${c.id}-pg${nextPage}-${i}`,
-            }));
-          }
-          return [...prevList, ...unique];
-        });
-
-      } else {
-        // --- 2. DEFAULT BROADSHEET FEED PAGINATION ---
-        const params = new URLSearchParams();
-        if (activeRole) params.set("role", activeRole);
-        if (activeInterests) params.set("interests", activeInterests);
-        if (activePrompt) params.set("custom_prompt", activePrompt);
-        params.set("offset", String(briefings.length));
-        params.set("page", String(nextPage));
-        params.set("limit", "6");
-
-        let incomingCards: BriefingCard[] = [];
-
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 9000);
-          const res = await fetch(`${API}/api/briefings?${params.toString()}`, {
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-          if (res.ok) {
-            const data: BriefingCard[] = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-              incomingCards = data;
-            }
-          }
-        } catch {
-          // Backend offline, timed out or error; fallback smoothly below
-        }
-
-        // If backend returned no cards or duplicates, use specialized next edition broadsheet cards
-        if (!incomingCards || incomingCards.length === 0) {
-          incomingCards = getNextEditionCards(nextPage, activeRole, activeInterests);
-        }
-
-        await minDelay;
-
-        setBriefings((prev) => {
-          const existingIds = new Set(prev.map((c) => c.id));
-          const existingTitles = new Set(prev.map((c) => c.title.toLowerCase().trim()));
-          let unique = incomingCards.filter(
-            (c) => !existingIds.has(c.id) && !existingTitles.has(c.title.toLowerCase().trim())
-          );
-          if (unique.length === 0) {
-            unique = getNextEditionCards(nextPage, activeRole, activeInterests);
-          }
-          return [...prev, ...unique];
-        });
-      }
-
-      pageNumberRef.current = nextPage;
-      setEditionNumber(nextPage);
-    } catch (err) {
-      console.error("Error loading next edition", err);
-      await minDelay;
-    } finally {
-      // Lower the page smoothly back to normal position
-      setIsLoadingMore(false);
-      isLoadingMoreRef.current = false;
-      setTimeout(() => {
-        canTriggerRef.current = true;
-      }, 800);
-    }
-  }, [loading, userRole, userInterests, customPrompt, briefings.length]);
-
-  // Topic AI Search Handlers
+  // Topic AI Search Handlers (Finite: 10 items, explicit user-initiated "Show 10 more")
   const handleTopicSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const query = searchQuery.trim();
@@ -459,46 +287,39 @@ export default function Home() {
     setIsSearchingTopic(true);
     setActiveSearchTopic(query);
     setSearchError("");
-    pageNumberRef.current = 1;
-    setEditionNumber(1);
+    setSearchOffset(10);
 
     try {
       const params = new URLSearchParams({
-        query,
+        q: query,
         role: userRole,
-        limit: "6",
+        limit: "10",
         offset: "0",
-        page: "1",
       });
-      const res = await fetch(`${API}/api/search-topic?${params.toString()}`);
-      if (res.ok) {
-        const data: BriefingCard[] = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setSearchedStories(
-            data.map((c) => ({
-              ...c,
-              rank: undefined,
-            }))
-          );
-        } else {
-          // Fallback keyword filter on current briefings
-          const local = briefings.filter(
-            (b) =>
-              b.title.toLowerCase().includes(query.toLowerCase()) ||
-              b.target_stack.some((s) => s.toLowerCase().includes(query.toLowerCase()))
-          );
-          setSearchedStories(local);
-          if (local.length === 0) {
-            setSearchError(`No live updates found for "${query}". Try another tech subject.`);
-          }
-        }
+      const res = await apiFetch<{ query: string; matches: string[]; cards: BriefingCard[] }>(
+        `/api/briefings/search?${params.toString()}`
+      );
+      const data = Array.isArray(res?.cards) ? res.cards : [];
+      if (data.length > 0) {
+        setSearchedStories(
+          data.map((c) => ({
+            ...c,
+            rank: undefined,
+          }))
+        );
+        setHasMoreSearch(data.length >= 10);
       } else {
+        // Fallback keyword filter on current briefings
         const local = briefings.filter(
           (b) =>
             b.title.toLowerCase().includes(query.toLowerCase()) ||
             b.target_stack.some((s) => s.toLowerCase().includes(query.toLowerCase()))
         );
         setSearchedStories(local);
+        setHasMoreSearch(false);
+        if (local.length === 0) {
+          setSearchError(`No live updates found for "${query}". Try another tech subject.`);
+        }
       }
     } catch (err) {
       console.error("Error searching topic:", err);
@@ -508,8 +329,45 @@ export default function Home() {
           b.target_stack.some((s) => s.toLowerCase().includes(query.toLowerCase()))
       );
       setSearchedStories(local);
+      setHasMoreSearch(false);
     } finally {
       setIsSearchingTopic(false);
+    }
+  };
+
+  const handleLoadMoreSearch = async () => {
+    if (isLoadingMoreSearch || !activeSearchTopic) return;
+    setIsLoadingMoreSearch(true);
+    try {
+      const params = new URLSearchParams({
+        q: activeSearchTopic,
+        role: userRole,
+        limit: "10",
+        offset: String(searchOffset),
+      });
+      const res = await apiFetch<{ query: string; matches: string[]; cards: BriefingCard[] }>(
+        `/api/briefings/search?${params.toString()}`
+      );
+      const data = Array.isArray(res?.cards) ? res.cards : [];
+      if (data.length > 0) {
+        setSearchedStories((prev) => {
+          const base = prev || [];
+          const existingIds = new Set(base.map((c) => c.id));
+          const newItems = data.filter((c) => !existingIds.has(c.id));
+          return [...base, ...newItems];
+        });
+        setSearchOffset((prev) => prev + data.length);
+        if (data.length < 10) {
+          setHasMoreSearch(false);
+        }
+      } else {
+        setHasMoreSearch(false);
+      }
+    } catch (err) {
+      console.error("Error loading more search items:", err);
+      setHasMoreSearch(false);
+    } finally {
+      setIsLoadingMoreSearch(false);
     }
   };
 
@@ -518,36 +376,12 @@ export default function Home() {
     setActiveSearchTopic("");
     setSearchedStories(null);
     setSearchError("");
-    pageNumberRef.current = 1;
-    setEditionNumber(1);
+    setSearchOffset(0);
+    setHasMoreSearch(false);
   };
 
-  // Scroll, Wheel & Touch Listeners for reaching the bottom & continuing to scroll
+  // Scroll Listener for header auto-hide and back-to-top button
   useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      if (isLoadingMoreRef.current || !canTriggerRef.current || loading) return;
-      const scrollPos = window.innerHeight + window.scrollY;
-      const threshold = document.documentElement.scrollHeight - 45;
-      if (scrollPos >= threshold && e.deltaY > 10) {
-        triggerLoadMore();
-      }
-    };
-
-    let touchStartY = 0;
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartY = e.touches[0].clientY;
-    };
-    const handleTouchMove = (e: TouchEvent) => {
-      if (isLoadingMoreRef.current || !canTriggerRef.current || loading) return;
-      const currentY = e.touches[0].clientY;
-      const diffY = touchStartY - currentY;
-      const scrollPos = window.innerHeight + window.scrollY;
-      const threshold = document.documentElement.scrollHeight - 45;
-      if (scrollPos >= threshold && diffY > 25) {
-        triggerLoadMore();
-      }
-    };
-
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       const diff = currentScrollY - lastScrollYRef.current;
@@ -558,7 +392,6 @@ export default function Home() {
       } else if (diff > 8) {
         // Scrolling down -> hide header
         setHeaderVisible(false);
-        setShowProfileMenu(false);
       } else if (diff < -6) {
         // Scrolling up a little bit -> show header immediately
         setHeaderVisible(true);
@@ -567,78 +400,48 @@ export default function Home() {
 
       // Reveal back to top arrow button when scrolled down
       setShowScrollTop(currentScrollY > 250);
-
-      if (isLoadingMoreRef.current || !canTriggerRef.current || loading) return;
-      const scrollPos = window.innerHeight + currentScrollY;
-      const threshold = document.documentElement.scrollHeight - 15;
-      if (scrollPos >= threshold) {
-        triggerLoadMore();
-      }
     };
 
-    window.addEventListener("wheel", handleWheel, { passive: true });
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchmove", handleTouchMove, { passive: true });
     window.addEventListener("scroll", handleScroll, { passive: true });
-
     return () => {
-      window.removeEventListener("wheel", handleWheel);
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [triggerLoadMore, loading]);
-
-  // Close profile menu on outside click ("off screen")
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
-        setShowProfileMenu(false);
-      }
-    };
-    if (showProfileMenu) {
-      document.addEventListener("mousedown", handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
-  }, [showProfileMenu]);
+  }, []);
   
   useEffect(() => {
-    const token = localStorage.getItem("becon_token");
-    if (!token) {
-      router.push("/login");
+    if (!user) return;
+
+    if (me && !me.has_completed_setup) {
+      hideLoader();
+      router.push("/profile?setup=true");
       return;
     }
-    
+
     const fetchProfileAndBriefings = async () => {
       hideLoader();
       try {
-        const res = await fetch(`${API}/api/profile`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const profile = await res.json();
-          if (profile.name) {
-            setUserName(profile.name);
-            localStorage.setItem("becon_user_name", profile.name);
-          } else if (profile.email) {
-            const prefix = profile.email.split("@")[0];
-            const clean = prefix.charAt(0).toUpperCase() + prefix.slice(1);
-            setUserName(clean);
-            localStorage.setItem("becon_user_name", clean);
-          }
+        const profile = await apiFetch<any>("/api/profile");
+        if (profile) {
+          if (profile.name) setUserName(profile.name);
+          if (profile.email) setUserEmail(profile.email);
           if (profile.role) setUserRole(profile.role);
-          if (profile.picture_url) {
-            setUserAvatar(profile.picture_url);
-            localStorage.setItem("becon_user_avatar", profile.picture_url);
-          } else {
-            const cached = localStorage.getItem("becon_user_avatar");
-            if (cached) setUserAvatar(cached);
-          }
-          if (profile.auth_provider === "guest" || localStorage.getItem("becon_is_guest") === "true") {
+          if (profile.picture_url) setUserAvatar(profile.picture_url);
+          const guestFlag = profile.auth_provider === "guest" || isAnonymous;
+          if (guestFlag) {
             setIsGuest(true);
           }
+          const resolved = resolveUserIdentity({
+            profile: {
+              name: profile.name,
+              role: profile.role,
+              email: profile.email,
+              picture_url: profile.picture_url,
+            },
+            me,
+            user,
+            isAnonymous: guestFlag,
+          });
+          syncIdentityCache(resolved.isGuest ? null : resolved.displayName, resolved.avatarUrl);
           if (profile.interests) {
             const list = profile.interests.split(",").map((i: string) => i.trim()).filter(Boolean);
             setUserInterests(list);
@@ -659,11 +462,6 @@ export default function Home() {
 
           // Fetch briefings strictly using this user's profile interests & role
           fetchAllBriefings(false, profile);
-        } else {
-          hideLoader();
-          // Token invalid or expired
-          localStorage.removeItem("becon_token");
-          router.push("/login");
         }
       } catch (err) {
         console.error("Error fetching profile", err);
@@ -672,7 +470,7 @@ export default function Home() {
     };
     
     fetchProfileAndBriefings();
-  }, [router]);
+  }, [user, me, isAnonymous, router]);
 
   const fetchAllBriefings = async (forceRefresh = false, profile: any = null) => {
     setLoading(true);
@@ -694,79 +492,61 @@ export default function Home() {
       topParams.set("limit", "5");
       if (forceRefresh) topParams.set("refresh", "true");
 
-      const topRes = await fetch(`${API}/api/briefings?${topParams.toString()}`);
-      if (topRes.ok) {
-        const topData: BriefingCard[] = await topRes.json();
-        if (Array.isArray(topData) && topData.length > 0) {
-          const mappedTop = topData.map((c, index) => ({
-            ...c,
-            rank: c.rank ?? index + 1,
-          }));
-          setBriefings(mappedTop);
-          try {
-            localStorage.setItem("becon_cached_briefings", JSON.stringify(mappedTop));
-          } catch {}
-          // INSTANTLY REVEAL TOP SCREEN TO USER!
-          setLoading(false);
-          hideLoader();
+      const topData = await apiFetch<BriefingCard[]>(`/api/briefings?${topParams.toString()}`);
+      if (Array.isArray(topData) && topData.length > 0) {
+        const mappedTop = topData.slice(0, 5).map((c, index) => ({
+          ...c,
+          rank: c.rank ?? index + 1,
+        }));
+        setBriefings(mappedTop);
+        try {
+          localStorage.setItem(getBriefingsCacheKey(user?.id), JSON.stringify(mappedTop));
+        } catch {}
+        // INSTANTLY REVEAL TOP SCREEN TO USER!
+        setLoading(false);
+        hideLoader();
 
-          // STEP 2: SIMULTANEOUSLY LAZY-LOAD REMAINING CARDS FOR BENTO DECK IN BACKGROUND
-          setLoadingRemaining(true);
-          const remParams = new URLSearchParams(baseParams);
-          remParams.set("scope", "remaining");
+        // STEP 2: SIMULTANEOUSLY LAZY-LOAD REMAINING CARDS FOR BENTO DECK (UP TO 5 MORE)
+        setLoadingRemaining(true);
+        const remParams = new URLSearchParams(baseParams);
+        remParams.set("scope", "remaining");
+        remParams.set("limit", "5");
 
-          try {
-            const remRes = await fetch(`${API}/api/briefings?${remParams.toString()}`);
-            if (remRes.ok) {
-              const remData: BriefingCard[] = await remRes.json();
-              if (Array.isArray(remData) && remData.length > 0) {
-                setBriefings((prev) => {
-                  const existingIds = new Set(prev.map((c) => c.id));
-                  const newCards = remData
-                    .filter((c) => !existingIds.has(c.id))
-                    .map((c, idx) => ({
-                      ...c,
-                      rank: c.rank ?? prev.length + idx + 1,
-                    }));
-                  const full = [...prev, ...newCards];
-                  try {
-                    localStorage.setItem("becon_cached_briefings", JSON.stringify(full));
-                  } catch {}
-                  return full;
-                });
-              }
-            }
-          } catch (remErr) {
-            console.error("Error lazy-loading remaining briefings:", remErr);
-          } finally {
-            setLoadingRemaining(false);
+        try {
+          const remData = await apiFetch<BriefingCard[]>(`/api/briefings?${remParams.toString()}`);
+          if (Array.isArray(remData) && remData.length > 0) {
+            setBriefings((prev) => {
+              const existingIds = new Set(prev.map((c) => c.id));
+              const newCards = remData
+                .filter((c) => !existingIds.has(c.id))
+                .slice(0, BRIEFING_MAX_CARDS - prev.length)
+                .map((c, idx) => ({
+                  ...c,
+                  rank: c.rank ?? prev.length + idx + 1,
+                }));
+              const full = [...prev, ...newCards].slice(0, BRIEFING_MAX_CARDS);
+              try {
+                localStorage.setItem(getBriefingsCacheKey(user?.id), JSON.stringify(full));
+              } catch {}
+              return full;
+            });
           }
-          return;
+        } catch (remErr) {
+          console.error("Error lazy-loading remaining briefings:", remErr);
+        } finally {
+          setLoadingRemaining(false);
         }
+        return;
       }
 
-      // Fallback if top fetch didn't return data
-      setBriefings(getBroadsheetCards(activeRole, activeInterests));
+      // Fallback if top fetch didn't return data (finite 10 cards)
+      setBriefings(getBroadsheetCards(activeRole, activeInterests).slice(0, BRIEFING_MAX_CARDS));
     } catch (err) {
       console.log("API offline, displaying full high-density editorial broadsheet", err);
-      setBriefings(getBroadsheetCards(activeRole, activeInterests));
+      setBriefings(getBroadsheetCards(activeRole, activeInterests).slice(0, BRIEFING_MAX_CARDS));
     } finally {
       setLoading(false);
       hideLoader();
-    }
-  };
-
-  const getActionBadgeColor = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "apply":
-        return "bg-slate-100/90 dark:bg-slate-800/80 text-emerald-600 dark:text-emerald-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
-      case "learn":
-        return "bg-slate-100/90 dark:bg-slate-800/80 text-sky-600 dark:text-sky-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
-      case "avoid":
-        return "bg-slate-100/90 dark:bg-slate-800/80 text-rose-600 dark:text-rose-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
-      case "prepare":
-      default:
-        return "bg-slate-100/90 dark:bg-slate-800/80 text-amber-600 dark:text-amber-400 border-slate-200/90 dark:border-slate-700/80 font-bold";
     }
   };
 
@@ -808,36 +588,8 @@ export default function Home() {
   }, [displayedBentoStories]);
 
   return (
-    <div className="relative min-h-screen bg-[#FAF8F5] overflow-x-clip">
-      {/* 20% HEIGHT REVEAL SCREEN (LOCATED BEHIND THE PAGE, REVEALED AS PAGE LIFTS UP) */}
-      <div
-        className="fixed bottom-0 left-0 right-0 h-[20vh] min-h-[140px] z-0 bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-t-2 border-amber-400 flex flex-col items-center justify-center p-4 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)]"
-      >
-        <div className="flex flex-col items-center justify-center space-y-2">
-          {/* Custom News-Loader GIF rendered in crisp white with subtle amber glow */}
-          <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/News-Loader.gif"
-              alt="Loading..."
-              className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
-              style={{ filter: "brightness(0) invert(1)" }}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-            <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
-              DISPATCHING NEXT GAZETTE EDITION
-            </span>
-          </div>
-
-          <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
-            Synthesizing additional architectural signals, deep takes & action cards…
-          </p>
-        </div>
-      </div>
-
+    <RequireAuth>
+      <div className="relative min-h-screen bg-[#FAF8F5] overflow-x-clip">
       {/* 1. TOP HEADER BAR (SMART AUTO-HIDE ON SCROLL DOWN, SLIDE DOWN ON SCROLL UP) */}
       <header
         className={`bg-slate-950 text-slate-200 py-2.5 sm:py-3 px-3 sm:px-6 border-b border-slate-800 shadow-md sticky top-0 z-50 transition-transform duration-300 ease-in-out ${
@@ -856,128 +608,31 @@ export default function Home() {
             </span>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-mono relative">
+          <div className="flex items-center gap-2 sm:gap-4 text-xs font-mono relative shrink-0">
             <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px] sm:text-xs hidden lg:inline">
               {todayDate}
             </span>
-            <span className="text-slate-400 font-semibold hidden xl:inline border-l border-slate-700 pl-4 uppercase tracking-wider text-[11px] mr-2">
-              EDITION: PERSONALIZED INTELLIGENCE
+            <span className="text-amber-300 dark:text-amber-400 font-bold hidden md:inline border-l border-slate-700 pl-3 tracking-wider uppercase text-[11px]">
+              {briefings.length} updates, ~{readingTimeMinutes} min read
             </span>
 
-            {/* PROFILE MENU CONTAINER */}
-            <div ref={profileMenuRef} className="relative">
-              {/* PROFILE BUTTON */}
-              <button
-                type="button"
-                aria-label="Profile Menu"
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="group flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-500 text-white pl-1.5 pr-3 py-1 sm:pl-2 sm:pr-3.5 sm:py-1.5 rounded-full transition-all shadow-xs hover:shadow-md cursor-pointer select-none"
-              >
-                <div className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center shadow-xs ring-1 ring-white/10 shrink-0 overflow-hidden">
-                  {userAvatar ? (
-                    <img src={userAvatar} alt={userFirstName} className="w-full h-full object-cover rounded-full" onError={() => setUserAvatar("")} />
-                  ) : (
-                    <User className="w-3.5 h-3.5" />
-                  )}
-                </div>
-                <span className="font-semibold text-xs sm:text-[13px] text-slate-200 tracking-tight hidden sm:inline font-sans">
-                  {userFirstName}
-                </span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 ease-in-out shrink-0 ${
-                    showProfileMenu ? "rotate-180 text-amber-400 group-hover:text-amber-400" : ""
-                  }`}
-                />
-              </button>
-
-              {/* PROFILE DROPDOWN MENU (CLASSIC & MINIMALIST) */}
-              {showProfileMenu && (
-                <div className="absolute right-0 top-full mt-2 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/10 dark:shadow-black/50 rounded-xl p-1.5 z-50 text-slate-800 dark:text-slate-200 font-sans animate-in fade-in zoom-in-95 duration-100 select-none">
-                  {/* USER INFO HEADER */}
-                  <div className="px-3 py-2.5 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-100 border border-slate-700/50 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden">
-                      {userAvatar ? (
-                        <img src={userAvatar} alt={userName} className="w-full h-full object-cover rounded-full" onError={() => setUserAvatar("")} />
-                      ) : (
-                        <span>{userFirstName && userFirstName[0] ? userFirstName[0].toUpperCase() : "U"}</span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate flex items-center gap-1.5">
-                        <span className="truncate">{userName || "Reader"}</span>
-                        {isGuest && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-400/15 text-amber-600 dark:text-amber-400 border border-amber-400/30 uppercase font-bold tracking-wide">
-                            Guest
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        {userRole || "Member"}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* DIVIDER */}
-                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
-
-                  {/* MENU ITEMS */}
-                  <div className="space-y-0.5">
-                    {isGuest && (
-                      <Link
-                        href="/login"
-                        onClick={() => setShowProfileMenu(false)}
-                        className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                      >
-                        <LogIn className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span>Sign In / Create Account</span>
-                      </Link>
-                    )}
-
-                    <Link
-                      href="/profile"
-                      onClick={() => setShowProfileMenu(false)}
-                      className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <User className="w-4 h-4 text-slate-400 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
-                      <span>Profile & Settings</span>
-                    </Link>
-
-                    <Link
-                      href="/about"
-                      onClick={() => setShowProfileMenu(false)}
-                      className="group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <BookOpen className="w-4 h-4 text-slate-400 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
-                      <span>About Becon</span>
-                    </Link>
-                  </div>
-
-                  {/* DIVIDER */}
-                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
-
-                  {/* LOGOUT */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      localStorage.removeItem("becon_token");
-                      localStorage.removeItem("becon_user_name");
-                      localStorage.removeItem("becon_user_avatar");
-                      localStorage.removeItem("becon_is_guest");
-                      router.push("/login");
-                    }}
-                    className="group flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors text-left cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4 text-rose-500 dark:text-rose-400" />
-                    <span>{isGuest ? "Exit Guest Mode" : "Logout"}</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <HeaderActions
+              identity={userIdentity}
+              email={userEmail || me?.email || user?.email}
+              currentPage="home"
+              onSignOut={async () => {
+                await signOut();
+                router.push("/login");
+              }}
+            />
           </div>
         </div>
       </header>
 
-      {/* 2. EDITION INDEX RIBBON (ALL SIGNALS IN ONE VIEW WITH PREV/NEXT CONTROLS & THEME SWITCHER) */}
+      {/* GUEST BANNER */}
+      <GuestBanner />
+
+      {/* 2. EDITION INDEX RIBBON (ALL SIGNALS IN ONE VIEW WITH RIGHT-ALIGNED PREV/NEXT CONTROLS) */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-1.5 sm:py-2 shadow-2xs transition-colors duration-200">
         <div className="max-w-[1600px] mx-auto flex items-center gap-1.5 sm:gap-3 font-mono text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
           {/* Label */}
@@ -986,22 +641,10 @@ export default function Home() {
             <span className="hidden sm:inline">COVERAGE:</span>
           </div>
 
-          {/* Previous Button */}
-          <button
-            type="button"
-            onClick={() => scrollCoverage("left")}
-            disabled={!canScrollLeft}
-            aria-label="Previous topics"
-            title="Scroll topics left"
-            className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
           {/* Topics Container with Hidden Scrollbar & Touch Panning */}
           <div
             ref={coverageScrollRef}
-            className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5 touch-pan-x"
+            className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5 touch-pan-x"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
@@ -1034,69 +677,34 @@ export default function Home() {
             )}
           </div>
 
-          {/* Next Button */}
-          <button
-            type="button"
-            onClick={() => scrollCoverage("right")}
-            disabled={!canScrollRight}
-            aria-label="Next topics"
-            title="Scroll topics right"
-            className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
-          >
-            <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          </button>
-
-          {/* Subtle Vertical Divider */}
-          <div className="h-4 sm:h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0 mx-0.5 sm:mx-1"></div>
-
-          {/* Theme Switch Toggle (On Sub-header Rightmost Position) */}
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isDarkMode}
-            onClick={toggleTheme}
-            aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            className="relative inline-flex items-center h-6 w-11 sm:h-7 sm:w-14 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-300 ease-in-out focus:outline-none select-none bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-inner group"
-          >
-            {/* Left Track Icon (Sun) */}
-            <span className="absolute left-1 sm:left-1.5 flex items-center justify-center pointer-events-none text-amber-500/70 dark:text-slate-600">
-              <Sun className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            </span>
-
-            {/* Right Track Icon (Moon) */}
-            <span className="absolute right-1 sm:right-1.5 flex items-center justify-center pointer-events-none text-slate-400 dark:text-amber-300/70">
-              <Moon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            </span>
-
-            {/* Sliding Knob */}
-            <span
-              className={`relative z-10 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full shadow-md transition-transform duration-300 ease-in-out ${
-                isDarkMode
-                  ? "translate-x-5 sm:translate-x-7 bg-slate-800 border border-slate-600 text-amber-300"
-                  : "translate-x-0 bg-white border border-slate-200 text-amber-500"
-              }`}
+          {/* Right-aligned Prev/Next Scroll Controls */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => scrollCoverage("left")}
+              disabled={!canScrollLeft}
+              aria-label="Previous topics"
+              title="Scroll topics left"
+              className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
             >
-              {isDarkMode ? (
-                <Moon className="w-3.5 h-3.5 fill-amber-300 text-amber-300 transition-transform duration-200 group-hover:rotate-12" />
-              ) : (
-                <Sun className="w-3.5 h-3.5 fill-amber-500 text-amber-500 transition-transform duration-200 group-hover:rotate-45" />
-              )}
-            </span>
-          </button>
+              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollCoverage("right")}
+              disabled={!canScrollRight}
+              aria-label="Next topics"
+              title="Scroll topics right"
+              className="shrink-0 p-1 sm:p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800 disabled:cursor-not-allowed text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+            >
+              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* FOREGROUND MAIN CONTENT (LIFTS UP GENTLY WHEN LOADING NEXT EDITION, HEADER REMAINS ANCHORED) */}
-      <div
-        style={{
-          transform: isLoadingMore ? "translateY(-120px)" : "translateY(0px)",
-          transition: "transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.45s ease",
-        }}
-        className={`relative z-10 min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-16 will-change-transform transition-colors duration-200 ${
-          isLoadingMore ? "shadow-[0_-20px_45px_rgba(0,0,0,0.65)]" : ""
-        }`}
-      >
+      {/* MAIN CONTENT AREA (FINITE BRIEFING, NO PAGE LIFT) */}
+      <div className="relative z-10 min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-16 transition-colors duration-200">
       {/* 3. MULTI-COLUMN HIGH-DENSITY BROADSHEET WITH TOP SHOWCASE & FULL-WIDTH BENTO GRID */}
       <main className="max-w-[1600px] w-full mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
         <div className="space-y-6 sm:space-y-8">
@@ -1115,9 +723,16 @@ export default function Home() {
                 </span>
               </div>
               <div className="flex-1 flex flex-col">
-                {loading || !leadStory
-                  ? renderLeadSkeleton()
-                  : renderLeadSidebarCard(leadStory, getActionBadgeColor, leadImageUrl)}
+                {loading || !leadStory ? (
+                  renderLeadSkeleton()
+                ) : (
+                  <LeadCard
+                    card={leadStory}
+                    leadImageUrl={leadImageUrl}
+                    onOpenDrawer={setDrawerCard}
+                    renderStackTag={renderStackTag}
+                  />
+                )}
               </div>
             </div>
 
@@ -1135,13 +750,15 @@ export default function Home() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 gap-3.5 flex-1">
                   {loading || topWireStories.length === 0
                     ? [2, 3, 4, 5].map((rank) => renderBriefSkeleton(rank))
-                    : topWireStories.map((card, idx) =>
-                        renderBriefCard(
-                          card,
-                          getActionBadgeColor,
-                          idx < 4 ? idx + 2 : undefined
-                        )
-                      )}
+                    : topWireStories.map((card, idx) => (
+                        <BriefCard
+                          key={card.id}
+                          card={card}
+                          rankNumber={idx < 4 ? idx + 2 : undefined}
+                          onOpenDrawer={setDrawerCard}
+                          renderStackTag={renderStackTag}
+                        />
+                      ))}
                 </div>
               </div>
             </div>
@@ -1160,9 +777,12 @@ export default function Home() {
                     <span className="font-serif font-black tracking-widest text-sm sm:text-base text-slate-950 dark:text-white">
                       BECON
                     </span>
-                    <span className="text-slate-400 font-mono font-bold">//</span>
+                    <span className="text-slate-400 font-mono font-bold">{"//"}</span>
                     <span className="font-mono font-black text-slate-900 dark:text-slate-100 text-xs sm:text-[13px] tracking-wide truncate">
                       {dailyHeading}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 shrink-0 hidden md:inline">
+                      {briefings.length} updates • ~{readingTimeMinutes} min read
                     </span>
                   </div>
 
@@ -1226,7 +846,7 @@ export default function Home() {
                   <div className="flex items-center gap-2 text-amber-950 dark:text-amber-200 font-bold">
                     <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                     <span>
-                      AI Synthesized News for: <strong className="text-slate-950 dark:text-amber-100 underline underline-offset-2">"{activeSearchTopic}"</strong>
+                      AI Synthesized News for: <strong className="text-slate-950 dark:text-amber-100 underline underline-offset-2">&quot;{activeSearchTopic}&quot;</strong>
                     </span>
                     {searchedStories && (
                       <span className="text-[10px] bg-amber-200/90 dark:bg-amber-900 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded font-black">
@@ -1295,10 +915,29 @@ export default function Home() {
                         const showImageOnCard = Boolean(resolvedImg);
 
                         if (span === 1) {
-                          return renderSquareCard(card, getActionBadgeColor, showImageOnCard, resolvedImg);
+                          return (
+                            <SquareCard
+                              key={card.id}
+                              card={card}
+                              showImage={showImageOnCard}
+                              resolvedImageUrl={resolvedImg}
+                              onOpenDrawer={setDrawerCard}
+                              renderStackTag={renderStackTag}
+                            />
+                          );
                         }
                         const isFullWidth = span === 3;
-                        return renderRectangleCard(card, getActionBadgeColor, showImageOnCard, isFullWidth, resolvedImg);
+                        return (
+                          <RectangleCard
+                            key={card.id}
+                            card={card}
+                            showImage={showImageOnCard}
+                            isFullWidth={isFullWidth}
+                            resolvedImageUrl={resolvedImg}
+                            onOpenDrawer={setDrawerCard}
+                            renderStackTag={renderStackTag}
+                          />
+                        );
                       });
                     })()}
                     {loadingRemaining && (
@@ -1318,7 +957,7 @@ export default function Home() {
                 ) : searchedStories !== null ? (
                   <div className="col-span-1 md:col-span-2 xl:col-span-3 p-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-center font-mono space-y-3 shadow-xs">
                     <p className="text-slate-900 dark:text-slate-100 font-bold text-sm">
-                      No live news articles found for "{activeSearchTopic}".
+                      No live news articles found for &quot;{activeSearchTopic}&quot;.
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 text-xs">
                       Try searching another technology keyword (e.g. Docker, Kubernetes, PostgreSQL, Rust, Go).
@@ -1343,23 +982,72 @@ export default function Home() {
 
           </div>
 
-        {/* BOTTOM GAZETTE END DETECTOR & PULL PROMPT */}
-        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-12 pt-8 border-t-2 border-slate-300 dark:border-slate-800 flex flex-col items-center justify-center text-center">
-          <button
-            type="button"
-            onClick={triggerLoadMore}
-            disabled={isLoadingMore}
-            className="group flex flex-col items-center gap-1.5 px-6 py-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-950 dark:hover:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 transition-all shadow-xs hover:shadow-md cursor-pointer"
+        {/* 4. FINITE BRIEFING END STATE: ALL CAUGHT UP PANEL */}
+        {searchedStories === null ? (
+          <section
+            data-testid="all-caught-up-panel"
+            className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-12 pt-8 border-t-2 border-slate-300 dark:border-slate-800"
           >
-            <div className="flex items-center gap-2 font-mono text-xs font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 group-hover:text-amber-300 transition-colors">
-              <ChevronDown className={`w-4 h-4 ${isLoadingMore ? "animate-spin text-amber-500" : "animate-bounce group-hover:text-amber-300"}`} />
-              <span>{isLoadingMore ? "Lifting Page • Dispatching New Edition..." : "Scroll Down Or Click To Load More Updates"}</span>
+            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 p-6 sm:p-8 md:p-10 shadow-xs flex flex-col items-center text-center max-w-2xl mx-auto">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 shadow-xs">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-black font-serif text-slate-950 dark:text-slate-50 tracking-tight mb-2">
+                You&apos;re all caught up for today
+              </h3>
+
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-sans leading-relaxed mb-6 max-w-md">
+                You&apos;ve completed all intelligence updates for today. Next daily edition arrives tomorrow.
+              </p>
+
+              {/* Briefing Stats Pill */}
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 font-mono text-[11px] text-slate-600 dark:text-slate-400 py-2 px-4 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 mb-6">
+                <span className="font-bold text-slate-900 dark:text-slate-100">
+                  {briefings.length} of {briefings.length} updates completed
+                </span>
+                <span className="text-slate-300 dark:text-slate-600">•</span>
+                <span>~{readingTimeMinutes} min read</span>
+                <span className="text-slate-300 dark:text-slate-600">•</span>
+                <span>{todayDate}</span>
+              </div>
+
+              {/* Link to adjust preferences */}
+              <Link
+                href="/profile"
+                className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-slate-900 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 underline underline-offset-4 transition-colors"
+              >
+                <span>Adjust your topics &amp; preferences</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 group-hover:text-slate-400">
-              Gazette Edition {editionNumber} • Pull up or scroll to reveal next briefings
-            </span>
-          </button>
-        </div>
+          </section>
+        ) : (
+          /* FINITE TOPIC SEARCH RESULTS PAGINATION */
+          <div className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-8 flex flex-col items-center">
+            {hasMoreSearch ? (
+              <button
+                type="button"
+                onClick={handleLoadMoreSearch}
+                disabled={isLoadingMoreSearch}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 font-mono text-xs font-bold transition-all shadow-xs cursor-pointer border border-slate-700"
+              >
+                {isLoadingMoreSearch ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Loading 10 more results...</span>
+                  </>
+                ) : (
+                  <span>Show 10 more results</span>
+                )}
+              </button>
+            ) : (
+              <div className="text-xs font-mono text-slate-500 dark:text-slate-400 py-4 text-center">
+                End of search results for &ldquo;{activeSearchTopic}&rdquo;
+              </div>
+            )}
+          </div>
+        )}
 
         {/* EDITORIAL FOOTER */}
         <footer className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-16 pt-8 pb-12 border-t border-slate-300 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 dark:text-slate-400 font-mono text-xs">
@@ -1395,7 +1083,15 @@ export default function Home() {
           <span className="sr-only">Back to top</span>
         </button>
       )}
-    </div>
+
+      {/* CARD DETAIL DRAWER */}
+      <CardDrawer
+        card={drawerCard}
+        isOpen={Boolean(drawerCard)}
+        onClose={() => setDrawerCard(null)}
+      />
+      </div>
+    </RequireAuth>
   );
 }
 
@@ -1634,406 +1330,9 @@ function renderBentoSkeletonCard(span: number, keyIndex: number) {
   );
 }
 
-/* RENDER HELPER 1: TOP MOST IMPORTANT UPDATE (COMPACT EDITORIAL LEAD BOX ON LEFT) */
-function renderLeadSidebarCard(
-  card: BriefingCard,
-  getBadgeColor: (type: string) => string,
-  leadImageUrl?: string | null
-) {
-  return (
-    <article
-      key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between h-full"
-    >
-      <div>
-        {/* Top Badges & Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border border-slate-800 dark:border-amber-400 uppercase tracking-wider shadow-xs">
-              LEAD // 01
-            </span>
-            {card.target_stack.slice(0, 2).map((tag) => renderStackTag(tag))}
-            <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
-              <span>{card.published_at || "Oct 23, 2026"}</span>
-            </span>
-          </div>
-        </div>
 
-        {/* Headline */}
-        <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-950 dark:text-slate-50 font-serif tracking-tight leading-tight mb-3">
-          <a
-            href={card.source_url}
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors"
-          >
-            {card.title}
-          </a>
-        </h3>
 
-        {/* Compact Hero Image (Spot 1 - Only rendered if a genuine resource image exists) */}
-        {leadImageUrl ? (
-          <div className="relative w-full h-36 sm:h-44 rounded-lg overflow-hidden my-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={leadImageUrl}
-              alt={card.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                const target = e.currentTarget.parentElement;
-                if (target) target.style.display = "none";
-              }}
-            />
-          </div>
-        ) : null}
 
-        {/* Key Article Highlights */}
-        <div className="mb-3.5 p-3.5 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-2">
-          <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-950 dark:text-slate-100 flex items-center gap-1.5">
-            <Pin className="w-3.5 h-3.5 text-rose-600" />
-            <span>ARTICLE HIGHLIGHTS:</span>
-          </div>
-          <ul className="space-y-2 pl-1 text-[11.5px] sm:text-xs">
-            {card.card_content.what_happened.map((bullet, idx) => (
-              <li key={idx} className="flex items-start gap-2 leading-relaxed">
-                <span className="text-rose-600 font-bold shrink-0 mt-0.5">•</span>
-                <span className="text-slate-800 dark:text-slate-200 leading-normal">{bullet}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Broadsheet Context & Significance: Fills text-only Lead card so it never leaves an empty void */}
-        {!leadImageUrl && card.card_content.why_it_matters && (
-          <p className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed mb-3 line-clamp-3">
-            <strong className="text-slate-900 dark:text-slate-100 font-mono text-[11px] uppercase mr-1">Context:</strong>
-            {card.card_content.why_it_matters}
-          </p>
-        )}
-      </div>
-
-      {/* Action Bar with Resource Link */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 font-mono mt-auto">
-        <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
-          Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
-        </span>
-        <a
-          href={card.source_url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 hover:text-amber-200 font-bold text-xs transition-all shadow-xs shrink-0 cursor-pointer border border-transparent dark:border-slate-700"
-          title="Open original resource documentation"
-        >
-          <span>Resource</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      </div>
-    </article>
-  );
-}
-
-/* RENDER HELPER 2: WIDE RECTANGLE CARD (FOR MAJOR ARCHITECTURAL UPDATES IN BENTO DECK) */
-function renderRectangleCard(
-  card: BriefingCard,
-  getBadgeColor: (type: string) => string,
-  showImage?: boolean,
-  isFullWidth?: boolean,
-  resolvedImageUrl?: string | null
-) {
-  const hasValidImage = Boolean(showImage && resolvedImageUrl);
-  return (
-    <article
-      key={card.id}
-      className={`${
-        isFullWidth
-          ? "col-span-1 md:col-span-2 xl:col-span-3"
-          : "col-span-1 md:col-span-2 xl:col-span-2"
-      } rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-4 sm:p-5 md:p-6 shadow-xs hover:shadow-md flex flex-col justify-between`}
-    >
-      <div>
-        {/* Top Header Row */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {card.target_stack.slice(0, 2).map((tag) => renderStackTag(tag))}
-            <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
-              <span>{card.published_at || "Oct 23, 2026"}</span>
-            </span>
-          </div>
-
-          {/* Direct Resource Link */}
-          <a
-            href={card.source_url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono text-[11px] font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0"
-            title="Open original resource documentation"
-          >
-            <span>Resource</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
-
-        {/* Content Body: Horizontal Media Split if showImage is true, else clean editorial layout */}
-        {hasValidImage ? (
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start">
-            {/* Left Image Thumbnail */}
-            <div className="relative w-full sm:w-48 md:w-56 h-36 sm:h-44 shrink-0 rounded-lg overflow-hidden border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={resolvedImageUrl!}
-                alt={card.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                onError={(e) => {
-                  const target = e.currentTarget.parentElement;
-                  if (target) target.style.display = "none";
-                }}
-              />
-            </div>
-
-            {/* Right Text Content */}
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base sm:text-lg font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug mb-2">
-                <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
-                  {card.title}
-                </a>
-              </h3>
-
-              {/* 2 Key Takeaway Bullets */}
-              <div className="mb-2 space-y-1">
-                <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
-                  {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-                    <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                      <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
-                      <span className="line-clamp-2">{bullet}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Why It Matters */}
-              <p className="text-slate-600 dark:text-slate-400 text-[11px] sm:text-xs leading-relaxed font-normal line-clamp-2">
-                <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[10px]">IMPACT: </strong>
-                {card.card_content.why_it_matters}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <h3 className="text-lg sm:text-xl font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug my-2">
-              <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
-                {card.title}
-              </a>
-            </h3>
-
-            {/* 2 Key Takeaway Bullets */}
-            <div className="mb-2.5 space-y-1">
-              <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
-                {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-                  <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                    <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
-                    <span className="line-clamp-2">{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Why It Matters */}
-            <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm leading-relaxed mb-3 font-normal line-clamp-2">
-              <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[11px]">IMPACT: </strong>
-              {card.card_content.why_it_matters}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 text-xs mt-3 font-mono">
-        <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
-          Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
-        </span>
-        <a
-          href={card.source_url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-[11px] px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-bold flex items-center gap-1.5 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer shrink-0 font-mono"
-          title="Open original resource documentation"
-        >
-          <span>Resource</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      </div>
-    </article>
-  );
-}
-
-/* RENDER HELPER 3: NEAT SQUARE CARD (FOR SYSTEM WATCH & SPOTLIGHTS IN BENTO DECK) */
-function renderSquareCard(
-  card: BriefingCard,
-  getBadgeColor: (type: string) => string,
-  showImage?: boolean,
-  resolvedImageUrl?: string | null
-) {
-  const hasValidImage = Boolean(showImage && resolvedImageUrl);
-  return (
-    <article
-      key={card.id}
-      className="col-span-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-4 sm:p-5 shadow-xs hover:shadow-md flex flex-col justify-between"
-    >
-      <div>
-        {/* Top Row with Tag and Direct Resource Icon Link */}
-        <div className="flex items-center justify-between gap-1.5 mb-2.5">
-          <div className="flex items-center gap-1.5 truncate">
-            {renderStackTag(card.target_stack[0])}
-            <span className="text-[9.5px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 shrink-0">
-              <Calendar className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500" />
-              <span>{card.published_at || "Oct 23, 2026"}</span>
-            </span>
-          </div>
-
-          <a
-            href={card.source_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-950 dark:hover:text-amber-300 transition-colors p-1"
-            title="Open original resource documentation"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
-
-        {/* Optional Image Thumbnail when real image exists */}
-        {hasValidImage && (
-          <div className="relative w-full h-32 sm:h-36 rounded-lg overflow-hidden mb-3 border border-slate-200/90 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-2xs">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={resolvedImageUrl!}
-              alt={card.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                const target = e.currentTarget.parentElement;
-                if (target) target.style.display = "none";
-              }}
-            />
-          </div>
-        )}
-
-        {/* Headline */}
-        <h3 className="text-base font-bold font-serif text-slate-950 dark:text-slate-100 leading-snug line-clamp-2 mb-2">
-          <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
-            {card.title}
-          </a>
-        </h3>
-
-        {/* 2 Key Signal Bullets */}
-        <div className="mb-2 space-y-1">
-          <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
-            {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-              <li key={idx} className="flex items-start gap-1.5 leading-snug">
-                <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0">•</span>
-                <span className="line-clamp-2">{bullet}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Why It Matters / Impact Snippet */}
-        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed font-normal line-clamp-2 mb-2">
-          <strong className="text-slate-900 dark:text-slate-200 font-semibold font-mono text-[10px]">IMPACT: </strong>
-          {card.card_content.why_it_matters}
-        </p>
-      </div>
-
-      {/* Footer */}
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2 mt-auto">
-        <a
-          href={card.source_url}
-          target="_blank"
-          rel="noreferrer"
-          className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono text-[10px] font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0 flex items-center gap-1 shadow-2xs"
-          title="Open original resource documentation"
-        >
-          <span>Resource</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      </div>
-    </article>
-  );
-}
-
-/* RENDER HELPER 4: BRIEF WIRE CARDS (SIDEBAR DISPATCHES) */
-function renderBriefCard(
-  card: BriefingCard,
-  getBadgeColor: (type: string) => string,
-  rankNumber?: number
-) {
-  return (
-    <article
-      key={card.id}
-      className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col justify-between h-full"
-    >
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-1.5 truncate">
-            {rankNumber !== undefined && rankNumber <= 5 && (
-              <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 dark:bg-slate-800 text-amber-300 border border-slate-800 dark:border-slate-700 shrink-0">
-                #{String(rankNumber).padStart(2, "0")}
-              </span>
-            )}
-            {renderStackTag(card.target_stack[0])}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={card.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono transition-all border border-slate-200 dark:border-slate-700 shrink-0"
-              title="Open original resource documentation"
-            >
-              <span>Resource</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          </div>
-        </div>
-
-        <h4 className="text-sm sm:text-base font-bold font-serif text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 mb-2">
-          <a href={card.source_url} target="_blank" rel="noreferrer" className="hover:text-rose-600 dark:hover:text-amber-300 transition-colors">
-            {card.title}
-          </a>
-        </h4>
-
-        {/* Authentic Highlights / Key Summary Lines */}
-        <div className="space-y-1.5 mb-2">
-          {card.card_content.what_happened.slice(0, 2).map((bullet, idx) => (
-            <p key={idx} className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed flex items-start gap-1.5">
-              <span className="text-rose-500 font-bold shrink-0 mt-0.5">•</span>
-              <span className="line-clamp-2">{bullet}</span>
-            </p>
-          ))}
-        </div>
-
-        {/* Technical Impact Context Snippet */}
-        {card.card_content.why_it_matters && (
-          <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed line-clamp-2 font-mono pt-2 border-t border-dashed border-slate-100 dark:border-slate-800">
-            <span className="font-bold text-slate-700 dark:text-slate-300">IMPACT: </span>
-            {card.card_content.why_it_matters}
-          </p>
-        )}
-      </div>
-
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-auto">
-        <span className="truncate flex items-center gap-1">
-          <Calendar className="w-2.5 h-2.5 text-slate-400" />
-          <span>{card.published_at || "Oct 23, 2026"}</span>
-        </span>
-      </div>
-    </article>
-  );
-}
 
 /* TOPIC CLASSIFIER FOR EDITORIAL CARDS */
 function detectTopicCategory(interests: string, role: string): "beauty_fashion" | "accounting_tax" | "retail_store" | "business_growth" | "tech_software" | "general" {
@@ -2773,609 +2072,5 @@ export async function authGatewayMiddleware(req: Request, res: Response, next: N
     ...c,
     rank: index < 10 ? index + 1 : undefined,
   }));
-}
-
-function getBeautyFashionEditionCards(edition: number, role: string): BriefingCard[] {
-  if (edition % 2 === 0) {
-    return [
-      {
-        id: `edition-${edition}-1`,
-        title: "Clean Beauty Traceability: Blockchain Verification for Botanical & Fragrance Extracts",
-        source_url: "https://wwd.com",
-        image_url: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=800&auto=format&fit=crop",
-        target_role: role || "Beauty Executive",
-        target_stack: ["Beauty & Cosmetics", "Supply Chain"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Luxury cosmetic houses deploy cryptographic batch passports verifying ethical harvesting of essential oils.",
-            "QR codes on product packaging allow consumers to view independent lab test results for heavy metals and purity."
-          ],
-          why_it_matters: "Defensible ingredient provenance commands up to 30% premium pricing among health-conscious cosmetic buyers.",
-          how_it_affects_you: "Suppliers unable to provide verified origin certificates risk de-listing from high-end retail distribution.",
-          what_to_do_next: { action_type: "prepare", guidance: "Audit ingredient provenance documentation across your core product lines." }
-        }
-      },
-      {
-        id: `edition-${edition}-2`,
-        title: "Sustainable Denim Manufacturing: Laser Finishing & Waterless Distressing Tech",
-        source_url: "https://vogue.com",
-        target_role: role || "Apparel Director",
-        target_stack: ["Fashion & Style", "Manufacturing"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Automated laser engraving and ozone bleaching eliminate hazardous sandblasting in commercial jean manufacturing.",
-            "Water consumption drops from 70 liters to under 5 liters per finished pair of jeans."
-          ],
-          why_it_matters: "Drastically lowers hazardous waste liability and fulfills stringent international environmental manufacturing codes.",
-          how_it_affects_you: "Apparel buyers can promote authentic eco-friendly denim collections without compromising aesthetic finish.",
-          what_to_do_next: { action_type: "apply", guidance: "Inquire with denim manufacturing partners regarding laser finishing adoption." }
-        }
-      },
-      {
-        id: `edition-${edition}-3`,
-        title: "Dermatological Skincare: Peptide Delivery Systems & Skin Barrier Restoration",
-        source_url: "https://instyle.com",
-        target_role: role || "Skincare Specialist",
-        target_stack: ["Beauty & Cosmetics", "Skincare"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Next-generation multi-molecular weight copper peptides achieve clinically proven collagen restoration without irritation.",
-            "Barrier-repair serums emerge as the fastest-growing skincare category across retail pharmacies and specialty counters."
-          ],
-          why_it_matters: "Consumers actively seek clinically validated active ingredients over generic cosmetic moisturizing creams.",
-          how_it_affects_you: "Merchandising formulations with stated active percentages significantly improves customer trust and repeat orders.",
-          what_to_do_next: { action_type: "learn", guidance: "Review peptide research formulations for upcoming seasonal skincare product lines." }
-        }
-      },
-      {
-        id: `edition-${edition}-4`,
-        title: "Color Cosmetics Forecasting: Terracotta & Olive Lead Luxury Seasonal Lines",
-        source_url: "https://wwd.com",
-        target_role: role || "Merchandiser",
-        target_stack: ["Fashion & Style", "Trend Analysis"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Milan Fashion Week color forecasting identifies terracotta, butter yellow, and muted olive as prevailing colorways.",
-            "Apparel and cosmetic collaborations coordinate cohesive seasonal shade palettes across lip, eye, and outerwear."
-          ],
-          why_it_matters: "Synchronized color stories between makeup and fashion collections drive cross-category basket growth.",
-          how_it_affects_you: "Window displays and promotional imagery should spotlight these verified seasonal tones.",
-          what_to_do_next: { action_type: "apply", guidance: "Update storefront displays and digital lookbooks to reflect these featured seasonal shades." }
-        }
-      },
-      {
-        id: `edition-${edition}-5`,
-        title: "Salon & Spa Operations: Predictive Staff Scheduling & Automated Booking SMS",
-        source_url: "https://modernsalon.com",
-        target_role: role || "Salon Owner",
-        target_stack: ["Beauty Business", "Operations"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Cloud salon management platforms utilize booking patterns to forecast appointment rush hours and optimize staff rotas.",
-            "Automated SMS rebooking reminders sent at the 4-week mark lift customer return frequency by 22%."
-          ],
-          why_it_matters: "Unbooked service hours represent irreversible lost revenue for appointment-based beauty and wellness businesses.",
-          how_it_affects_you: "Automating rebooking workflows guarantees consistent salon chair utilization throughout the working week.",
-          what_to_do_next: { action_type: "apply", guidance: "Set up automated SMS rebooking workflows targeting clients 3-4 weeks post-service." }
-        }
-      },
-      {
-        id: `edition-${edition}-6`,
-        title: "Luxury Fashion Consignment: Digital Resale Authentication Protocols",
-        source_url: "https://businessoffashion.com",
-        target_role: role || "Fashion Merchant",
-        target_stack: ["Fashion & Style", "Retail Commerce"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Computer vision microscopic stitch analysis tools authenticate pre-owned designer bags and accessories within 30 seconds.",
-            "Secondary luxury marketplaces surge in consumer adoption as collectors monetize archived wardrobe assets."
-          ],
-          why_it_matters: "Authentication guarantees eliminate counterfeit liabilities in high-value pre-owned apparel transactions.",
-          how_it_affects_you: "Boutique retailers can introduce trade-in credits to incentivize clients to purchase current-season collections.",
-          what_to_do_next: { action_type: "learn", guidance: "Explore store trade-in programs to stimulate sales velocity on current-season inventory." }
-        }
-      }
-    ];
-  } else {
-    return [
-      {
-        id: `edition-${edition}-1`,
-        title: "AI Shade Matching: Spectral Camera Analysis in Digital Beauty Retail",
-        source_url: "https://cosmeticsbusiness.com",
-        image_url: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?q=80&w=800&auto=format&fit=crop",
-        target_role: role || "Beauty Executive",
-        target_stack: ["Beauty & Cosmetics", "Retail Tech"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Spectral camera analysis on smartphone sensors matches user skin undertones to foundation formulas with 95% precision.",
-            "Beauty brands report a 40% reduction in foundation returns and higher customer retention."
-          ],
-          why_it_matters: "Accurate online shade matching removes the primary friction barrier in digital cosmetic shopping.",
-          how_it_affects_you: "Storefronts with interactive shade matching retain shoppers longer and enjoy superior conversion.",
-          what_to_do_next: { action_type: "apply", guidance: "Integrate virtual shade matching tools on your digital beauty storefront." }
-        }
-      },
-      {
-        id: `edition-${edition}-2`,
-        title: "Circular Apparel Design: Mono-Material Garments for Zero-Waste Recycling",
-        source_url: "https://textileworld.com",
-        target_role: role || "Fashion Designer",
-        target_stack: ["Fashion & Style", "Sustainability"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Apparel brands shift toward 100% single-fiber garments (mono-materials) to enable mechanical and chemical recycling.",
-            "Avoids blended synthetic fibers that are impossible to separate in conventional recycling plants."
-          ],
-          why_it_matters: "Anticipates upcoming European textile waste disposal levies and consumer sustainability mandates.",
-          how_it_affects_you: "Specifying pure natural or single-source synthetic fibers insulates brands from circular economy penalties.",
-          what_to_do_next: { action_type: "prepare", guidance: "Review fabric compositions with apparel pattern designers to prioritize mono-material construction." }
-        }
-      },
-      {
-        id: `edition-${edition}-3`,
-        title: "Clean Hair Care Formulations: Microplastic-Free Styling Polymers",
-        source_url: "https://modernsalon.com",
-        target_role: role || "Salon Specialist",
-        target_stack: ["Hair Care", "Beauty Trends"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Plant-derived polysaccharides replace synthetic microplastic fixatives in professional hair styling gels and hairsprays.",
-            "Delivers flexible all-day hold without scalp flaking or environmental bioaccumulation."
-          ],
-          why_it_matters: "Upcoming regulatory bans on microplastics in leave-on hair formulations require reformulation of legacy lines.",
-          how_it_affects_you: "Stocking compliant clean styling products protects professional salon retail sales from regulatory disruptions.",
-          what_to_do_next: { action_type: "learn", guidance: "Transition salon retail displays toward verified clean hair care lines." }
-        }
-      },
-      {
-        id: `edition-${edition}-4`,
-        title: "Footwear Supply Chains: Bio-Based Thermoplastic Soles Gain Traction",
-        source_url: "https://footwearnews.com",
-        target_role: role || "Footwear Merchant",
-        target_stack: ["Fashion & Style", "Supply Chain"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Shoe manufacturers replace petroleum EVA foams with sugarcane-derived bio-resins that match durability standards.",
-            "Reduces product carbon footprint by up to 50% without increasing wholesale production costs."
-          ],
-          why_it_matters: "Footwear brands can make legitimate eco-friendly marketing claims backed by verified bio-content percentages.",
-          how_it_affects_you: "Footwear buyers report higher consumer willingness to pay for verified sustainable shoe construction.",
-          what_to_do_next: { action_type: "apply", guidance: "Inquire with footwear distributors regarding bio-foam shoe models for next season's catalog." }
-        }
-      },
-      {
-        id: `edition-${edition}-5`,
-        title: "Beauty Influencer ROI: Micro-Creator Seeding Outperforms Big Endorsements",
-        source_url: "https://businessoffashion.com",
-        target_role: role || "Brand Strategist",
-        target_stack: ["Beauty Marketing", "Social Commerce"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Data analysis shows beauty creators with 10k-50k followers generate 3x higher direct sales conversions than mega-celebrities.",
-            "Audience trust in genuine, unscripted product demonstrations drives immediate checkout action."
-          ],
-          why_it_matters: "Spreading influencer marketing budgets across multiple micro-creators mitigates campaign risk and maximizes ROI.",
-          how_it_affects_you: "Building long-term relationships with authentic niche creators creates a consistent stream of customer acquisitions.",
-          what_to_do_next: { action_type: "apply", guidance: "Develop a dedicated gifting and affiliate package for 20 active micro-creators in your niche." }
-        }
-      },
-      {
-        id: `edition-${edition}-6`,
-        title: "Fragrance Chemistry: Sustainable Biotechnology in Molecular Perfumery",
-        source_url: "https://perfumerflavorist.com",
-        target_role: role || "Product Developer",
-        target_stack: ["Cosmetics & Fragrance", "Innovation"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Enzymatic biotechnology synthesizes rare oud and musk scent profiles using renewable sugar feedstocks.",
-            "Guarantees 100% hypoallergenic purity and ethical sourcing without reliance on endangered animal or plant sources."
-          ],
-          why_it_matters: "Removes ethical controversies while securing consistent raw ingredient pricing across seasonal manufacturing cycles.",
-          how_it_affects_you: "Luxury perfume houses can market cruelty-free, sustainable credentials with exceptional scent longevity.",
-          what_to_do_next: { action_type: "learn", guidance: "Sample bio-derived fragrance compounds for upcoming seasonal perfume releases." }
-        }
-      }
-    ];
-  }
-}
-
-function getAccountingEditionCards(edition: number, role: string): BriefingCard[] {
-  return [
-    {
-      id: `edition-${edition}-1`,
-      title: "Statutory Tax Audits: Digital Record Preservation & Penalty Prevention",
-      source_url: "https://taxnotes.com",
-      image_url: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?q=80&w=800&auto=format&fit=crop",
-      target_role: role || "Accountant",
-      target_stack: ["Tax & Compliance", "Accounting"],
-      priority: "major",
-      card_content: {
-        what_happened: [
-          "Revenue authorities mandate retaining searchable digital transaction archives for a minimum of 7 consecutive financial years.",
-          "Inability to furnish machine-readable audit trails during tax inquiries results in disallowance of operating deductions."
-        ],
-        why_it_matters: "Disallowed business expenses result in steep retrospective tax demands and mandatory interest penalties.",
-        how_it_affects_you: "Accounting departments must implement immutable cloud ledger backups with encrypted timestamping.",
-        what_to_do_next: { action_type: "apply", guidance: "Audit archive retention procedures to ensure all invoices and payment vouchers are digitally indexed." }
-      }
-    },
-    {
-      id: `edition-${edition}-2`,
-      title: "Working Capital Optimization: Dynamic Supplier Discounting Models",
-      source_url: "https://cpa.org",
-      target_role: role || "Financial Controller",
-      target_stack: ["Corporate Finance", "Cash Management"],
-      priority: "major",
-      card_content: {
-        what_happened: [
-          "Enterprises deploy sliding-scale early payment discounts to suppliers in exchange for 2% invoice price reductions.",
-          "Generates annualized risk-free returns exceeding 18% on surplus short-term operational cash reserves."
-        ],
-        why_it_matters: "Offers a high-yield deployment strategy for corporate cash balances while strengthening crucial vendor supply chains.",
-        how_it_affects_you: "Accounts payable workflows can unlock substantial annualized cost savings without altering operational budgets.",
-        what_to_do_next: { action_type: "prepare", guidance: "Evaluate early-payment discount agreements with top 20 vendors by monthly spend volume." }
-      }
-    },
-    {
-      id: `edition-${edition}-3`,
-      title: "Payroll Tax Harmonization: Managing Multi-State & Remote Workforce Withholdings",
-      source_url: "https://accountingtoday.com",
-      target_role: role || "Payroll Specialist",
-      target_stack: ["Payroll", "Tax Compliance"],
-      priority: "major",
-      card_content: {
-        what_happened: [
-          "Cross-jurisdictional tax authorities intensify compliance reviews on remote worker payroll withholding obligations.",
-          "Failure to register in employee residential states triggers corporate nexus liabilities and payroll penalties."
-        ],
-        why_it_matters: "Creating unintended corporate tax nexus in new states exposes companies to unexpected state corporate franchise taxes.",
-        how_it_affects_you: "Human resources and payroll systems must synchronize worker physical addresses with payroll withholding schedules.",
-        what_to_do_next: { action_type: "apply", guidance: "Review current employee remote locations and verify corresponding state payroll registrations." }
-      }
-    },
-    {
-      id: `edition-${edition}-4`,
-      title: "Commercial Banking Covenants: Navigating Debt-to-EBITDA Thresholds",
-      source_url: "https://bloomberg.com",
-      target_role: role || "Finance Director",
-      target_stack: ["Corporate Finance", "Banking"],
-      priority: "brief",
-      card_content: {
-        what_happened: [
-          "Commercial lenders tighten credit review covenants, demanding monthly compliance certification on leverage ratios.",
-          "Technical covenant breaches trigger immediate loan re-pricing and mandatory collateral calls."
-        ],
-        why_it_matters: "Proactive communication and financial modeling preserve favorable borrowing rates with primary banking partners.",
-        how_it_affects_you: "Finance heads should stress-test operating earnings against existing loan agreement covenant thresholds.",
-        what_to_do_next: { action_type: "prepare", guidance: "Model quarterly EBITDA sensitivities against existing credit facility covenant ratios." }
-      }
-    },
-    {
-      id: `edition-${edition}-5`,
-      title: "Automated Bank Reconciliations: API Integration with Real-Time Statements",
-      source_url: "https://accountingtoday.com",
-      target_role: role || "Bookkeeper",
-      target_stack: ["Accounting Tech", "Bookkeeping"],
-      priority: "brief",
-      card_content: {
-        what_happened: [
-          "Direct open banking APIs eliminate manual CSV statement downloads and automate 95% of routine ledger matching.",
-          "Unidentified bank charges and erroneous deposits are flagged within minutes of settlement."
-        ],
-        why_it_matters: "Reduces month-end closing timelines from 10 days to under 48 hours for fast-growing businesses.",
-        how_it_affects_you: "Enabling direct bank feeds frees finance staff to focus on strategic cash management and forecasting.",
-        what_to_do_next: { action_type: "apply", guidance: "Activate direct API bank statement synchronization within your primary accounting software." }
-      }
-    },
-    {
-      id: `edition-${edition}-6`,
-      title: "R&D Tax Credits: Documenting Software Development & Process Improvements",
-      source_url: "https://taxnotes.com",
-      target_role: role || "Tax Accountant",
-      target_stack: ["Tax Credits", "Corporate Planning"],
-      priority: "brief",
-      card_content: {
-        what_happened: [
-          "Statutory provisions allow substantial payroll tax offsets for technical wages invested in custom process automation.",
-          "Requires contemporaneously recorded developer logs and technical sprint documentation to substantiate claims."
-        ],
-        why_it_matters: "Can offset up to $500,000 in annual employer payroll taxes for qualifying innovative mid-market enterprises.",
-        how_it_affects_you: "Properly substantiating technical project hours converts internal development costs into immediate cash credits.",
-        what_to_do_next: { action_type: "apply", guidance: "Review engineering and process automation logs to identify qualifying R&D tax credit activities." }
-      }
-    }
-  ];
-}
-
-/* NEXT EDITIONS GENERATOR: RICH EDITORIAL ARCHITECTURE CARDS FOR INFINITE SCROLL */
-function getNextEditionCards(edition: number, role: string, interests: string): BriefingCard[] {
-  const cat = detectTopicCategory(interests, role);
-  if (cat === "beauty_fashion") {
-    return getBeautyFashionEditionCards(edition, role);
-  }
-  if (cat === "accounting_tax") {
-    return getAccountingEditionCards(edition, role);
-  }
-  if (edition % 2 === 0) {
-    return [
-      {
-        id: `edition-${edition}-1`,
-        title: "Zero-Copy Deserialization with FlatBuffers: Benchmarking 5x Throughput in Microservices",
-        source_url: "https://devblogs.microsoft.com",
-        image_url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=800&auto=format&fit=crop",
-        target_role: role || "Senior Software Engineer",
-        target_stack: [".NET Core", "High Performance"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Enterprise infrastructure benchmarking demonstrates memory allocation reductions up to 90% using FlatBuffers over JSON serialization.",
-            "Eliminates GC pressure during continuous high-frequency telemetry stream ingestion."
-          ],
-          why_it_matters: "Heavy JSON parsing bottlenecks cloud CPU instances during high-concurrency peak load events.",
-          how_it_affects_you: "Direct access to internal binary buffer fields without unpacking lowers p99 latency in production services.",
-          what_to_do_next: {
-            action_type: "apply",
-            guidance: "Evaluate binary schema compiler tooling on internal inter-service gRPC communication channels."
-          }
-        },
-        deep_detail: {
-          full_description: "Traditional serialized payloads like JSON or standard protocol buffers demand a dedicated deserialization phase where byte streams get parsed into managed heap objects. FlatBuffers stores organized hierarchical data in flat binary memory buffers, enabling applications to read fields directly in-place without memory allocation overhead.",
-          has_visual_diagram: true,
-          diagram_title: "Zero-Copy In-Place Memory Traversal vs Heap Allocation",
-          code_snippet: {
-            language: "C#",
-            code: `// Zero-Allocation FlatBuffer Accessor Pattern\nvar byteBuffer = new ByteBuffer(networkPayloadSpan);\nvar telemetryData = TelemetryReport.GetRootAsTelemetryReport(byteBuffer);\n\n// Direct field access via offset lookup without object allocation\nlong deviceId = telemetryData.DeviceId;\ndouble p99Latency = telemetryData.LatencyMs;`
-          }
-        }
-      },
-      {
-        id: `edition-${edition}-2`,
-        title: "Distributed Transaction Outbox Pattern: Guaranteeing Consistency in Cloud Slices",
-        source_url: "https://learn.microsoft.com/azure/architecture/",
-        target_role: role || "Cloud Architect",
-        target_stack: ["Cloud Infrastructure", "Architecture"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Architectural patterns validate the transactional outbox table as the primary defense against dual-write inconsistency.",
-            "Debezium and Kafka Connect change-data-capture (CDC) pipelines automate asynchronous event dispatch."
-          ],
-          why_it_matters: "Prevents orphaned database records and phantom downstream message broker publishes during system faults.",
-          how_it_affects_you: "You must encapsulate database operations and corresponding event rows inside a single local ACID transaction.",
-          what_to_do_next: {
-            action_type: "prepare",
-            guidance: "Audit existing domain command handlers to verify transactional outbox table schema support."
-          }
-        },
-        deep_detail: {
-          full_description: "When an application updates a database and sends an event to a message broker, a failure in either step leaves the system in an inconsistent state. The Outbox pattern writes the outgoing message directly into an 'Outbox' table within the exact same database transaction as the business entity changes, providing absolute transactional integrity.",
-          has_visual_diagram: true,
-          diagram_title: "Transactional Outbox & CDC Event Relay Pipeline"
-        }
-      },
-      {
-        id: `edition-${edition}-3`,
-        title: "WebAssembly GC & Component Model: Polyglot Cloud Microservices Entering Staging",
-        source_url: "https://webassembly.org",
-        target_role: role || "Full Stack Engineer",
-        target_stack: ["WebAssembly", "Tooling"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Wasm Component Model introduces interface types enabling seamless interoperability between Rust, C#, and Go binaries.",
-            "Native Garbage Collection (WasmGC) support drops cold-start footprint to sub-millisecond execution times."
-          ],
-          why_it_matters: "Enables secure, lightweight sandboxing for user-defined functions without container virtualization penalties.",
-          how_it_affects_you: "Edge serverless workers can be compiled once and deployed universally across multi-cloud environments.",
-          what_to_do_next: {
-            action_type: "learn",
-            guidance: "Review WASI Preview 2 specifications and build a prototype Wasm edge function."
-          }
-        }
-      },
-      {
-        id: `edition-${edition}-4`,
-        title: "PostgreSQL Connection Pooling: PgBouncer vs Odyssey Under Burst Concurrency",
-        source_url: "https://postgresql.org",
-        image_url: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?q=80&w=800&auto=format&fit=crop",
-        target_role: role || "Database Admin",
-        target_stack: ["SQL & Vector DB", "PostgreSQL"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Comparative stress testing demonstrates multi-threaded connection routers sustain 40,000 active concurrent client sessions.",
-            "Transaction-mode pooling drastically curtails PostgreSQL backend process fork memory degradation."
-          ],
-          why_it_matters: "Protects production database clusters from connection storms during sudden Kubernetes pod autoscaling bursts.",
-          how_it_affects_you: "Session state features like prepared statements require precise pooler transaction-mode configuration.",
-          what_to_do_next: {
-            action_type: "apply",
-            guidance: "Configure transaction-level connection pooling on staging read replicas before scaling client replica counts."
-          }
-        }
-      },
-      {
-        id: `edition-${edition}-5`,
-        title: "Kernel-Level Zero-Trust: Replacing Sidecar Proxies with Cilium & eBPF",
-        source_url: "https://cilium.io",
-        target_role: role || "DevOps Architect",
-        target_stack: ["Zero-Trust Security", "DevOps"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "eBPF sockmap optimizations bypass host TCP/IP stack overhead for pod-to-pod network transmission.",
-            "Zero-trust network policy enforcement shifts directly into the Linux kernel socket layer."
-          ],
-          why_it_matters: "Cuts microservice network latency in half by eliminating dual user-space context switches through Envoy sidecars.",
-          how_it_affects_you: "Service mesh telemetry is collected seamlessly without mutating pod deployments or injecting containers.",
-          what_to_do_next: {
-            action_type: "learn",
-            guidance: "Deploy Cilium CNI in a development cluster and benchmark pod ping latency."
-          }
-        }
-      },
-      {
-        id: `edition-${edition}-6`,
-        title: "Next-Gen Frontend Compilation: Lightning CSS & Rolldown Engine Acceleration",
-        source_url: "https://rolldown.rs",
-        target_role: role || "Frontend Architect",
-        target_stack: ["React & Next.js", "Tooling"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Rust-based Rolldown bundler delivers 10x-30x build acceleration with full Rollup plugin API compatibility.",
-            "Lightning CSS replaces legacy PostCSS plugins with native multi-threaded syntax tree parsing."
-          ],
-          why_it_matters: "Significantly decreases production CI build waiting times and accelerates developer hot-module reload feedback.",
-          how_it_affects_you: "Large monorepos can consolidate disparate CSS build setups into a single optimized binary pipeline.",
-          what_to_do_next: {
-            action_type: "apply",
-            guidance: "Benchmark Lightning CSS minification against current Webpack or Vite build configurations."
-          }
-        }
-      }
-    ];
-  } else {
-    return [
-      {
-        id: `edition-${edition}-1`,
-        title: "Vector Index Performance: HNSW vs IVFFlat Under High-Dimensionality Workloads",
-        source_url: "https://pgvector.dev",
-        image_url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop",
-        target_role: role || "AI Engineer",
-        target_stack: ["Generative AI & LLMs", "SQL & Vector DB"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Hierarchical Navigable Small World (HNSW) indexes demonstrate 98% recall at sub-10ms query latency for 1536-dimensional embeddings.",
-            "Memory footprint trade-offs require careful quantization tuning when scaling beyond 10 million vector records."
-          ],
-          why_it_matters: "Selecting the wrong indexing strategy causes vector retrieval timeouts during live retrieval-augmented generation (RAG).",
-          how_it_affects_you: "Production vector store setup must balance construction time, memory usage, and approximate nearest neighbor recall.",
-          what_to_do_next: {
-            action_type: "learn",
-            guidance: "Benchmark pgvector HNSW index parameters (m=16, ef_construction=64) on your domain embeddings dataset."
-          }
-        },
-        deep_detail: {
-          full_description: "Retrieval-Augmented Generation (RAG) platforms rely on low-latency vector similarity search across semantic embeddings. IVFFlat clusters vectors into inverted lists which offers rapid build times but requires re-indexing as data grows. HNSW builds multi-layer graph topologies that retain exceptional recall speed regardless of corpus size.",
-          has_visual_diagram: true,
-          diagram_title: "HNSW Multi-Layer Navigable Graph vs IVFFlat Voronoi Cells"
-        }
-      },
-      {
-        id: `edition-${edition}-2`,
-        title: "Fault-Tolerant Microservices: Combining Polly Retry Pipelines with Circuit Breakers",
-        source_url: "https://github.com/App-vNext/Polly",
-        target_role: role || "Senior Backend Engineer",
-        target_stack: [".NET Core", "Architecture"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Polly v8 redesign introduces unified resilience pipelines with zero-allocation telemetry hooks.",
-            "Circuit breakers combined with exponential jitter prevent thundering herd crashes on recovering upstream dependencies."
-          ],
-          why_it_matters: "Uncoordinated retry storms overwhelm impaired backend dependencies, turning minor blips into complete outages.",
-          how_it_affects_you: "All outbound HTTP client factories should be configured with jittered backoff strategies and breaker thresholds.",
-          what_to_do_next: {
-            action_type: "apply",
-            guidance: "Migrate legacy Polly syntax to the new ResiliencePipelineBuilder API pattern."
-          }
-        }
-      },
-      {
-        id: `edition-${edition}-3`,
-        title: "Event Sourcing Mechanics: Schema Evolution & Compatibility Modes in Kafka",
-        source_url: "https://kafka.apache.org",
-        target_role: role || "Cloud Architect",
-        target_stack: ["Cloud Infrastructure & Azure", "Microservices"],
-        priority: "major",
-        card_content: {
-          what_happened: [
-            "Confluent Schema Registry enforce FORWARD and FULL_TRANSITIVE validation rules preventing breaking consumer deserialization crashes.",
-            "Avro and Protobuf schema diffing integrated directly into CI pull request verification checks."
-          ],
-          why_it_matters: "Decoupled downstream consumer microservices crash when upstream domain events introduce incompatible schema modifications.",
-          how_it_affects_you: "Every schema mutation must adhere to strict backward or transitive compatibility rules.",
-          what_to_do_next: {
-            action_type: "prepare",
-            guidance: "Configure automated schema validation checks in your continuous integration deployment gates."
-          }
-        }
-      },
-      {
-        id: `edition-${edition}-4`,
-        title: "Browser Profiling Deep Dive: Diagnosing Detached DOM Trees & Event Closures",
-        source_url: "https://developer.chrome.com",
-        target_role: role || "Frontend Engineer",
-        target_stack: ["Angular & Web Frameworks", "TypeScript"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Chrome DevTools Memory snapshot comparisons reveal uncleaned RxJS subscriptions and detached component host elements.",
-            "Retained memory leaks degrade client page responsiveness during long-lived single-page application sessions."
-          ],
-          why_it_matters: "Gradual memory leakage causes browser tab crashes on enterprise workstations operating dashboards all day.",
-          how_it_affects_you: "Use takeUntilDestroyed() or AbortController signals to guarantee deterministic cleanup on component destroy.",
-          what_to_do_next: {
-            action_type: "avoid",
-            guidance: "Audit subscribe blocks and replace manual unsubscriptions with automated lifecycle destroy hooks."
-          }
-        }
-      },
-      {
-        id: `edition-${edition}-5`,
-        title: "Enterprise Generative AI: Structured Tool Calling & Output Grounding",
-        source_url: "https://ai.google.dev",
-        target_role: role || "AI Engineer",
-        target_stack: ["Generative AI & LLMs", "AI Systems"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Modern AI API frameworks introduce deterministic schema enforcement with response_schema and function declaration validation.",
-            "Hallucination rates fall below 0.5% when combining function calling with retrieval grounding."
-          ],
-          why_it_matters: "Enterprise automation requires 100% parseable JSON payloads without Markdown formatting artifacts or hallucinated fields.",
-          how_it_affects_you: "You can define Pydantic / JSON Schema models that the AI engine is mathematically constrained to conform to.",
-          what_to_do_next: {
-            action_type: "apply",
-            guidance: "Adopt structured JSON schema generation in your AI prompt orchestration workflows."
-          }
-        }
-      },
-      {
-        id: `edition-${edition}-6`,
-        title: "Zero-Trust Cloud Identity: Workload Identity Federation & Ephemeral Credentials",
-        source_url: "https://learn.microsoft.com",
-        target_role: role || "Security Engineer",
-        target_stack: ["Zero-Trust Cloud Security", "Cloud Infrastructure"],
-        priority: "brief",
-        card_content: {
-          what_happened: [
-            "Security standards mandate eliminating static long-lived API secrets and service principal passwords in CI/CD pipelines.",
-            "OpenID Connect (OIDC) token exchange grants short-lived ephemeral cloud access tokens with zero stored keys."
-          ],
-          why_it_matters: "Leaked long-lived repository secrets represent the number one vector for automated supply chain account compromises.",
-          how_it_affects_you: "GitHub Actions and Azure DevOps runners obtain temporary cloud access via cryptographically signed OIDC tokens.",
-          what_to_do_next: {
-            action_type: "apply",
-            guidance: "Deprecate repository secret credentials and configure OIDC federated credentials in Azure AD."
-          }
-        }
-      }
-    ];
-  }
 }
 
