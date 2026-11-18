@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-18  
 Current phase: 1 (Foundation & Documentation Consolidation)  
-Current task: 1.8a (Documentation consolidation — pending approval; next: Phase 2 or 1.8 ESLint cleanup & 6.1 compact-card fix)  
+Current task: 1.8a (Documentation consolidation — pending approval; next = 1.7b)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
