@@ -78,6 +78,7 @@ When deploying the Next.js frontend to Vercel (Preview and Production):
 - **Root Directory:** Set to `frontend` in Vercel Project Settings.
 - **Node.js Version:** `24.x` (matches `frontend/Dockerfile` and local verification; Next.js `16.3.0` with Turbopack).
 - **Standalone Output Handling:** [`frontend/next.config.ts`](frontend/next.config.ts) sets `output: process.env.VERCEL ? undefined : "standalone"`. Vercel sets `VERCEL=1` automatically, disabling `output: "standalone"` so Vercel's Next.js 16 build adapter (`onBuildComplete`) bundles routes cleanly without hitting `ENOENT` on `.next/next-server.js.nft.json`, while Docker (`frontend/Dockerfile` / `docker-compose.yml`) and local builds retain `output: "standalone"`.
+- **Self-Hosted Fonts (Zero External Fetch at Build Time):** `Space Grotesk`, `Plus Jakarta Sans`, and `Source Serif 4` (Latin `.woff2` + SIL OFL 1.1 licenses) are committed under `frontend/src/app/fonts/` and loaded via `next/font/local` in [`frontend/src/app/layout.tsx`](frontend/src/app/layout.tsx), so Vercel builds do not fetch fonts from `fonts.googleapis.com`.
 - **Required Environment Variables (Preview & Production):**
   - `NEXT_PUBLIC_SUPABASE_URL` — Bare Supabase project root URL (e.g. `https://<project-ref>.supabase.co`, **no trailing path** such as `/rest/v1` or `/auth/v1`).
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase project `anon` public key.

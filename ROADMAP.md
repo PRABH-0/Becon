@@ -65,6 +65,7 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 - [~] 1.10 Header cleanup: shared accessible `UserMenu` (`aria-haspopup`, `aria-expanded`, `role="menu"`/`menuitem`, Escape refocus, click-outside, arrow-key/Home/End/Tab nav, `max-w-[280px]` email truncation with `title`, guest `"Create account"` -> `/register?upgrade=1`, quiet rose `Sign out`) and shared `HeaderActions` right-side cluster (`[backLink] [ThemeToggle] [UserMenu]`, uniform `h-9` / `rounded-lg` / `gap-2`, zero overflow at 360px) adopted on `/` and `/profile` *(done, pending approval)*
 - [~] 1.10b Remove duplicate `ThemeToggle` from `/` coverage ribbon; right-align Prev/Next scroll buttons and add `min-w-0` on horizontal pill track *(done, pending approval)*
 - [~] 1.11 Fix Vercel preview build failure (`ENOENT` on `.next/next-server.js.nft.json` in `onBuildComplete`): make `output: "standalone"` conditional on `!process.env.VERCEL` in `frontend/next.config.ts` so Vercel builds cleanly while Docker keeps standalone output; add Vercel deployment notes to `README.md` *(done, pending approval)*
+- [~] 1.12 Self-host fonts via `next/font/local`: bundle Latin `.woff2` files + OFL licenses under `frontend/src/app/fonts/` for `Space Grotesk` (`500, 600, 700`), `Plus Jakarta Sans` (`400, 500, 600, 700`), and editorial serif `Source Serif 4` (`400, 600, 700, 900`, resolving Task `6.6`'s missing serif); eliminates build-time Google Fonts fetches on Vercel *(done, pending approval)*
 
 *Pending manual QA (to be done post-push): email signup + verification, Google OAuth, guest upgrade, forgot/reset password, account deletion, token refresh, and `alembic upgrade head` against the Supabase dev project (RLS role check).*
 
@@ -120,7 +121,7 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 - [ ] 6.3 Remove ~1,300 lines of mock fallback generators from `page.tsx`; split `page.tsx` into components
 - [ ] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles)
 - [ ] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive
-- [ ] 6.6 Typography (load editorial serif), token cleanup, accessibility fixes (focus, Escape, contrast, aria; *note: Profile Menu dropdown Escape/`aria-expanded`/keyboard a11y resolved in `1.10`*)
+- [ ] 6.6 Typography (load editorial serif — *resolved in `1.12` via self-hosted Source Serif 4*), token cleanup, accessibility fixes (focus, Escape, contrast, aria; *note: Profile Menu dropdown Escape/`aria-expanded`/keyboard a11y resolved in `1.10`*)
 - [ ] 6.7 Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow
 
 *Exit: full user flow works against real data.*
@@ -196,3 +197,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-18 | 1.10 | Pending Approval | Header cleanup on `task-1.10-header-usermenu`: created accessible `UserMenu` (`aria-haspopup`, `aria-expanded`, `role="menu"`/`menuitem`, Escape refocus, click-outside, arrow-key/Tab nav, `max-w-[280px]` truncated email + `title`, guest `"Create account"` -> `/register?upgrade=1`, quiet rose `Sign out`) and shared `HeaderActions` (`h-9`, `rounded-lg`, `gap-2`, responsive `← Gazette` back link) adopted on `/` and `/profile` |
 | 2026-11-18 | 1.10b | Pending Approval | Removed duplicate inline theme toggle from `/` coverage ribbon (`task-1.10b-remove-ribbon-toggle`), right-aligned Prev/Next scroll controls with `min-w-0` pill track, added single-switch & `becon_theme` persistence tests |
 | 2026-11-18 | 1.11 | Pending Approval | Fixed Vercel preview build failure (`task-1.11-vercel-build`): made `output: "standalone"` conditional (`process.env.VERCEL ? undefined : "standalone"`) in `frontend/next.config.ts` so Vercel's Next 16 adapter succeeds while Docker retains standalone output; added Vercel deployment notes to `README.md` |
+| 2026-11-18 | 1.12 | Pending Approval | Self-hosted fonts via `next/font/local` (`task-1.12-self-host-fonts`): bundled Latin `.woff2` files + OFL 1.1 licenses under `frontend/src/app/fonts/` for `Space Grotesk`, `Plus Jakarta Sans`, and editorial serif `Source Serif 4` (also closing Task `6.6`'s missing editorial serif) so Vercel builds make zero Google Fonts fetches |

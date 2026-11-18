@@ -72,9 +72,9 @@ The styling architecture uses **Tailwind CSS v4** without a `tailwind.config.ts`
 
 | Font Family | Declared Variable | Applied Elements | Issue / Note |
 | :--- | :--- | :--- | :--- |
-| **Space Grotesk** | `--font-heading` (`500, 600, 700`) | `h1-h6` via `globals.css:28-30` | Defined in `layout.tsx:7-11`. Substituted on almost all headlines by utility classes. |
-| **Plus Jakarta Sans** | `--font-body` (`400, 500, 600, 700`) | `body` via `globals.css:22-26` | Defined in `layout.tsx:13-17`. Global fallback body typeface. |
-| **Serif (Editorial)** | None (Default system serif) | Card titles, brand headers (`font-serif`) | **Missing declaration.** Classes like `font-serif text-3xl font-black` use system serif (Times/Georgia) because no webfont is loaded. |
+| **Space Grotesk** | `--font-heading` (`500, 600, 700`) | `h1-h6` via `globals.css:28-30` | Self-hosted via `next/font/local` in `frontend/src/app/fonts/space-grotesk/` (OFL 1.1). |
+| **Plus Jakarta Sans** | `--font-body` (`400, 500, 600, 700`) | `body` via `globals.css:22-26` | Self-hosted via `next/font/local` in `frontend/src/app/fonts/plus-jakarta-sans/` (OFL 1.1). Global body typeface. |
+| **Source Serif 4 (Editorial Serif)** | `--font-editorial-serif` -> `--font-serif` (`400, 600, 700, 900`) | Card titles, brand headers (`font-serif`) | Self-hosted via `next/font/local` in `frontend/src/app/fonts/source-serif-4/` (OFL 1.1, Task 1.12 / 6.6) with Georgia / Times New Roman fallback. |
 | **Monospace (Data / Tags)** | None (Default system mono) | Timestamps, tags, badges, search bar (`font-mono`) | Uses system default monospace font stack. |
 
 #### Type Scale & Weights (As Implemented)
