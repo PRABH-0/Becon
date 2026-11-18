@@ -97,30 +97,50 @@ class InProcessRateLimiter:
 
             q.append(now)
 
+    def _assert_quota_available_locked(self, user_key: str | None = None) -> None:
+        self._roll_day_if_needed()
+
+        if self._global_gemini_count >= settings.GEMINI_DAILY_CAP_GLOBAL:
+            retry_after = seconds_until_utc_midnight()
+            raise GeminiQuotaExceededError(
+                detail="Global daily AI quota exceeded. Please try again tomorrow.",
+                retry_after=retry_after,
+            )
+
+        if user_key is not None:
+            if self._user_gemini_counts[user_key] >= settings.GEMINI_DAILY_CAP_PER_USER:
+                retry_after = seconds_until_utc_midnight()
+                raise GeminiQuotaExceededError(
+                    detail="Your daily AI request quota has been reached. Please try again tomorrow.",
+                    retry_after=retry_after,
+                )
+
+    def check_gemini_quota(self, user_key: str | None = None) -> None:
+        """Pre-flight check that daily Gemini quota is available without incrementing counters."""
+        if not settings.RATE_LIMIT_ENABLED:
+            return
+        with self._lock:
+            self._assert_quota_available_locked(user_key=user_key)
+
+    def record_gemini_usage(self, user_key: str | None = None) -> None:
+        """Record one completed/reached Gemini logical request against daily caps."""
+        if not settings.RATE_LIMIT_ENABLED:
+            return
+        with self._lock:
+            self._roll_day_if_needed()
+            if user_key is not None:
+                self._user_gemini_counts[user_key] += 1
+            self._global_gemini_count += 1
+
     def consume_gemini_quota(self, user_key: str | None = None) -> None:
         """Enforce hard UTC-day per-user and global Gemini call caps; raise GeminiQuotaExceededError."""
         if not settings.RATE_LIMIT_ENABLED:
             return
 
         with self._lock:
-            self._roll_day_if_needed()
-
-            if self._global_gemini_count >= settings.GEMINI_DAILY_CAP_GLOBAL:
-                retry_after = seconds_until_utc_midnight()
-                raise GeminiQuotaExceededError(
-                    detail="Global daily AI quota exceeded. Please try again tomorrow.",
-                    retry_after=retry_after,
-                )
-
+            self._assert_quota_available_locked(user_key=user_key)
             if user_key is not None:
-                if self._user_gemini_counts[user_key] >= settings.GEMINI_DAILY_CAP_PER_USER:
-                    retry_after = seconds_until_utc_midnight()
-                    raise GeminiQuotaExceededError(
-                        detail="Your daily AI request quota has been reached. Please try again tomorrow.",
-                        retry_after=retry_after,
-                    )
                 self._user_gemini_counts[user_key] += 1
-
             self._global_gemini_count += 1
 
 
