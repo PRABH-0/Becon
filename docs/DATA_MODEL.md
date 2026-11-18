@@ -184,11 +184,11 @@ Alembic manages all schema lifecycle events across SQLite (local development) an
 
 ### Migration History
 1. `0001_baseline`: Stamped baseline representing initial schema.
-2. `0002_full_schema`: Full schema expansion (20 application tables), email deduplication, and check constraints.
+2. `0002_full_schema`: Full schema expansion (all application tables cataloged in Section 3), email deduplication, and check constraints.
 3. `0003_supabase_auth_rls`:
    - Makes `user_profiles.email` nullable (`VARCHAR(255) NULL`).
    - Cleanses existing empty strings (`''`) and synthetic guest emails (`@guest.becon.local`) to `NULL`.
-   - Enables Row Level Security (RLS) on all 20 application tables (+ `alembic_version` = 21 with RLS) in PostgreSQL with zero policies (blocking direct PostgREST Data API queries via anon/authenticated roles, while allowing backend service role/owner connections).
+   - Enables Row Level Security (RLS) on all application tables and `alembic_version` in PostgreSQL with zero policies (blocking direct PostgREST Data API queries via anon/authenticated roles, while allowing backend service role/owner connections).
 
 ### Adoption of Existing Local Database (`becon.db`)
 Existing local databases containing the initial unversioned schema must be stamped with baseline `0001` before upgrading:
@@ -242,9 +242,9 @@ The seeder performs upserts keyed by `slug`, synchronizes aliases, establishes p
 
 ---
 
-## 8. Ingestion Pipeline & Persistence (Task 1.5)
+## 8. Ingestion Pipeline & Persistence
 
-The ingestion pipeline ([`backend/app/ingestion.py`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/ingestion.py)) replaces transient in-memory card dictionaries with durable database persistence across `sources`, `raw_items`, `events`, `cards`, and `card_variants`:
+The ingestion pipeline ([`backend/app/ingestion.py`](../backend/app/ingestion.py)) replaces transient in-memory card dictionaries with durable database persistence across `sources`, `raw_items`, `events`, `cards`, and `card_variants`:
 
 1. **Source Tracking:** Resolves each configured feed URL into a `sources` record with fetch timestamps (`last_fetched_at`, `last_success_at`), error tracking (`last_error`), and consecutive failure counters.
 2. **Idempotent Raw Ingestion:** Parses incoming feed items into `raw_items` with SHA-256 hashes on normalized canonical URLs and article content. Re-running ingestion on existing feeds generates zero duplicate raw items.
