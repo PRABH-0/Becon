@@ -37,7 +37,12 @@ Becon is a career update companion (not a news app): a 3-5 minute daily briefing
 
 ## Audit baseline (2026-11-17)
 
-Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks served), nothing persisted (in-memory cache only), sources are Google News/dev.to not official, main feed omits "How it affects you" and "What to do next", infinite scroll present, unauthenticated ingest/guest endpoints, no migrations, no tests/CI/Docker/scheduler, duplicate user rows, two auth systems.
+Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
+- **Runtime:** Python 3.12 / FastAPI + SQLAlchemy (SQLite `becon.db`), Node 24 / Next.js 16.3 + React 19 + Tailwind CSS v4.
+- **Working at baseline:** Local FastAPI + Next.js dev servers ran, Bento Grid UI and light/dark theme worked, `tsc` clean.
+- **Data & AI gaps:** `GEMINI_API_KEY` inactive (heuristic fallback templates served), zero card persistence (in-memory dict cache only), no Alembic migrations, no unique email constraint (duplicate `user_profiles` rows), no semantic dedup, feeds relied on Google News & dev.to instead of official sources.
+- **Product & UI gaps:** Main feed cards omitted *How it affects you* and *What to do next*, no card detail drawer, infinite scroll + page-lift violated time-boxed briefing vision, no email/password UI.
+- **Security & tooling gaps:** Unauthenticated `/api/ingest` and `/api/auth/guest`, custom JWT expiry bug (`15m` vs `7d`), unsanitized `custom_prompt`, wildcard CORS, two auth systems, zero automated tests, CI, Docker, or background scheduler.
 
 ---
 
