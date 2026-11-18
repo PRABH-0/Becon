@@ -105,7 +105,7 @@ class UserProfile(Base):
 class SavedBriefing(Base):
     """Legacy saved briefings table.
 
-    DEPRECATED: No user link, unused by modern cards. Retained until phase 1.5.
+    DEPRECATED: No user link, unused by modern cards. Dropped in Phase 6.5 (after saved_cards UI ships).
     """
 
     __tablename__ = "saved_briefings"

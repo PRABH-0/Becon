@@ -23,7 +23,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `feed_service.py`: Database-backed feed querying, stale-while-revalidate orchestration, and pagination slicing (zero in-memory cache).
   - `ai_service.py`: Google Gemini integration (`google-genai`), Pydantic schema-constrained JSON extraction.
   - `database.py`: SQLAlchemy session and engine management with naming conventions for SQLite and PostgreSQL.
-  - `models.py`: Declarative ORM models (20 tables; see [docs/DATA_MODEL.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/DATA_MODEL.md)).
+  - `models.py`: Declarative ORM models (20 application tables (+ `alembic_version` = 21 with RLS); see [docs/DATA_MODEL.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/DATA_MODEL.md)).
   - `seed/`: Idempotent data seeder loading professions and focus topics from JSON files in `seed/data/`.
   - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `UserProfileBase`, `UserMeResponse`, `HealthResponse`).
 - **Frontend ([frontend/src](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src)):** Next.js 16 App Router broadsheet web app using Tailwind CSS v4 and Lucide icons.
@@ -52,7 +52,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 | **Typecheck**| `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A | Verified |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` | Verified |
 | **Build** | `cd frontend && npm run build` | N/A | N/A | Verified |
-| **Test** | `cd frontend && npm test` *(25 unit tests via Vitest)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
+| **Test** | `cd frontend && npm test` *(41 unit tests via Vitest)* | `backend\.venv\Scripts\pytest backend\tests -v` | `.\scripts\dev.ps1 test` | Verified |
 | **Docker** | `docker compose build && docker compose up -d` | `docker compose build && docker compose up -d` | N/A | Config Verified |
 
 ## 5. Environment Variables
@@ -69,6 +69,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `INGEST_API_TOKEN`: Secret authorization token for `POST /api/ingest`.
   - `ALLOWED_ORIGINS`: Comma-separated CORS allowed domains (e.g. `http://localhost:3000`).
   - `ENABLE_DOCS`: Toggle for `/docs` and `/redoc` Swagger documentation endpoints (`"true"`/`"false"`).
+  - `FEED_CACHE_TTL_SECONDS`: Stale-while-revalidate TTL in seconds for persisted briefing cards (default: `1800`).
 - **Frontend (`frontend/.env.local`):**
   - `NEXT_PUBLIC_API_URL`: Base URL of the backend FastAPI service (e.g. `http://127.0.0.1:8000`).
   - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for Google OAuth handling.
@@ -81,9 +82,9 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 
 ## 7. Data Model Summary & Migrations
 Full specification and ER diagram documented in [docs/DATA_MODEL.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/DATA_MODEL.md).
-- **20 Tables:** `user_profiles` (migrated, unique email), `saved_briefings` (legacy, DEPRECATED), `professions`, `focus_topics`, `topic_aliases`, `profession_topics`, `user_focus_topics`, `sources`, `source_topics`, `user_follows`, `raw_items`, `events`, `event_topics`, `cards`, `card_variants`, `saved_cards`, `card_feedback`, `error_reports`, `deliveries`, `metrics_events`.
+- **20 application tables (+ `alembic_version` = 21 with RLS):** `user_profiles` (migrated, unique email), `saved_briefings` (legacy, DEPRECATED), `professions`, `focus_topics`, `topic_aliases`, `profession_topics`, `user_focus_topics`, `sources`, `source_topics`, `user_follows`, `raw_items`, `events`, `event_topics`, `cards`, `card_variants`, `saved_cards`, `card_feedback`, `error_reports`, `deliveries`, `metrics_events`.
 - **Design Rules:** UUID PKs (`sa.Uuid`), UTC timestamps, portable JSON (`JSONB` on Postgres), check constraints for fixed vocabularies, lowercase email and alias indexing, safe get-or-create handling on races.
-- **Migrations:** Alembic baseline `0001` (stamps existing DB), `0002_full_schema` (creates tables, deduplicates emails), and `0003_supabase_auth_rls` (nullable email, PostgreSQL RLS enabled on all 21 tables).
+- **Migrations:** Alembic baseline `0001` (stamps existing DB), `0002_full_schema` (creates tables, deduplicates emails), and `0003_supabase_auth_rls` (nullable email, PostgreSQL RLS enabled on all 20 application tables + `alembic_version` = 21 with RLS).
 - **Identity & Auth:** Full specification in [docs/AUTH.md](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/docs/AUTH.md). Supabase Auth is single identity provider; custom JWT and local credentials retired. Protected routes require Supabase Bearer token; frontend client uses `AuthContext` and `apiFetch` with silent session refresh.
 - **Database Selection:** Handled in [`backend/app/database.py`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/database.py). Defaults to SQLite locally; normalizes `postgres://` to `postgresql+psycopg2://` for Postgres/Supabase.
 
@@ -97,11 +98,13 @@ Full specification and ER diagram documented in [docs/DATA_MODEL.md](file:///d:/
 7. **Adhere to Report Format:** Always complete turns with the exact progress report template shown in Section 10.
 
 ## 9. Known Gaps & Tech Debt (Factual)
-- [`frontend/src/app/page.tsx:1638-2035`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1638-L2035): Main feed cards omit *How It Affects You* and *What To Do Next* (tactical guidance).
-- [`frontend/src/app/page.tsx:1723`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1723): No modal or drawer component exists for card deep-dives (code snippets/diagrams).
+- *Resolved in Tasks 6.1 & 6.2*: Main feed extracted `LeadCard`, `RectangleCard`, `SquareCard`, `BriefCard`, `ActionBadge`, `ActionCardBody`, and `CardDrawer`; infinite scroll and page-lift animation removed (D12).
+- [`frontend/src/components/cards/ActionCardBody.tsx:80-110`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/components/cards/ActionCardBody.tsx#L80-L110): Compact card variant (`SquareCard`, `BriefCard`) still omits *Why It Matters* when *How It Affects You* is present (pending fix in Task 6.1).
+- [`frontend/src/app/page.tsx`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx): ~610 lines of mock fallback generators remain (Task 6.3), and 12 non-trivial ESLint errors (`react-hooks/set-state-in-effect`, `immutability`, `preserve-manual-memoization`, `@typescript-eslint/no-explicit-any`) remain across `page.tsx`, `profile/page.tsx`, `onboarding/page.tsx`, and `ThemeContext.tsx` (Task 1.8 / 6.3).
+- Frontend-backend search contract mismatch: frontend calls `GET /api/search-topic` and `GET /api/topic-search`, while backend only exposes `GET /api/briefings/search` (whose `TopicSearchResponse` omits `cards`) and `POST /api/ai/match-topics` (Task 1.7).
 - *Resolved in Task 1.5*: Ingestion pipeline persists sources, raw_items, events, cards, and card_variants in the database with exact deduplication; in-memory `_USER_CACHES` retired. Feed served directly from DB with stale-while-revalidate background refresh.
-- [`backend/app/feed_service.py:18-138`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L18-L138): Feeds rely on `dev.to` and Google News queries rather than official vendor release notes and advisories (Phase 2).
-- Legacy table `saved_briefings` has no user relation; slated for removal.
+- [`backend/app/feed_service.py:31-154`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/backend/app/feed_service.py#L31-L154): Feeds rely on `dev.to` and Google News queries rather than official vendor release notes and advisories (Phase 2).
+- Legacy table `saved_briefings` has no user relation; slated for removal in Phase 6.5 (after `saved_cards` UI ships).
 
 ## 10. Required Progress Report Format
 ```

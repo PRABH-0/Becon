@@ -2,9 +2,9 @@
 
 Single source of truth for where the project stands. Lives in the repo root. Maintained by the project lead (Claude chat) and updated by Antigravity after each approved task.
 
-Last updated: 2026-11-17  
-Current phase: 1 (Foundation)  
-Current task: Phase 1 closed; next: 6.1 and 6.2 (render all 4 Action Card parts, remove infinite scroll)  
+Last updated: 2026-11-18  
+Current phase: 1 (Stabilization & Pre-Phase-2 Hardening)  
+Current task: 1.6 (Pre-push stabilization; next: 1.7 Pre-Phase-2 hardening and 6.1 compact-card fix)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -50,12 +50,16 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 
 ## PHASE 1: Foundation
 - [x] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
+- [~] 1.1b Remote secrets scan and local history rewrite *(remote history/UI_DESIGN drift unverified)*
 - [x] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
 - [x] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
 - [x] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages
-- [x] 1.4c Post-auth cleanup and docs drift: docker-compose cleanup, .env.example matching CLAUDE.md, UI_DESIGN.md and README.md updated, CI PostgreSQL service container job added
+- [~] 1.4c Post-auth cleanup and docs drift: docker-compose cleanup, .env.example matching CLAUDE.md, UI_DESIGN.md and README.md updated, CI PostgreSQL service container job added *(remote history/UI_DESIGN drift unverified)*
 - [x] 1.4d Viewport fitting: auth pages fit within one viewport without scrollbars via AuthShell and responsive height queries
 - [x] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
+- [~] 1.6 Pre-push stabilization: back up and discard dirty `page.tsx` diff, verify green `tsc`/`test`/`build`, fix trivial ESLint errors, update `dev.ps1 test` to run frontend + backend tests, fix high-priority doc drift, commit & push *(pending lead approval)*
+- [ ] 1.7 Pre-Phase-2 hardening: fix `/api/search-topic` and `/api/topic-search` vs `/api/briefings/search` contract (`TopicSearchResponse` strips `cards`), rate limiting on unauthenticated endpoints, `hmac.compare_digest` for ingest token, gate `refresh=true` and `/api/ai/match-topics`, tighten CORS, test for soft-delete 401, cap auto-created `Profession` rows
+- [ ] 1.8 Docs drift cleanup: refresh `UI_DESIGN.md` Sections 6–9 & 12, update `CLAUDE.md` Section 3 component inventory, and resolve remaining 12 ESLint hook/`any` errors (remove CI `continue-on-error: true` once at 0 errors)
 
 *Pending manual QA (to be done post-push): email signup + verification, Google OAuth, guest upgrade, forgot/reset password, account deletion, token refresh, and `alembic upgrade head` against the Supabase dev project (RLS role check).*
 
@@ -106,8 +110,8 @@ Backend runs, UI polished, tsc clean. Gaps: Gemini inactive (template fallbacks 
 ---
 
 ## PHASE 6: Frontend completion
-- [ ] 6.1 Render all 4 Action Card parts and action badge on every card; card detail drawer
-- [ ] 6.2 Remove infinite scroll and page-lift (D12); finite briefing with "you're done" end state
+- [~] 6.1 Render all 4 Action Card parts and action badge on every card; card detail drawer *(committed `376852d`; compact cards omit `why_it_matters`; fix pending)*
+- [x] 6.2 Remove infinite scroll and page-lift (D12); finite briefing with "you're done" end state *(committed `4afb33f`)*
 - [ ] 6.3 Remove ~1,300 lines of mock fallback generators from `page.tsx`; split `page.tsx` into components
 - [ ] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles)
 - [ ] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive
@@ -171,10 +175,13 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | :--- | :--- | :--- | :--- |
 | 2026-11-17 | 0.1, 0.2, 0.3 | Done | Audit, UI audit and repo CLAUDE.md created |
 | 2026-11-17 | 1.1 | Done (`af04d7b`) | Hygiene & security guardrails implemented: .gitignore updated, obsolete DB scripts removed, settings centralized, ingest endpoint protected, guest rate-limited, token expiry fixed, personal defaults removed, prompt sanitized, test suite passing |
-| 2026-11-17 | 1.1b | Done (`0e9831d`) | Remote secrets scan, SECRET_KEY verified, local history safely rewritten to remove unredacted report commits, smoke tests passed |
+| 2026-11-17 | 1.1b | Partial (`0e9831d`) | Remote secrets scan, SECRET_KEY verified, local history rewritten, smoke tests passed *(remote history/UI_DESIGN drift unverified)* |
 | 2026-11-17 | 1.2 | Done (`5da2a57`) | Approved by lead: Added GET /health, stdlib structured logging, requirements.lock, multi-stage Dockerfiles, docker-compose.yml, GitHub Actions CI, dev.ps1, pre-commit config, and README |
-| 2026-11-17 | 1.3 | Done (`56d11d4`) | Approved by lead: Alembic migrations setup (0001 baseline + 0002 full schema), 20 declarative ORM tables with UUID PKs and CHECK constraints, email deduplication on user_profiles, safe get-or-create user handling, idempotent seed data (54 topics, 2 professions), docs/DATA_MODEL.md, comprehensive test suite |
-| 2026-11-17 | 1.4a/b | Done (`de4952d`, `903f769`) | Supabase Auth end-to-end: PyJWT JWKS (ES256/RS256) and HS256 fallback, user mapping, migration 0003 for nullable email and PostgreSQL RLS on all 21 tables, retired custom JWT, added GET /api/me & DELETE /api/account, frontend AuthContext, apiFetch refresh retry, unified AuthForm, danger zone deletion, 25 Vitest tests. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
-| 2026-11-17 | 1.4c | Done (`ad6b6b7`) | Post-auth cleanup and docs drift: docker-compose retired SECRET_KEY removed and Supabase variables passed through, .env.example matching CLAUDE.md Section 5, UI_DESIGN.md updated, AUDIT_REPORT.md historical baseline note added, README.md Supabase setup section added, CI PostgreSQL service container job added. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
+| 2026-11-17 | 1.3 | Done (`56d11d4`) | Approved by lead: Alembic migrations setup (0001 baseline + 0002 full schema), 20 application ORM tables (+ alembic_version = 21 with RLS) with UUID PKs and CHECK constraints, email deduplication on user_profiles, safe get-or-create user handling, idempotent seed data (54 topics, 2 professions), docs/DATA_MODEL.md, comprehensive test suite |
+| 2026-11-17 | 1.4a/b | Done (`de4952d`, `903f769`) | Supabase Auth end-to-end: PyJWT JWKS (ES256/RS256) and HS256 fallback, user mapping, migration 0003 for nullable email and PostgreSQL RLS on all 20 application tables (+ alembic_version = 21 with RLS), retired custom JWT, added GET /api/me & DELETE /api/account, frontend AuthContext, apiFetch refresh retry, unified AuthForm, danger zone deletion, 25 Vitest tests. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
+| 2026-11-17 | 1.4c | Partial (`ad6b6b7`) | Post-auth cleanup and docs drift: docker-compose retired SECRET_KEY removed and Supabase variables passed through, .env.example matching CLAUDE.md Section 5, UI_DESIGN.md partially updated, AUDIT_REPORT.md historical baseline note added, README.md Supabase setup section added, CI PostgreSQL service container job added *(remote history/UI_DESIGN drift unverified)* |
 | 2026-11-17 | 1.4d | Done (`7a6c521`) | Viewport fitting: created shared AuthShell, set h-dvh min-h-dvh, compacted vertical rhythm, added responsive height queries ([@media(max-height:760px)]:hidden on subtitles) so all auth pages fit within one viewport without scrollbars at 680px and 600px. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
 | 2026-11-17 | 1.5 | Done (`72d873c`) | Feed ingestion pipeline (backend/app/ingestion.py), exact deduplication (URL and title), durable DB persistence across sources/raw_items/events/cards/card_variants, lazy variant caching, stale-while-revalidate serving, in-memory _USER_CACHES retired, 44 passing backend tests. Approved by lead; manual browser QA of auth flows pending, to be done post-push |
+| 2026-11-17 | 6.1 | In Progress (`376852d`) | Extracted 4-part card components (`LeadCard`, `RectangleCard`, `SquareCard`, `BriefCard`, `ActionBadge`, `ActionCardBody`) and `CardDrawer` (+13 Vitest tests); compact cards still omit `why_it_matters` (fix pending) |
+| 2026-11-17 | 6.2 | Done (`4afb33f`) | Removed infinite scroll, wheel/touch listeners, and page-lift animation (D12); added `BRIEFING_MAX_CARDS=10`, reading-time estimate, and "You're all caught up for today" end state (+3 Vitest tests) |
+| 2026-11-18 | 1.6 | In Progress | Pre-push stabilization: backed up and restored dirty `page.tsx`, verified green backend/frontend checks, fixed trivial ESLint issues (down to 12 errors/4 warnings), updated `dev.ps1 test` to run backend + frontend tests, resolved high-priority doc drift, added `docs/COMPLETION_REPORT.md`, committed & pushed |

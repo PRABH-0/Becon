@@ -1,5 +1,6 @@
 # Becon — Frontend UI Architecture & Design Documentation
 
+> **Note:** Sections 6-9 and 12 predate Tasks 6.1/6.2; refresh pending in Task 1.8.  
 > **Status:** Current State Documentation (As-Built)  
 > **Source Directory:** `frontend/`  
 > **Last Updated:** November 2026  
@@ -301,11 +302,9 @@ The frontend contains extensive fallback generators that produce simulated cards
 | :--- | :--- | :--- | :--- |
 | **HIGH** | **Missing Action Guidance & Impact Sections on Cards** | The 4-part Action Card is Becon's core differentiator. Main feed cards omit `how_it_affects_you` and `what_to_do_next`, turning cards into standard news summaries. | [`frontend/src/app/page.tsx:1638-2035`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1638-L2035) |
 | **HIGH** | **Missing Card Detail Modal / Drawer** | Clicking a card immediately navigates away to third-party sources. No in-app expanded view exists for code snippets, architecture diagrams, or full writeups. | [`frontend/src/app/page.tsx:1723,1768,1898`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1723) |
-| **HIGH** | **Missing Email/Password Authentication** | The backend provides traditional JWT email registration, but `/login` and `/register` only render Google OAuth and Guest buttons. | [`frontend/src/app/login/page.tsx`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/login/page.tsx), [`frontend/src/app/register/page.tsx`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/register/page.tsx) |
 | **MEDIUM** | **Unclickable Coverage Topic Pills** | Topic pills in the sticky sub-header ribbon show active topics but cannot be clicked to filter the feed. | [`frontend/src/app/page.tsx:1010-1035`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L1010-L1035) |
 | **MEDIUM** | **Missing Save / Bookmark Functionality** | Users cannot save cards to a personal digest or team backlog, despite backend database support (`SavedBriefing`). | Whole frontend |
 | **MEDIUM** | **Missing Editorial Serif Font Declaration** | Headings use `font-serif`, but no serif font is loaded in `layout.tsx` or `globals.css`, causing inconsistent system font fallbacks. | [`frontend/src/app/layout.tsx:7-17`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/layout.tsx#L7-L17) |
-| **MEDIUM** | **Duplicated Route Code between Login and Register** | `login/page.tsx` and `register/page.tsx` are 95% copy-pasted duplicates sharing identical logic and buttons. | [`frontend/src/app/login/page.tsx`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/login/page.tsx), [`frontend/src/app/register/page.tsx`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/register/page.tsx) |
 | **LOW** | **Hardcoded Background Color Inconsistency** | `globals.css` specifies `#090d16` for dark mode, while layout and pages hardcode `#070b12`. | [`frontend/src/app/globals.css:11`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/globals.css#L11), [`frontend/src/app/layout.tsx:51`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/layout.tsx#L51) |
 | **LOW** | **Bloated Page Component** | `frontend/src/app/page.tsx` contains 3,381 lines of code because multiple vertical mock databases are embedded in the component file. | [`frontend/src/app/page.tsx:2038-3381`](file:///d:/Prabhjot%20Private/Personal-Projects/Becon/frontend/src/app/page.tsx#L2038-L3381) |
 

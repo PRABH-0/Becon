@@ -206,7 +206,7 @@ Run this checklist against a live Supabase project to verify end-to-end function
   - On `/login`, click "Continue as Guest".
   - Redirected to `/`: Verify `<GuestBanner />` displays with upgrade prompt.
 - [ ] **5. Guest account upgrade**:
-  - Click upgrade button on `<GuestBanner />` or navigate to `/register?mode=upgrade`.
+  - Click upgrade button on `<GuestBanner />` or navigate to `/register?upgrade=1`.
   - Enter email and password: Confirm session upgrades to permanent account without losing reading history.
 - [ ] **6. Password reset**:
   - Navigate to `/forgot-password`, enter registered email, and submit.

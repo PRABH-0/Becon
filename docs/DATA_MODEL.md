@@ -136,7 +136,7 @@ Product telemetry and interaction logs. **Rule**: Strict privacy boundary — ab
 Stores user identity, authentication provider, delivery preferences, timezone, and profession link.
 
 ### 20. `saved_briefings` (Legacy Table, Retained)
-Retained for backwards compatibility; marked `DEPRECATED`. No longer created by modern pipeline and will be dropped in Phase 1.5.
+Retained for backwards compatibility; marked `DEPRECATED`. No longer created by modern pipeline and will be dropped in Phase 6.5 (after `saved_cards` UI ships).
 
 ---
 
@@ -174,7 +174,7 @@ In `user_profiles`:
 - `aiTone`: **DEPRECATED**.
 
 Legacy table `saved_briefings`:
-- **DEPRECATED**. Does not link to users or support four-part Action Cards. Retained during Phase 1 transitions and targeted for deletion in Phase 1.5.
+- **DEPRECATED**. Does not link to users or support four-part Action Cards. Retained during Phase 1 transitions and targeted for deletion in Phase 6.5 (after `saved_cards` UI ships).
 
 ---
 
@@ -184,11 +184,11 @@ Alembic manages all schema lifecycle events across SQLite (local development) an
 
 ### Migration History
 1. `0001_baseline`: Stamped baseline representing initial schema.
-2. `0002_full_schema`: Full schema expansion (20 tables), email deduplication, and check constraints.
+2. `0002_full_schema`: Full schema expansion (20 application tables), email deduplication, and check constraints.
 3. `0003_supabase_auth_rls`:
    - Makes `user_profiles.email` nullable (`VARCHAR(255) NULL`).
    - Cleanses existing empty strings (`''`) and synthetic guest emails (`@guest.becon.local`) to `NULL`.
-   - Enables Row Level Security (RLS) on all 21 tables in PostgreSQL with zero policies (blocking direct PostgREST Data API queries via anon/authenticated roles, while allowing backend service role/owner connections).
+   - Enables Row Level Security (RLS) on all 20 application tables (+ `alembic_version` = 21 with RLS) in PostgreSQL with zero policies (blocking direct PostgREST Data API queries via anon/authenticated roles, while allowing backend service role/owner connections).
 
 ### Adoption of Existing Local Database (`becon.db`)
 Existing local databases containing the initial unversioned schema must be stamped with baseline `0001` before upgrading:
