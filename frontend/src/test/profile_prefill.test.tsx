@@ -294,7 +294,7 @@ describe("Profile identity prefill & Google OAuth prompt (Task 1.9)", () => {
 
     fireEvent.click(profileBtn);
     expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
-    expect(screen.getByText("Staff Engineer")).toBeInTheDocument();
+    expect(screen.getByText("ada@gmail.com")).toBeInTheDocument();
     expect(screen.queryByText("Reader")).toBeNull();
   });
 });
