@@ -1,6 +1,6 @@
 "use client";
 
-import { Layers, Radio, Flame, Pin, ChevronLeft, ChevronRight, ArrowUp, X, Loader2, CheckCircle2, ArrowRight } from "lucide-react";
+import { Layers, Radio, Flame, Pin, ChevronLeft, ChevronRight, ArrowUp, CheckCircle2, ArrowRight } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";

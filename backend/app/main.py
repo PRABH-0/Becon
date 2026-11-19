@@ -23,7 +23,7 @@ from app.ai_service import ai_match_topics
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user, sanitize_https_avatar_url
-from app.feed_service import get_live_briefings, search_topic_briefings
+from app.feed_service import get_live_briefings
 from app.ingestion import run_ingestion_pipeline
 from app.logging_config import request_id_ctx_var, setup_logging
 from app.models import FocusTopic, TopicAlias, UserProfile
@@ -34,7 +34,6 @@ from app.rate_limit import (
 )
 from app.schemas import (
     BriefingCard,
-    BriefingSearchResponse,
     ChatRequest,
     ChatResponse,
     HealthResponse,
@@ -373,80 +372,6 @@ def get_briefings(
         allow_variant_generation=is_authenticated_non_guest,
         user_key=str(current_user.id) if current_user else None,
     )
-
-
-@app.get(
-    "/api/briefings/search",
-    tags=["Briefings"],
-    summary="Search persisted briefing cards by topic or keyword",
-    response_model=BriefingSearchResponse,
-)
-def search_briefings_endpoint(
-    q: str = Query(
-        ...,
-        min_length=2,
-        max_length=200,
-        description="Search query string or specific topic name",
-        examples=["Docker", "Rust memory safety", "PostgreSQL indexes"],
-    ),
-    role: str = Query(
-        default="Software Engineer",
-        max_length=120,
-        description="Target professional role for relevance evaluation",
-        examples=["Senior Backend Engineer"],
-    ),
-    limit: int = Query(
-        default=10,
-        ge=1,
-        le=50,
-        description="Maximum number of briefing cards to return",
-    ),
-    offset: int = Query(
-        default=0,
-        ge=0,
-        description="Offset for search result pagination",
-    ),
-    live: bool = Query(
-        default=False,
-        description="Allow live feed fetch on DB cache miss (requires authenticated non-guest account)",
-    ),
-    db: Session = Depends(get_db),
-    current_user: UserProfile | None = Depends(get_optional_user),
-    _: None = Depends(enforce_public_rate_limit),
-):
-    """
-    Searches persisted briefing cards and returns them in the same BriefingCard shape used by /api/briefings.
-    Unauthenticated callers read from persisted DB rows only (zero ingestion or AI calls).
-    """
-    allow_live_fetch = False
-    if live:
-        if current_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required for live search ingestion.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        if current_user.is_anonymous:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Sign in with a full account to trigger live search ingestion.",
-            )
-        enforce_auth_ai_rate_limit(current_user.id, scope="briefings_search_live")
-        allow_live_fetch = True
-
-    effective_role = current_user.role if (current_user and current_user.role) else role
-    is_authenticated_non_guest = bool(current_user and not current_user.is_anonymous)
-    result = search_topic_briefings(
-        query=q,
-        user_role=effective_role,
-        db=db,
-        limit=limit,
-        offset=offset,
-        allow_live_fetch=allow_live_fetch,
-        allow_variant_generation=is_authenticated_non_guest,
-        user_key=str(current_user.id) if current_user else None,
-    )
-    return BriefingSearchResponse(**result)
 
 
 @app.get(
