@@ -1,0 +1,26 @@
+[
+  {
+    "ghsa_id": "GHSA-79hf-g46h-p7f8",
+    "cve_id": "CVE-2026-4455",
+    "url": "https://api.github.com/advisories/GHSA-79hf-g46h-p7f8",
+    "html_url": "https://github.com/advisories/GHSA-79hf-g46h-p7f8",
+    "summary": "Remote Code Execution in Core Package via Deserialization",
+    "description": "An untrusted deserialization vulnerability in core-lib allows unauthenticated remote attackers to execute arbitrary system commands when parsing incoming RPC messages.",
+    "severity": "CRITICAL",
+    "cvss": {
+      "score": 9.8,
+      "vector_string": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    },
+    "vulnerabilities": [
+      {
+        "package": {
+          "ecosystem": "npm",
+          "name": "core-lib"
+        },
+        "vulnerable_version_range": "< 2.4.1"
+      }
+    ],
+    "published_at": "2026-11-18T16:00:00Z",
+    "updated_at": "2026-11-18T18:00:00Z"
+  }
+]

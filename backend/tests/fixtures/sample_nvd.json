@@ -1,0 +1,39 @@
+{
+  "resultsPerPage": 1,
+  "startIndex": 0,
+  "totalResults": 1,
+  "format": "NVD_CVE",
+  "version": "2.0",
+  "timestamp": "2026-11-18T18:00:00.000",
+  "vulnerabilities": [
+    {
+      "cve": {
+        "id": "CVE-2026-9999",
+        "sourceIdentifier": "cve@mitre.org",
+        "published": "2026-11-18T12:00:00.000",
+        "lastModified": "2026-11-18T15:00:00.000",
+        "vulnStatus": "Analyzed",
+        "descriptions": [
+          {
+            "lang": "en",
+            "value": "Improper input validation in WebFramework allows cross-site scripting (XSS) via query parameters."
+          }
+        ],
+        "metrics": {
+          "cvssMetricV31": [
+            {
+              "source": "nvd@nist.gov",
+              "type": "Primary",
+              "cvssData": {
+                "version": "3.1",
+                "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+                "baseScore": 6.1,
+                "baseSeverity": "MEDIUM"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

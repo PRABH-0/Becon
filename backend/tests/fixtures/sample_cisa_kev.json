@@ -1,0 +1,19 @@
+{
+  "title": "CISA Known Exploited Vulnerabilities Catalog",
+  "catalogVersion": "2026.11.18",
+  "dateReleased": "2026-11-18T18:00:00Z",
+  "count": 1,
+  "vulnerabilities": [
+    {
+      "cveID": "CVE-2026-1234",
+      "vendorProject": "OpenSSL",
+      "product": "CryptoEngine",
+      "vulnerabilityName": "OpenSSL Buffer Overflow Leading to RCE",
+      "dateAdded": "2026-11-18",
+      "shortDescription": "OpenSSL CryptoEngine contains a stack buffer overflow flaw allowing remote code execution during TLS handshake.",
+      "requiredAction": "Apply vendor security updates immediately or disable vulnerable cipher suites.",
+      "dueDate": "2026-12-05",
+      "knownRansomwareCampaignUse": "Known"
+    }
+  ]
+}
