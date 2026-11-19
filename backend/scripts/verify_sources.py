@@ -450,21 +450,35 @@ def verify_source(source: Dict[str, Any], client: httpx.Client) -> Dict[str, Any
 
 
 def main():
-    print(f"Testing {len(CANDIDATES)} candidate sources with live HTTP requests...\n")
+    import sys
+
+    output_markdown = "--markdown" in sys.argv
     results = []
     with httpx.Client() as client:
+        if output_markdown:
+            print("| slug | type | feed_url | HTTP status | parsed items | latest item date | topics |")
+            print("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
+        else:
+            print(f"Testing {len(CANDIDATES)} candidate sources with live HTTP requests...\n")
+
         for src in CANDIDATES:
             res = verify_source(src, client)
             results.append(res)
-            mark = "[PASS]" if res["is_valid"] else "[FAIL]"
-            print(
-                f"{mark} {res['slug']:<25} | {res['type']:<6} | {res['feed_url']:<50} | HTTP {res['status_code']} | items: {res['parsed_items']:<4} | latest: {res['latest_date']:<22} | topics: {res['topics']}"
-            )
+            if output_markdown:
+                print(
+                    f"| `{res['slug']}` | {res['type']} | {res['feed_url']} | {res['status_code']} | {res['parsed_items']} | {res['latest_date']} | {res['topics']} |"
+                )
+            else:
+                mark = "[PASS]" if res["is_valid"] else "[FAIL]"
+                print(
+                    f"{mark} {res['slug']:<25} | {res['type']:<6} | {res['feed_url']:<50} | HTTP {res['status_code']} | items: {res['parsed_items']:<4} | latest: {res['latest_date']:<22} | topics: {res['topics']}"
+                )
 
-    valid = [r for r in results if r["is_valid"]]
-    print(
-        f"\nTotal tested: {len(results)}, Valid: {len(valid)}, Failed: {len(results) - len(valid)}"
-    )
+    if not output_markdown:
+        valid = [r for r in results if r["is_valid"]]
+        print(
+            f"\nTotal tested: {len(results)}, Valid: {len(valid)}, Failed: {len(results) - len(valid)}"
+        )
 
 
 if __name__ == "__main__":
