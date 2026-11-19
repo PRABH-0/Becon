@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
+from app.fetchers.base import SourceFetchSummary
 from app.fetchers.http_client import SafeHTTPClient, sanitize_error_message
-from app.fetchers.runner import SourceFetchSummary, fetch_and_store_source
 from app.models import Source
 from app.scheduler.timing import (
     claim_source_lease,
@@ -78,6 +78,8 @@ class SchedulerEngine:
         limit: int | None = None,
     ) -> SourceFetchSummary:
         """Synchronously execute a single source fetch within its own DB transaction."""
+        from app.fetchers.runner import fetch_and_store_source
+
         db = self.db_factory()
         try:
             source = db.query(Source).filter(Source.id == source_id).first()

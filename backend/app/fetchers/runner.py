@@ -13,27 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
-from app.fetchers.base import registry
+from app.fetchers.base import SourceFetchSummary, registry
 from app.fetchers.http_client import SafeHTTPClient, sanitize_error_message
 from app.ingestion import compute_hash, normalize_url
 from app.models import RawItem, Source
 from app.scheduler.timing import calculate_next_fetch_at
 
 logger = logging.getLogger("becon.fetchers.runner")
-
-
-@dataclass
-class SourceFetchSummary:
-    """Execution summary for a single source fetch run."""
-
-    slug: str
-    status: str  # "ok", "not_modified", "error", "skipped"
-    items_fetched: int = 0
-    new_inserted: int = 0
-    duplicates_skipped: int = 0
-    duration_seconds: float = 0.0
-    next_fetch_at: datetime | None = None
-    error: str | None = None
 
 
 def fetch_and_store_source(

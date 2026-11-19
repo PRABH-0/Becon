@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import (
     BackgroundTasks,
@@ -308,7 +309,11 @@ def get_sources_health(
     failing = sum(1 for s in sources if s.status == "failing")
     never_fetched = sum(1 for s in sources if s.last_fetched_at is None)
 
-    last_successful = [s.last_success_at for s in sources if s.last_success_at is not None]
+    last_successful = [
+        s.last_success_at.replace(tzinfo=UTC) if s.last_success_at.tzinfo is None else s.last_success_at
+        for s in sources
+        if s.last_success_at is not None
+    ]
     last_success_time = max(last_successful) if last_successful else None
     oldest_success_time = min(last_successful) if last_successful else None
 

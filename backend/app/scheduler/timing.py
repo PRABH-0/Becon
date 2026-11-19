@@ -16,6 +16,15 @@ from app.models import Source
 logger = logging.getLogger("becon.scheduler.timing")
 
 
+def ensure_utc(dt: datetime | None) -> datetime | None:
+    """Ensure a datetime object is timezone-aware and set to UTC."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
 def calculate_next_fetch_at(
     source: Source,
     now: datetime,
@@ -41,6 +50,8 @@ def calculate_next_fetch_at(
     """
     if max_backoff_minutes is None:
         max_backoff_minutes = getattr(settings, "FETCH_MAX_BACKOFF_MINUTES", 360)
+
+    now = ensure_utc(now) or datetime.now(UTC)
 
     if is_success:
         interval_minutes = max(1, source.fetch_interval_minutes)
@@ -68,21 +79,26 @@ def is_source_due(source: Source, now: datetime) -> bool:
     if not source.enabled:
         return False
 
+    now_utc = ensure_utc(now) or datetime.now(UTC)
+    lease_exp = ensure_utc(source.lease_expires_at)
+    next_f = ensure_utc(source.next_fetch_at)
+    last_f = ensure_utc(source.last_fetched_at)
+
     # Check if another process holds an unexpired lease
-    if source.lease_expires_at is not None and source.lease_expires_at > now:
+    if lease_exp is not None and lease_exp > now_utc:
         return False
 
     # If next_fetch_at is explicitly set, honor it
-    if source.next_fetch_at is not None:
-        return now >= source.next_fetch_at
+    if next_f is not None:
+        return now_utc >= next_f
 
     # If never fetched, it is due immediately
-    if source.last_fetched_at is None:
+    if last_f is None:
         return True
 
     # Fallback to last_fetched_at + poll interval
     poll_delta = timedelta(minutes=max(1, source.fetch_interval_minutes))
-    return now >= (source.last_fetched_at + poll_delta)
+    return now_utc >= (last_f + poll_delta)
 
 
 def claim_source_lease(
@@ -96,7 +112,8 @@ def claim_source_lease(
     Returns:
         True if the lease was successfully claimed, False if already held.
     """
-    lease_expiry = now + timedelta(seconds=lease_seconds)
+    now_utc = ensure_utc(now) or datetime.now(UTC)
+    lease_expiry = now_utc + timedelta(seconds=lease_seconds)
     updated = (
         db.query(Source)
         .filter(
@@ -104,12 +121,12 @@ def claim_source_lease(
             Source.enabled == True,  # noqa: E712
             or_(
                 Source.lease_expires_at.is_(None),
-                Source.lease_expires_at <= now,
+                Source.lease_expires_at <= now_utc,
             ),
         )
         .update(
             {
-                Source.fetch_started_at: now,
+                Source.fetch_started_at: now_utc,
                 Source.lease_expires_at: lease_expiry,
             },
             synchronize_session=False,
@@ -127,8 +144,7 @@ def release_source_lease(
     retry_after_seconds: float | None = None,
 ) -> None:
     """Release an acquired lease and update failure metadata if an error occurred."""
-    if now is None:
-        now = datetime.now(UTC)
+    now_utc = ensure_utc(now) or datetime.now(UTC)
 
     source = db.query(Source).filter(Source.id == source_id).first()
     if not source:
@@ -145,7 +161,7 @@ def release_source_lease(
         source.status = "failing" if source.consecutive_failures >= threshold else "degraded"
         source.next_fetch_at = calculate_next_fetch_at(
             source,
-            now=now,
+            now=now_utc,
             is_success=False,
             retry_after_seconds=retry_after_seconds,
         )
