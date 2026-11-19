@@ -18,7 +18,7 @@ Provides standard development workflow tasks: install, dev-backend, dev-frontend
 
 param (
     [Parameter(Position=0, Mandatory=$true)]
-    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed", "fetch")]
+    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed", "fetch", "scheduler")]
     [string]$Command,
 
     [Parameter(Position=1, Mandatory=$false)]
@@ -145,6 +145,16 @@ switch ($Command) {
         Push-Location "$RepoRoot\backend"
         try {
             & .venv\Scripts\python.exe -m app.fetchers
+        } finally {
+            Pop-Location
+        }
+    }
+
+    "scheduler" {
+        Write-Host "==> Running Becon Source Scheduler Worker..." -ForegroundColor Cyan
+        Push-Location "$RepoRoot\backend"
+        try {
+            & .venv\Scripts\python.exe -m app.scheduler
         } finally {
             Pop-Location
         }

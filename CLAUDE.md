@@ -52,6 +52,8 @@ Run the test and migration commands below to check current test and table counts
 | **Migrate** | N/A | `cd backend && .\.venv\Scripts\alembic upgrade head` | `.\scripts\dev.ps1 migrate` |
 | **Make Migration** | N/A | `cd backend && .\.venv\Scripts\alembic revision --autogenerate -m "..."` | `.\scripts\dev.ps1 makemigration -Message "..."` |
 | **Seed** | N/A | `cd backend && .\.venv\Scripts\python -m app.seed` | `.\scripts\dev.ps1 seed` |
+| **Fetch** | N/A | `cd backend && .\.venv\Scripts\python -m app.fetchers` | `.\scripts\dev.ps1 fetch` |
+| **Scheduler** | N/A | `cd backend && .\.venv\Scripts\python -m app.scheduler` | `.\scripts\dev.ps1 scheduler` |
 | **Typecheck** | `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` |
 | **Build** | `cd frontend && npm run build` | N/A | N/A |
