@@ -349,3 +349,36 @@ class SourceResponse(BaseModel):
     last_fetched_at: datetime | None = None
     last_success_at: datetime | None = None
     created_at: datetime
+
+
+class SourceHealthItem(BaseModel):
+    """Health details for an individual source."""
+
+    slug: str
+    name: str
+    enabled: bool
+    status: str  # healthy, degraded, failing
+    last_fetched_at: datetime | None = None
+    last_success_at: datetime | None = None
+    consecutive_failures: int = 0
+    last_error: str | None = None
+    next_fetch_at: datetime | None = None
+
+
+class SourceHealthSummary(BaseModel):
+    """Aggregate health status metrics across all registered sources."""
+
+    total: int
+    healthy: int
+    degraded: int
+    failing: int
+    never_fetched: int
+    last_successful_run_at: datetime | None = None
+    oldest_last_success_at: datetime | None = None
+
+
+class SourceHealthResponse(BaseModel):
+    """Comprehensive source health summary and item breakdown."""
+
+    summary: SourceHealthSummary
+    sources: List[SourceHealthItem]

@@ -26,7 +26,7 @@ from app.deps import get_current_user, get_optional_user, sanitize_https_avatar_
 from app.feed_service import get_live_briefings
 from app.ingestion import run_ingestion_pipeline
 from app.logging_config import request_id_ctx_var, setup_logging
-from app.models import FocusTopic, TopicAlias, UserProfile
+from app.models import FocusTopic, Source, TopicAlias, UserProfile
 from app.rate_limit import (
     GeminiQuotaExceededError,
     enforce_auth_ai_rate_limit,
@@ -41,6 +41,9 @@ from app.schemas import (
     IngestCounts,
     IngestResponse,
     MatchTopicsRequest,
+    SourceHealthItem,
+    SourceHealthResponse,
+    SourceHealthSummary,
     TopicSearchResponse,
     UserMeResponse,
     UserProfileCreate,
@@ -259,6 +262,82 @@ def read_root():
         "app": "Becon AI Intelligence Briefing",
         "engine": "Becon AI Intelligence (Personalized & Structured)",
     }
+
+
+@app.get(
+    "/api/sources/health",
+    tags=["Health", "Sources"],
+    summary="Get operational health metrics and per-source status",
+    response_model=SourceHealthResponse,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid X-Ingest-Token"},
+        503: {"description": "Service Unavailable - INGEST_API_TOKEN is not configured"},
+    },
+)
+def get_sources_health(
+    request: Request,
+    db: Session = Depends(get_db),
+    x_ingest_token: str | None = Header(default=None, alias="X-Ingest-Token"),
+):
+    """
+    Returns aggregate health metrics and per-source status records.
+    Protected by X-Ingest-Token header (constant-time comparison) and rate-limited.
+    """
+    enforce_public_rate_limit(request)
+
+    if not settings.INGEST_API_TOKEN or not settings.INGEST_API_TOKEN.strip():
+        logger.error("GET /api/sources/health triggered but INGEST_API_TOKEN is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Endpoint is disabled because INGEST_API_TOKEN is not configured.",
+        )
+
+    expected = settings.INGEST_API_TOKEN.strip().encode("utf-8")
+    provided = x_ingest_token.strip().encode("utf-8") if x_ingest_token else b""
+    if not x_ingest_token or not hmac.compare_digest(provided, expected):
+        logger.warning("Unauthorized /api/sources/health attempt with invalid or missing token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Ingest-Token header.",
+        )
+
+    sources = db.query(Source).order_by(Source.slug.asc()).all()
+    total = len(sources)
+    healthy = sum(1 for s in sources if s.status == "healthy")
+    degraded = sum(1 for s in sources if s.status == "degraded")
+    failing = sum(1 for s in sources if s.status == "failing")
+    never_fetched = sum(1 for s in sources if s.last_fetched_at is None)
+
+    last_successful = [s.last_success_at for s in sources if s.last_success_at is not None]
+    last_success_time = max(last_successful) if last_successful else None
+    oldest_success_time = min(last_successful) if last_successful else None
+
+    summary = SourceHealthSummary(
+        total=total,
+        healthy=healthy,
+        degraded=degraded,
+        failing=failing,
+        never_fetched=never_fetched,
+        last_successful_run_at=last_success_time,
+        oldest_last_success_at=oldest_success_time,
+    )
+
+    items = [
+        SourceHealthItem(
+            slug=s.slug,
+            name=s.name,
+            enabled=s.enabled,
+            status=s.status,
+            last_fetched_at=s.last_fetched_at,
+            last_success_at=s.last_success_at,
+            consecutive_failures=s.consecutive_failures,
+            last_error=s.last_error[:500] if s.last_error else None,
+            next_fetch_at=s.next_fetch_at,
+        )
+        for s in sources
+    ]
+
+    return SourceHealthResponse(summary=summary, sources=items)
 
 
 @app.get(
