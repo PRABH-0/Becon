@@ -84,7 +84,7 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 - [x] 2.1 Source registry model and admin seed script (approved, merged `b98f9dd`)
 - [x] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories) (approved, merged `b98f9dd`)
 - [~] 2.3 Fetchers: RSS/Atom, GitHub Releases API, advisories (GHSA/NVD); conditional GET; full-text extraction; sanitization
-- [ ] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint
+- [ ] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint *(Note: needs per-source timeouts; slowest sources took 14-25s, probably the full-text fallback)*
 - [ ] 2.5 Remove Google News and dev.to as primary sources
 
 *Exit: scheduled run fills raw_items reliably; source health visible.*
@@ -95,14 +95,14 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 - [~] 3.1 Exact dedup (URL/hash) and normalization *(exact dedup done in 1.5; normalization edge cases pending)*
 - [ ] 3.2 Semantic dedup with embeddings into events
 - [ ] 3.3 Focus tagging via taxonomy, category (release, deprecation, security, EOL, industry)
-- [ ] 3.4 Severity score (D7)
+- [ ] 3.4 Severity score (D7) *(Note: Phase 3 should use the modified date for advisories as NVD publishes old CVEs that were recently modified; cisa-kev severity is assigned, not a CVSS value, so D7 must treat it separately)*
 
 *Exit: sample evaluation shows duplicates merged and tags correct; thresholds documented.*
 
 ---
 
 ## PHASE 4: Grounded Gemini synthesis
-- [ ] 4.1 Gemini key configured; strict schema; source-only prompt
+- [ ] 4.1 Gemini key configured; strict schema; source-only prompt *(Note: Task 4.1 must treat raw_items text as untrusted input with prompt-injection guard)*
 - [ ] 4.2 Validation layer (schema, claim-in-source check, retry once, else flag and do not publish)
 - [ ] 4.3 Rate-limit handling with backoff, caching, cost tracking
 - [ ] 4.4 Evaluation set of 30+ real updates and manual review report
