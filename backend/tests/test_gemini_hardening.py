@@ -268,6 +268,9 @@ def test_shared_variant_cache_isolated_from_custom_prompt(client, monkeypatch):
         assert resp_b.json()[0]["card_content"]["how_it_affects_you"] == (
             resp_a.json()[0]["card_content"]["how_it_affects_you"]
         )
+        card_b_str = json.dumps(resp_b.json()[0]["card_content"])
+        assert "SECRET_USER_A_DIRECTIVE_ONLY" not in card_b_str
+        assert "SECRET_USER_B_DIRECTIVE_ONLY" not in card_b_str
 
         # Verify DB row itself has no user prompt contamination
         variant_row = (
@@ -278,6 +281,8 @@ def test_shared_variant_cache_isolated_from_custom_prompt(client, monkeypatch):
         assert variant_row is not None
         assert "SECRET_USER_A_DIRECTIVE_ONLY" not in variant_row.how_it_affects_you
         assert "SECRET_USER_B_DIRECTIVE_ONLY" not in variant_row.how_it_affects_you
+        assert "SECRET_USER_A_DIRECTIVE_ONLY" not in variant_row.action_guidance
+        assert "SECRET_USER_B_DIRECTIVE_ONLY" not in variant_row.action_guidance
     finally:
         if ev is not None:
             db.delete(ev)
