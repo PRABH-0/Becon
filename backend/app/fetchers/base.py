@@ -40,6 +40,7 @@ class FetchResult:
     error: str | None = None
     http_status: int | None = None
     duration_seconds: float = 0.0
+    retry_after_seconds: float | None = None
 
 
 class BaseFetcher(ABC):

@@ -14,7 +14,7 @@ from typing import Any, List
 import feedparser
 
 from app.fetchers.base import BaseFetcher, FetchItem, FetchResult, registry
-from app.fetchers.http_client import SafeHTTPClient
+from app.fetchers.http_client import SafeHTTPClient, parse_retry_after
 from app.fetchers.sanitizer import (
     MAX_CONTENT_TEXT_LENGTH,
     MAX_SUMMARY_TEXT_LENGTH,
@@ -128,11 +128,13 @@ class FeedFetcher(BaseFetcher):
             )
 
         if response.status_code != 200:
+            retry_after_sec = parse_retry_after(response.headers)
             return FetchResult(
                 status="error",
                 error=f"Unexpected HTTP status {response.status_code}",
                 http_status=response.status_code,
                 duration_seconds=duration,
+                retry_after_seconds=retry_after_sec,
             )
 
         # Extract caching validators from response headers

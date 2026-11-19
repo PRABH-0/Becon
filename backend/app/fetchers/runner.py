@@ -11,11 +11,13 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import SessionLocal
 from app.fetchers.base import registry
 from app.fetchers.http_client import SafeHTTPClient, sanitize_error_message
 from app.ingestion import compute_hash, normalize_url
 from app.models import RawItem, Source
+from app.scheduler.timing import calculate_next_fetch_at
 
 logger = logging.getLogger("becon.fetchers.runner")
 
@@ -30,6 +32,7 @@ class SourceFetchSummary:
     new_inserted: int = 0
     duplicates_skipped: int = 0
     duration_seconds: float = 0.0
+    next_fetch_at: datetime | None = None
     error: str | None = None
 
 
@@ -60,11 +63,17 @@ def fetch_and_store_source(
         logger.error("Unhandled error fetching source %s: %s", source.slug, err_msg)
         source.consecutive_failures += 1
         source.last_error = err_msg
+        threshold = getattr(settings, "FETCH_FAILING_THRESHOLD", 10)
+        source.status = "failing" if source.consecutive_failures >= threshold else "degraded"
+        source.next_fetch_at = calculate_next_fetch_at(source, now, is_success=False)
+        source.lease_expires_at = None
+        source.fetch_started_at = None
         db.commit()
         return SourceFetchSummary(
             slug=source.slug,
             status="error",
             duration_seconds=0.0,
+            next_fetch_at=source.next_fetch_at,
             error=err_msg,
         )
 
@@ -79,6 +88,11 @@ def fetch_and_store_source(
         source.last_success_at = now
         source.consecutive_failures = 0
         source.last_error = None
+        source.status = "healthy"
+        source.next_fetch_at = calculate_next_fetch_at(source, now, is_success=True)
+        source.lease_expires_at = None
+        source.fetch_started_at = None
+        summary.next_fetch_at = source.next_fetch_at
         db.commit()
         return summary
 
@@ -86,6 +100,17 @@ def fetch_and_store_source(
         err_msg = sanitize_error_message(result.error or "Unknown fetch error")
         source.consecutive_failures += 1
         source.last_error = err_msg
+        threshold = getattr(settings, "FETCH_FAILING_THRESHOLD", 10)
+        source.status = "failing" if source.consecutive_failures >= threshold else "degraded"
+        source.next_fetch_at = calculate_next_fetch_at(
+            source,
+            now,
+            is_success=False,
+            retry_after_seconds=result.retry_after_seconds,
+        )
+        source.lease_expires_at = None
+        source.fetch_started_at = None
+        summary.next_fetch_at = source.next_fetch_at
         summary.error = err_msg
         db.commit()
         return summary
@@ -147,6 +172,11 @@ def fetch_and_store_source(
     source.last_success_at = now
     source.consecutive_failures = 0
     source.last_error = None
+    source.status = "healthy"
+    source.next_fetch_at = calculate_next_fetch_at(source, now, is_success=True)
+    source.lease_expires_at = None
+    source.fetch_started_at = None
+    summary.next_fetch_at = source.next_fetch_at
 
     try:
         db.commit()
@@ -156,15 +186,17 @@ def fetch_and_store_source(
         logger.error("DB commit failed for source %s: %s", source.slug, err_msg)
         source.consecutive_failures += 1
         source.last_error = err_msg
+        threshold = getattr(settings, "FETCH_FAILING_THRESHOLD", 10)
+        source.status = "failing" if source.consecutive_failures >= threshold else "degraded"
+        source.next_fetch_at = calculate_next_fetch_at(source, now, is_success=False)
+        source.lease_expires_at = None
+        source.fetch_started_at = None
         summary.status = "error"
         summary.error = err_msg
         summary.new_inserted = 0
+        summary.next_fetch_at = source.next_fetch_at
         db.commit()
         return summary
-
-    summary.new_inserted = new_count
-    summary.duplicates_skipped = dup_count
-    return summary
 
     summary.new_inserted = new_count
     summary.duplicates_skipped = dup_count
