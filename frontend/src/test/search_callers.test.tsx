@@ -73,32 +73,10 @@ describe("Frontend search callers (Task 1.7 contract)", () => {
     localStorage.clear();
   });
 
-  it("Home search calls /api/briefings/search with q, limit, offset and renders returned cards", async () => {
-    const mockSearchCard = {
-      id: "search-card-1",
-      rank: 1,
-      title: "Kubernetes 1.32 Gateway API Stabilization",
-      source_url: "https://kubernetes.io/blog/test",
-      target_role: "Software Engineer",
-      target_stack: ["Kubernetes"],
-      priority: "major" as const,
-      card_content: {
-        what_happened: ["Gateway API v1.2 graduated to GA."],
-        why_it_matters: "Standardizes ingress routing across clusters.",
-        how_it_affects_you: "Enables migrating off legacy Ingress annotations.",
-        what_to_do_next: {
-          action_type: "apply" as const,
-          guidance: "Adopt HTTPRoute specs in staging.",
-        },
-      },
-    };
-
-    const apiSpy = vi.spyOn(apiModule, "apiFetch").mockImplementation(async (path: string) => {
+  it("Home page does NOT render the topic search input or search submit button", async () => {
+    vi.spyOn(apiModule, "apiFetch").mockImplementation(async (path: string) => {
       if (path.startsWith("/api/profile")) {
         return { name: "Search Tester", role: "Software Engineer", interests: "Kubernetes" };
-      }
-      if (path.startsWith("/api/briefings/search")) {
-        return { query: "Kubernetes", matches: ["Kubernetes"], cards: [mockSearchCard] };
       }
       if (path.startsWith("/api/briefings")) {
         return [];
@@ -108,19 +86,8 @@ describe("Frontend search callers (Task 1.7 contract)", () => {
 
     render(<Home />);
 
-    const searchInput = await screen.findByPlaceholderText(/Search topic/i);
-    fireEvent.change(searchInput, { target: { value: "Kubernetes" } });
-    fireEvent.submit(searchInput.closest("form")!);
-
-    await waitFor(() => {
-      const searchCalls = apiSpy.mock.calls.filter(([p]) => String(p).startsWith("/api/briefings/search"));
-      expect(searchCalls.length).toBeGreaterThanOrEqual(1);
-      expect(String(searchCalls[0][0])).toContain("q=Kubernetes");
-      expect(String(searchCalls[0][0])).toContain("limit=10");
-      expect(String(searchCalls[0][0])).toContain("offset=0");
-    });
-
-    expect(await screen.findByText(/Kubernetes 1\.32 Gateway API Stabilization/i)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/Search topic/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^search$/i })).not.toBeInTheDocument();
   });
 
   it("ProfilePage topic autocomplete calls /api/topics/search via apiFetch and shows matches", async () => {

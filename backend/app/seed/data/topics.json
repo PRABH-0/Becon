@@ -297,6 +297,42 @@
     "aliases": ["software-architecture", "distributed-systems"]
   },
   {
+    "slug": "flutter",
+    "name": "Flutter",
+    "kind": "technology",
+    "professions": ["software-development"],
+    "aliases": ["flutter", "flutter-dev", "dart-flutter"]
+  },
+  {
+    "slug": "android",
+    "name": "Android",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": ["android", "android-dev", "aosp"]
+  },
+  {
+    "slug": "swift",
+    "name": "Swift",
+    "kind": "language",
+    "professions": ["software-development"],
+    "aliases": ["swift", "swift-lang", "swiftlang"]
+  },
+  {
+    "slug": "ios",
+    "name": "iOS",
+    "kind": "platform",
+    "professions": ["software-development"],
+    "aliases": ["ios", "apple-dev", "apple-platforms", "ipados"]
+  },
+  {
+    "slug": "supabase",
+    "name": "Supabase",
+    "kind": "technology",
+    "parent_slug": "postgresql",
+    "professions": ["software-development"],
+    "aliases": ["supabase", "supabase-db"]
+  },
+  {
     "slug": "ifrs",
     "name": "IFRS Standards",
     "kind": "standard",

@@ -21,6 +21,7 @@ from app.models import (
     RawItem,
     SavedCard,
     Source,
+    SourceProfession,
     TopicAlias,
     UserFollow,
     UserProfile,
@@ -83,7 +84,7 @@ def test_migration_upgrade_downgrade_cycle():
         engine = create_engine(db_url)
         inspector = inspect(engine)
         tables = [t for t in inspector.get_table_names() if t != "alembic_version"]
-        assert len(tables) >= 20, f"Expected 20 tables, found {len(tables)}"
+        assert len(tables) >= 21, f"Expected at least 21 tables, found {len(tables)}"
         engine.dispose()
 
         # Downgrade base
@@ -99,7 +100,7 @@ def test_migration_upgrade_downgrade_cycle():
         engine = create_engine(db_url)
         inspector = inspect(engine)
         reupgraded_tables = [t for t in inspector.get_table_names() if t != "alembic_version"]
-        assert len(reupgraded_tables) >= 20, "Failed to re-upgrade to head"
+        assert len(reupgraded_tables) >= 21, "Failed to re-upgrade to head"
         engine.dispose()
     finally:
         if os.path.exists(temp_path):
@@ -269,6 +270,34 @@ def test_schema_constraints_and_cascades(sqlite_engine):
 
         # Event remains intact!
         assert db.query(Event).filter(Event.id == event_obj.id).count() == 1
+
+        # 10. Source professions join, uniqueness, and cascade
+        prof = Profession(slug="software-dev-test", name="Software Dev Test")
+        db.add(prof)
+        source2 = Source(
+            slug="test-source-2",
+            name="Test Source 2",
+            site_url="https://example.org",
+            feed_url="https://example.org/feed",
+            type="rss",
+        )
+        db.add(source2)
+        db.commit()
+
+        sp1 = SourceProfession(source_id=source2.id, profession_id=prof.id)
+        db.add(sp1)
+        db.commit()
+
+        sp2 = SourceProfession(source_id=source2.id, profession_id=prof.id)
+        db.add(sp2)
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+
+        # Cascade delete on source removes source_professions
+        db.delete(source2)
+        db.commit()
+        assert db.query(SourceProfession).filter(SourceProfession.source_id == source2.id).count() == 0
 
     finally:
         db.close()

@@ -46,6 +46,9 @@ erDiagram
     sources ||--o{ source_topics : "covers"
     focus_topics ||--o{ source_topics : "covered_by"
     
+    sources ||--o{ source_professions : "serves"
+    professions ||--o{ source_professions : "served_by"
+    
     user_profiles ||--o{ user_follows : "follows"
     sources ||--o{ user_follows : "followed_by"
     
@@ -78,64 +81,67 @@ erDiagram
 
 ## 3. Table Catalog & Purposes
 
-### 1. `professions`
+### `professions`
 Represents professional domains (e.g., Software Development, Accounting and Finance). Serves as the root grouping for onboarding topic suggestions and card variant personalization.
 
-### 2. `focus_topics`
+### `focus_topics`
 Canonical tools, technologies, platforms, languages, regulations, and standards that users follow (e.g., Next.js, Docker, IFRS). Supports hierarchical parent-child relationships (e.g., `.NET` $\rightarrow$ `C#`).
 
-### 3. `topic_aliases`
+### `topic_aliases`
 Stores alternative names, abbreviations, and common misspellings (lowercase) mapping to a canonical focus topic (e.g., `next`, `nextjs`, and `next.js` resolve to `Next.js`).
 
-### 4. `profession_topics`
+### `profession_topics`
 Many-to-many relationship linking professions to suggested focus topics displayed during user onboarding and topic exploration.
 
-### 5. `user_focus_topics`
+### `user_focus_topics`
 Explicit topic preferences selected by users with optional version constraints (e.g., Python 3.12, Next.js 15) to drive personal briefing ranking.
 
-### 6. `sources`
+### `sources`
 Authoritative external feeds (RSS, Atom, GitHub releases, security advisories). Tracks fetch intervals, ETag/Last-Modified HTTP caching headers, health state, and trust tiers.
 
-### 7. `source_topics`
+### `source_topics`
 Mapping of external content sources to the focus topics they reliably cover.
 
-### 8. `user_follows`
+### `source_professions`
+Many-to-many relationship linking external content sources to the target professions they serve.
+
+### `user_follows`
 Prepares creator and specific source following functionality (Phase 9), enabling users to subscribe to trusted individual publishers.
 
-### 9. `raw_items`
+### `raw_items`
 Unprocessed items retrieved by background ingesters from external sources. Enforces unique URL hashes per source and records raw content, processing status, and linked event.
 
-### 10. `events`
+### `events`
 Canonical, deduplicated career occurrences distilled from one or more raw items. Captures event category, breaking change flags, and severity scores ($0$–$100$).
 
-### 11. `event_topics`
+### `event_topics`
 Connects events to relevant focus topics along with version metadata and topic-matching confidence scores ($0.0$–$1.0$).
 
-### 12. `cards`
+### `cards`
 The core briefing artifact: exactly one shared canonical Action Card per event. Grounded exclusively in source text with strict structure (`what_happened` JSON list, `why_it_matters`, `how_it_affects_you`, and `action_guidance`).
 
-### 13. `card_variants`
+### `card_variants`
 Role- and topic-specific adaptations of the personalized sections (`how_it_affects_you` and `action_guidance`) tailored to specific professions or sub-specializations.
 
-### 14. `saved_cards`
+### `saved_cards`
 User bookmarks for archiving important Action Cards for long-term reference.
 
-### 15. `card_feedback`
+### `card_feedback`
 User quality feedback (+1 helpful / -1 not helpful) used to calibrate ranking and AI prompt quality.
 
-### 16. `error_reports`
+### `error_reports`
 User reports flagging factual inaccuracies or hallucinations in Action Cards for review and prompt iteration.
 
-### 17. `deliveries`
+### `deliveries`
 Schedules and logs outbound notifications and digest briefings via email or Telegram.
 
-### 18. `metrics_events`
+### `metrics_events`
 Product telemetry and interaction logs. **Rule**: Strict privacy boundary — absolutely no personal data (emails, passwords, tokens) allowed in properties JSON.
 
-### 19. `user_profiles` (Existing Table, Migrated)
+### `user_profiles` (Existing Table, Migrated)
 Stores user identity, authentication provider, delivery preferences, timezone, and profession link.
 
-### 20. `saved_briefings` (Legacy Table, Retained)
+### `saved_briefings` (Legacy Table, Retained)
 Retained for backwards compatibility; marked `DEPRECATED`. No longer created by modern pipeline and will be dropped in Phase 6.5 (after `saved_cards` UI ships).
 
 ---
@@ -189,6 +195,9 @@ Alembic manages all schema lifecycle events across SQLite (local development) an
    - Makes `user_profiles.email` nullable (`VARCHAR(255) NULL`).
    - Cleanses existing empty strings (`''`) and synthetic guest emails (`@guest.becon.local`) to `NULL`.
    - Enables Row Level Security (RLS) on all application tables and `alembic_version` in PostgreSQL with zero policies (blocking direct PostgREST Data API queries via anon/authenticated roles, while allowing backend service role/owner connections).
+4. `0004_source_registry`:
+   - Creates `source_professions` join table linking content sources to target professions.
+   - Enables Row Level Security (RLS) on `source_professions` in PostgreSQL.
 
 ### Adoption of Existing Local Database (`becon.db`)
 Existing local databases containing the initial unversioned schema must be stamped with baseline `0001` before upgrading:
@@ -227,9 +236,10 @@ cd backend
 
 ## 7. Seed Data Management
 
-Professions and focus topics are maintained in version-controlled JSON data files:
+Professions, focus topics, and authoritative content sources are maintained in version-controlled JSON data files:
 - `backend/app/seed/data/professions.json`
 - `backend/app/seed/data/topics.json`
+- `backend/app/seed/data/sources.json`
 
 To add a new profession or topic, update the JSON files directly. To apply seed changes idempotently:
 ```powershell

@@ -19,6 +19,24 @@ from app.main import app as fastapi_app
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "network: mark test as requiring network access")
+
+
+def pytest_collection_modifyitems(config, items):
+    # Skip network tests by default unless explicitly requested via -m network
+    run_network = False
+    opt_m = config.getoption("-m", default=None)
+    if opt_m and "network" in opt_m:
+        run_network = True
+
+    if not run_network:
+        skip_marker = pytest.mark.skip(reason="requires network access (run with -m network)")
+        for item in items:
+            if "network" in item.keywords:
+                item.add_marker(skip_marker)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db_and_app():
     """Session-level fixture configuring an isolated migrated test database."""

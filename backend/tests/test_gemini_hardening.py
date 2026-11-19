@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 import app.ai_service as ai_service
 import app.database as app_db
 import app.ingestion as ingestion_mod
+import app.schemas as schemas
 from app.config import settings
 from app.deps import get_current_user, get_optional_user
 from app.main import app
@@ -121,22 +122,11 @@ def test_unauthenticated_search_and_briefings_zero_gemini_and_zero_db_rows(clien
         profs_before = db.query(Profession).count()
         variants_before = db.query(CardVariant).count()
 
-        # 1. Unauthenticated search cache miss -> empty cards + friendly message, 0 Gemini, 0 DB rows
-        resp_miss = client.get(
-            "/api/briefings/search",
-            params={"q": "zz_unmatched_topic_9999", "role": "Hardening Engineer"},
-        )
-        assert resp_miss.status_code == 200
-        body = resp_miss.json()
-        assert body["cards"] == []
-        assert body["message"] and "no matches yet" in body["message"].lower()
+        # 1. Removed search route returns 404 (Task 6.9)
+        assert client.get("/api/briefings/search", params={"q": "zz_unmatched_topic_9999"}).status_code == 404
 
-        # 2. Unauthenticated search with live=true -> 401
-        resp_live_unauth = client.get(
-            "/api/briefings/search",
-            params={"q": "zz_unmatched_topic_9999", "live": "true"},
-        )
-        assert resp_live_unauth.status_code == 401
+        # 2. Unauthenticated refresh=true requires auth -> 401
+        assert client.get("/api/briefings", params={"refresh": "true"}).status_code == 401
 
         # 3. Unauthenticated briefings with known profession and multi-topic interests -> DB-only, 0 Gemini
         resp_feed = client.get(
@@ -173,10 +163,22 @@ def test_oversize_inputs_return_422_and_max_output_tokens_set_on_all_gemini_call
     assert client.get("/api/briefings", params={"interests": topic_too_long}).status_code == 422
 
     assert client.get("/api/briefings", params={"role": "r" * 121}).status_code == 422
-    assert client.get("/api/briefings", params={"custom_prompt": "p" * 501}).status_code == 422
+    assert client.get("/api/briefings", params={"custom_prompt": "p" * (schemas.CUSTOM_PROMPT_MAX_LENGTH + 1)}).status_code == 422
+
+    # 1b. POST /api/profile caps customPrompt at CUSTOM_PROMPT_MAX_LENGTH (501 chars -> 422)
+    fake_user = UserProfile(id=8801, email="caps@example.com", name="Caps User", is_anonymous=False)
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    oversize_profile = {
+        "name": "Caps User",
+        "role": "Engineer",
+        "email": "caps@example.com",
+        "experience": "Senior",
+        "interests": "Python",
+        "customPrompt": "p" * (schemas.CUSTOM_PROMPT_MAX_LENGTH + 1),
+    }
+    assert client.post("/api/profile", json=oversize_profile).status_code == 422
 
     # 2. POST /api/onboarding/chat caps
-    fake_user = UserProfile(id=8801, email="caps@example.com", name="Caps User", is_anonymous=False)
     app.dependency_overrides[get_current_user] = lambda: fake_user
 
     too_many_msgs = {"messages": [{"role": "user", "content": f"msg {i}"} for i in range(21)]}
@@ -253,14 +255,14 @@ def test_shared_variant_cache_isolated_from_custom_prompt(client, monkeypatch):
             is_anonymous=False,
         )
 
-        # User A triggers first shared variant generation
+        # User A triggers first shared variant generation via /api/briefings
         app.dependency_overrides[get_optional_user] = lambda: user_a
         resp_a = client.get(
-            "/api/briefings/search",
-            params={"q": ev.canonical_title, "role": "Variant Iso Engineer"},
+            "/api/briefings",
+            params={"interests": ev.canonical_title, "role": "Variant Iso Engineer", "limit": 1},
         )
         assert resp_a.status_code == 200
-        assert len(resp_a.json()["cards"]) == 1
+        assert len(resp_a.json()) == 1
         assert len(fake_gemini.calls) == 1
 
         # Prompt sent to Gemini MUST NOT contain User A's custom_prompt
@@ -271,14 +273,17 @@ def test_shared_variant_cache_isolated_from_custom_prompt(client, monkeypatch):
         # User B with different custom_prompt gets the shared cached variant with ZERO new Gemini calls
         app.dependency_overrides[get_optional_user] = lambda: user_b
         resp_b = client.get(
-            "/api/briefings/search",
-            params={"q": ev.canonical_title, "role": "Variant Iso Engineer"},
+            "/api/briefings",
+            params={"interests": ev.canonical_title, "role": "Variant Iso Engineer", "limit": 1},
         )
         assert resp_b.status_code == 200
         assert len(fake_gemini.calls) == 1  # Still 1 (served from shared cache)
-        assert resp_b.json()["cards"][0]["card_content"]["how_it_affects_you"] == (
-            resp_a.json()["cards"][0]["card_content"]["how_it_affects_you"]
+        assert resp_b.json()[0]["card_content"]["how_it_affects_you"] == (
+            resp_a.json()[0]["card_content"]["how_it_affects_you"]
         )
+        card_b_str = json.dumps(resp_b.json()[0]["card_content"])
+        assert "SECRET_USER_A_DIRECTIVE_ONLY" not in card_b_str
+        assert "SECRET_USER_B_DIRECTIVE_ONLY" not in card_b_str
 
         # Verify DB row itself has no user prompt contamination
         variant_row = (
@@ -289,6 +294,8 @@ def test_shared_variant_cache_isolated_from_custom_prompt(client, monkeypatch):
         assert variant_row is not None
         assert "SECRET_USER_A_DIRECTIVE_ONLY" not in variant_row.how_it_affects_you
         assert "SECRET_USER_B_DIRECTIVE_ONLY" not in variant_row.how_it_affects_you
+        assert "SECRET_USER_A_DIRECTIVE_ONLY" not in variant_row.action_guidance
+        assert "SECRET_USER_B_DIRECTIVE_ONLY" not in variant_row.action_guidance
     finally:
         if ev is not None:
             db.delete(ev)
@@ -370,10 +377,10 @@ def test_guest_stricter_limits_apply_and_normal_user_unaffected(client, monkeypa
     normal_user = UserProfile(id=9201, email="real@example.com", name="Real User", is_anonymous=False)
     chat_payload = {"messages": [{"role": "user", "content": "Hi"}]}
 
-    # Guests cannot force refresh or trigger live search
+    # Guests cannot force refresh; removed search returns 404
     app.dependency_overrides[get_optional_user] = lambda: guest_1
     assert client.get("/api/briefings", params={"refresh": "true"}).status_code == 403
-    assert client.get("/api/briefings/search", params={"q": "python", "live": "true"}).status_code == 403
+    assert client.get("/api/briefings/search").status_code == 404
 
     # Guest 1 hits per-guest daily/per-min cap at call #3 (cap=2)
     app.dependency_overrides[get_current_user] = lambda: guest_1
