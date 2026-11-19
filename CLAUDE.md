@@ -15,21 +15,21 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 - **V1 Scope Boundary:** **NON-GOAL: No payments or paywalls in V1**. Quality > low cost > speed.
 
 ## 3. Architecture Overview
-- **Backend ([backend/app](backend/app)):** FastAPI service exposing REST endpoints for briefings, search, topic autocomplete, user profiles, authentication, onboarding chat, and ingestion triggers.
-  - `main.py`: App routing, explicit CORS middleware, request ID tracking, `/health`, `/api/me`, `/api/account`, `/api/briefings`, `/api/briefings/search`, `/api/topics/search`, `/api/ingest`.
+- **Backend ([backend/app](backend/app)):** FastAPI service exposing REST endpoints for briefings, topic autocomplete, user profiles, authentication, onboarding chat, and ingestion triggers.
+  - `main.py`: App routing, explicit CORS middleware, request ID tracking, `/health`, `/api/me`, `/api/account`, `/api/briefings`, `/api/topics/search`, `/api/ingest`.
   - `config.py`: Centralized Pydantic settings and Supabase URL root validation.
   - `rate_limit.py`: In-process sliding-window rate limiter, `TRUSTED_PROXIES` IP resolution, and UTC-day Gemini quotas.
   - `supabase_auth.py`: Token verification via PyJWT using Supabase JWKS (ES256/RS256) or legacy HS256 secret.
   - `deps.py`: User mapping (`get_current_user`, `get_optional_user`, `map_token_to_user`, `https://`-only avatar hygiene).
   - `ingestion.py`: Ingestion pipeline resolving feeds into `sources`, upserting `raw_items`, exact dedup into `events`, shared canonical `cards`, and lazy `card_variants` caching for existing active professions.
-  - `feed_service.py`: Database-backed feed querying, stale-while-revalidate orchestration, topic search, and pagination slicing.
+  - `feed_service.py`: Database-backed feed querying, stale-while-revalidate orchestration, and pagination slicing.
   - `ai_service.py`: Google Gemini integration (`google-genai`), Pydantic schema-constrained JSON extraction, prompt sanitization.
   - `database.py`: SQLAlchemy session and engine management for SQLite and PostgreSQL.
   - `models.py`: Declarative ORM models (full table catalog in [docs/DATA_MODEL.md](docs/DATA_MODEL.md)).
   - `seed/`: Idempotent data seeder loading professions and focus topics from JSON files in `seed/data/`.
-  - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `BriefingSearchResponse`, `TopicSearchResponse`, `UserProfileBase`, `UserMeResponse`, `HealthResponse`).
+  - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `TopicSearchResponse`, `UserProfileBase`, `UserMeResponse`, `HealthResponse`).
 - **Frontend ([frontend/src](frontend/src)):** Next.js App Router broadsheet web app using Tailwind CSS v4, Lucide icons, and self-hosted local fonts (full design spec in [docs/UI_DESIGN.md](docs/UI_DESIGN.md)).
-  - `app/page.tsx`: Broadsheet layout containing Top Showcase (Lead + Quick Wire), Bento Grid deck, topic search, and finite briefing end state.
+  - `app/page.tsx`: Broadsheet layout containing Top Showcase (Lead + Quick Wire), Bento Grid deck, and finite briefing end state.
   - `app/profile/page.tsx`: Profile form (identity prefill, role, focus topics autocomplete, custom prompt, tone, Danger Zone deletion).
   - `app/onboarding/page.tsx`: Interactive chat wizard extracting profile attributes via Becon AI.
   - `app/about/page.tsx`: Manifesto and interactive 4-part Action Card role demonstration.

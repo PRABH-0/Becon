@@ -107,7 +107,6 @@ All authenticated calls go through [`apiFetch`](../frontend/src/lib/api.ts) (Bea
 | `/api/account` | `DELETE` | `/profile` Danger Zone | Permanent Supabase Admin + cascading DB account deletion |
 | `/api/profile` | `GET` / `POST` | `/`, `/profile` | Load and save profile preferences (with non-overwriting identity prefill on `/profile`) |
 | `/api/briefings` | `GET` | `/` | Two-phase briefing load (`scope=top&limit=5`, then `scope=remaining`) |
-| `/api/briefings/search` | `GET` | `/` search bar | Persisted briefing card search (`q`, `role`, `limit=10`, `offset`) |
 | `/api/topics/search` | `GET` | `/profile` topic autocomplete | Canonical topic + alias prefix autocomplete backed by `focus_topics` & `topic_aliases` |
 | `/api/onboarding/chat` | `POST` | `/onboarding` | Conversational profile extraction |
 
