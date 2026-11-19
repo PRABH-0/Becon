@@ -627,5 +627,54 @@
     "professions": [
       "software-development"
     ]
+  },
+  {
+    "slug": "github-advisories",
+    "name": "GitHub Advisory Database",
+    "homepage_url": "https://github.com/advisories",
+    "feed_url": "https://api.github.com/advisories",
+    "source_type": "advisory",
+    "trust_tier": "official",
+    "poll_interval_minutes": 60,
+    "is_active": true,
+    "topics": [
+      "cve-security",
+      "owasp-security"
+    ],
+    "professions": [
+      "software-development"
+    ]
+  },
+  {
+    "slug": "cisa-kev",
+    "name": "CISA Known Exploited Vulnerabilities Catalog",
+    "homepage_url": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
+    "feed_url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "source_type": "advisory",
+    "trust_tier": "official",
+    "poll_interval_minutes": 120,
+    "is_active": true,
+    "topics": [
+      "cve-security"
+    ],
+    "professions": [
+      "software-development"
+    ]
+  },
+  {
+    "slug": "nvd-cve",
+    "name": "National Vulnerability Database",
+    "homepage_url": "https://nvd.nist.gov/",
+    "feed_url": "https://services.nvd.nist.gov/rest/json/cves/2.0",
+    "source_type": "advisory",
+    "trust_tier": "official",
+    "poll_interval_minutes": 120,
+    "is_active": true,
+    "topics": [
+      "cve-security"
+    ],
+    "professions": [
+      "software-development"
+    ]
   }
 ]

@@ -26,10 +26,10 @@ def get_test_alembic_config(db_url: str) -> Config:
     return cfg
 
 
-def test_seed_sources_count_between_25_and_40():
-    """Verify curated official sources count is strictly between 25 and 40."""
+def test_seed_sources_count():
+    """Verify curated official sources count is strictly between 25 and 45."""
     data = load_json("sources.json")
-    assert 25 <= len(data) <= 40, f"Expected 25-40 sources, got {len(data)}"
+    assert 25 <= len(data) <= 45, f"Expected 25-45 sources, got {len(data)}"
 
 
 def test_seed_sources_valid_schema():
