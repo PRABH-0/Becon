@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-19  
 Current phase: 2 (Source Registry and Ingestion)  
-Current task: 2.4 (Scheduler: retries, backoff, per-source health, health endpoint)  
+Current task: 2.5 (Remove Google News and dev.to as primary sources)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -84,7 +84,7 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 - [x] 2.1 Source registry model and admin seed script (approved, merged `b98f9dd`)
 - [x] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories) (approved, merged `b98f9dd`)
 - [x] 2.3 Fetchers: RSS/Atom, GitHub Releases API, advisories (GHSA/NVD); conditional GET; full-text extraction; sanitization (approved, merged `85cbd62`)
-- [~] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint *(Note: needs per-source timeouts; slowest sources took 14-25s, probably the full-text fallback)*
+- [x] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint (approved, merged `29aca4e`)
 - [ ] 2.5 Remove Google News and dev.to as primary sources
 
 *Exit: scheduled run fills raw_items reliably; source health visible.*
@@ -214,3 +214,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-19 | 6.9 | Approved, merged `b98f9dd` | Home-page search investigation & removal (`task-2.1-source-registry`): removed search input/states/handlers/pagination from `/`, restored clean finite broadsheet header, removed `/api/briefings/search` route, `search_topic_briefings` & `BriefingSearchResponse`, upheld 1.7b Gemini hardening guarantees on remaining endpoints, added 404 test, deferred DB-only archive search to 6.5 |
 | 2026-11-19 | 2.1, 2.2 | Approved, merged `b98f9dd` | Source registry & curated official sources (DATA ONLY, `task-2.1-source-registry`): migration 0004 for `source_professions` join table with PostgreSQL RLS, `Source` model synonyms (`homepage_url`, `source_type`, `poll_interval_minutes`, `is_active`), `SourceSeedItem` Pydantic v2 DTO with https enforcement, 38 live-verified official developer feeds in `sources.json`, idempotent seeder, offline test suite + marker-gated network test |
 | 2026-11-19 | 2.3 | Approved, merged `85cbd62` | Fetchers framework (RSS/Atom, GitHub Releases, advisory APIs): safe httpx client with SSRF guards, conditional GET, plain-text sanitization, raw_items metadata column (migration 0005), GHSA/CISA KEV/NVD advisory fetchers, runner and dev.ps1 fetch |
+| 2026-11-19 | 2.4 | Approved, merged `29aca4e` | Scheduler worker, retries/exponential backoff, per-source health, health endpoint (`task-2.4-scheduler`): migration 0006 for status/next_fetch_at/lease columns, asyncio scheduler worker engine (`python -m app.scheduler`, `dev.ps1 scheduler`, docker-compose service), atomic DB leasing & expired lease reclaim, 45s per-source timeout & concurrency semaphores, consecutive failure tracking & backoff with Retry-After, GET /api/sources/health endpoint with X-Ingest-Token protection & slowapi rate limiting, CLI `--status` & `--once` flags, 11 deterministic offline tests |
