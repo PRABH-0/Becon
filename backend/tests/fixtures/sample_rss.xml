@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Sample Engineering Blog</title>
+    <link>https://example.com/blog</link>
+    <description>Updates on high performance computing</description>
+    <lastBuildDate>Wed, 18 Nov 2026 12:00:00 GMT</lastBuildDate>
+    <item>
+      <title>Architecture of High-Throughput Pipelines</title>
+      <link>https://example.com/blog/high-throughput-pipelines?utm_source=rss&amp;utm_medium=feed</link>
+      <guid isPermaLink="true">https://example.com/blog/high-throughput-pipelines</guid>
+      <pubDate>Wed, 18 Nov 2026 10:30:00 GMT</pubDate>
+      <dc:creator>Jane Doe</dc:creator>
+      <description><![CDATA[<p>In this post we explore how modern distributed queues handle 100k events/sec. <script>alert('xss');</script> We look into batching, disk writes, and zero-copy transfers across memory boundaries.</p>]]></description>
+    </item>
+    <item>
+      <title>Historical Post from Two Years Ago</title>
+      <link>https://example.com/blog/historical-post</link>
+      <guid isPermaLink="true">https://example.com/blog/historical-post</guid>
+      <pubDate>Sun, 01 Jan 2023 00:00:00 GMT</pubDate>
+      <description><![CDATA[This is an ancient post that should be skipped by max_age_days cutoff.]]></description>
+    </item>
+  </channel>
+</rss>

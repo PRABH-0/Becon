@@ -26,6 +26,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `ai_service.py`: Google Gemini integration (`google-genai`), Pydantic schema-constrained JSON extraction, prompt sanitization.
   - `database.py`: SQLAlchemy session and engine management for SQLite and PostgreSQL.
   - `models.py`: Declarative ORM models (full table catalog in [docs/DATA_MODEL.md](docs/DATA_MODEL.md)).
+  - `fetchers/`: Modular source fetchers (RSS/Atom, GitHub Releases, security advisories GHSA/CISA KEV/NVD) with SSRF guards, size caps, conditional GET, plain-text sanitization, deduplication, and manual CLI runner.
   - `seed/`: Idempotent data seeder loading professions, focus topics, and official content sources from JSON files in `seed/data/`.
   - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `TopicSearchResponse`, `UserProfileBase`, `UserMeResponse`, `HealthResponse`, `SourceSeedItem`, `SourceResponse`).
 - **Frontend ([frontend/src](frontend/src)):** Next.js App Router broadsheet web app using Tailwind CSS v4, Lucide icons, and self-hosted local fonts (full design spec in [docs/UI_DESIGN.md](docs/UI_DESIGN.md)).
@@ -72,6 +73,8 @@ Run the test and migration commands below to check current test and table counts
   - `ALLOWED_ORIGINS`: Comma-separated CORS allowed origins (e.g. `http://localhost:3000`).
   - `ENABLE_DOCS`: Toggle for `/docs` and `/redoc` Swagger documentation endpoints (`"true"`/`"false"`).
   - `FEED_CACHE_TTL_SECONDS`: Stale-while-revalidate TTL in seconds for persisted briefing cards (default: `1800`).
+  - `GITHUB_TOKEN`: Optional GitHub API token for higher advisory rate limits.
+  - `NVD_API_KEY`: Optional NVD API key for higher CVE rate limits.
   - `RATE_LIMIT_ENABLED`: Enable/disable in-process rate limits and daily Gemini quotas (default: `true`).
   - `RATE_LIMIT_PUBLIC_PER_MIN`: Per-IP requests/min limit on public endpoints (default: `30`).
   - `RATE_LIMIT_AUTH_AI_PER_MIN`: Per-user requests/min limit on authenticated AI-triggering endpoints (default: `10`).

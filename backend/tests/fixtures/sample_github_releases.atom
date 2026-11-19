@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/fastapi/fastapi/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/fastapi/fastapi/releases"/>
+  <title>Release notes from fastapi</title>
+  <updated>2026-11-18T19:14:20Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/160761181/0.116.0</id>
+    <updated>2026-11-18T19:14:20Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/fastapi/fastapi/releases/tag/0.116.0"/>
+    <title>0.116.0</title>
+    <content type="html"><![CDATA[
+      <h2>Breaking Changes</h2>
+      <p>Upgrade Starlette to 0.40.0 for improved HTTP/2 connection pooling.</p>
+      <h2>Fixes</h2>
+      <p>Fix memory leak in background tasks when streaming generator payloads.</p>
+    ]]></content>
+    <author>
+      <name>tiangolo</name>
+    </author>
+  </entry>
+</feed>

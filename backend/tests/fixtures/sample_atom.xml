@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Sample Framework Releases</title>
+  <link href="https://example.org/releases"/>
+  <updated>2026-11-18T14:00:00Z</updated>
+  <id>https://example.org/releases</id>
+  <entry>
+    <title>Framework v3.2.0 Released</title>
+    <link href="https://example.org/releases/v3.2.0?ref=feed"/>
+    <id>tag:example.org,2026:release-v3.2.0</id>
+    <updated>2026-11-18T12:00:00Z</updated>
+    <published>2026-11-18T11:00:00Z</published>
+    <author>
+      <name>Core Team</name>
+    </author>
+    <summary type="html">&lt;p&gt;Framework v3.2.0 introduces zero-allocation stream parsing and breaking deprecations for legacy socket connectors.&lt;/p&gt;</summary>
+    <content type="html"><![CDATA[
+      <article>
+        <h1>Release Notes for v3.2.0</h1>
+        <p>This release delivers enhanced throughput and resolves critical socket connection leaks in high-concurrency environments.</p>
+        <p>Developers must upgrade client adapters before December 2026.</p>
+      </article>
+    ]]></content>
+  </entry>
+</feed>

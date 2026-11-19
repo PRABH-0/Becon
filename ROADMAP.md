@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-19  
 Current phase: 2 (Source Registry and Ingestion)  
-Current task: 2.1 (Source registry model) + 2.2 (Curated official sources)  
+Current task: 2.3 (Fetchers: RSS/Atom, conditional GET, sanitization)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -81,10 +81,10 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 ---
 
 ## PHASE 2: Source registry and ingestion
-- [~] 2.1 Source registry model and admin seed script
-- [~] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories)
-- [ ] 2.3 Fetchers: RSS/Atom, GitHub Releases API, advisories (GHSA/NVD); conditional GET; full-text extraction; sanitization
-- [ ] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint
+- [x] 2.1 Source registry model and admin seed script (approved, merged `b98f9dd`)
+- [x] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories) (approved, merged `b98f9dd`)
+- [~] 2.3 Fetchers: RSS/Atom, GitHub Releases API, advisories (GHSA/NVD); conditional GET; full-text extraction; sanitization
+- [ ] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint *(Note: needs per-source timeouts; slowest sources took 14-25s, probably the full-text fallback)*
 - [ ] 2.5 Remove Google News and dev.to as primary sources
 
 *Exit: scheduled run fills raw_items reliably; source health visible.*
@@ -95,14 +95,14 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 - [~] 3.1 Exact dedup (URL/hash) and normalization *(exact dedup done in 1.5; normalization edge cases pending)*
 - [ ] 3.2 Semantic dedup with embeddings into events
 - [ ] 3.3 Focus tagging via taxonomy, category (release, deprecation, security, EOL, industry)
-- [ ] 3.4 Severity score (D7)
+- [ ] 3.4 Severity score (D7) *(Note: Phase 3 should use the modified date for advisories as NVD publishes old CVEs that were recently modified; cisa-kev severity is assigned, not a CVSS value, so D7 must treat it separately)*
 
 *Exit: sample evaluation shows duplicates merged and tags correct; thresholds documented.*
 
 ---
 
 ## PHASE 4: Grounded Gemini synthesis
-- [ ] 4.1 Gemini key configured; strict schema; source-only prompt
+- [ ] 4.1 Gemini key configured; strict schema; source-only prompt *(Note: Task 4.1 must treat raw_items text as untrusted input with prompt-injection guard)*
 - [ ] 4.2 Validation layer (schema, claim-in-source check, retry once, else flag and do not publish)
 - [ ] 4.3 Rate-limit handling with backoff, caching, cost tracking
 - [ ] 4.4 Evaluation set of 30+ real updates and manual review report
@@ -132,7 +132,7 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 - [ ] 6.6 Typography (load editorial serif — *resolved in `1.12` via self-hosted Source Serif 4*), token cleanup, accessibility fixes (focus, Escape, contrast, aria; *note: Profile Menu dropdown Escape/`aria-expanded`/keyboard a11y resolved in `1.10`*)
 - [ ] 6.7 Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow
 - [x] 6.8 UI polish pass (small fixes, NOT a redesign): compact cards 4-part rendering (6.1b), lead card dead space removal, equal-height card pinning, metadata/body text scaling & AA contrast, unified "Read source" & "Details" labels, remove full broadsheet density jargon, /profile placeholder & primary accent button & accessible tone radiogroup & live prompt counter & accurate privacy & account email copy *(approved, merged `4fdc08a`)*
-- [~] 6.9 Remove home-page topic search UI and backend route; plan DB-only archive search under 6.5 after Phase 2 *(in progress)*
+- [x] 6.9 Remove home-page topic search UI and backend route; plan DB-only archive search under 6.5 after Phase 2 (approved, merged `b98f9dd`)
 
 *Exit: full user flow works against real data.*
 
@@ -211,5 +211,6 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-18 | 1.8a | Approved, merged `0ec76d9` | Documentation consolidation (`task-1.8a-docs`): folded <=10-line audit baseline into `ROADMAP.md`, removed `AUDIT_REPORT.md`, `docs/COMPLETION_REPORT.md`, untracked `docs/MERGE_READINESS_REPORT.md`, and `frontend/README.md`, moved & refreshed `UI_DESIGN.md` -> `docs/UI_DESIGN.md`, eliminated all `file:///` links & duplicated env/count prose, added no-new-`.md`/chat-report rules to `CLAUDE.md`, ticked merged Phase 1 tasks (`1.6b`–`1.12`) |
 | 2026-11-18 | 1.7b | Approved, merged `e4f8b2e` | Pre-`GEMINI_API_KEY` spend/abuse hardening (`task-1.7b-gemini-hardening`): DB-only unauthenticated `/api/briefings/search` & `/api/briefings`, `422` caps on `interests`/`role`/`custom_prompt`/`ChatRequest`, shared `CardVariant` isolated from `custom_prompt` & unauthenticated triggers, configurable `max_output_tokens`, once-per-logical-request retry quota accounting, stricter guest limits & all-guests pool cap, per-run ingest budget (`INGEST_MAX_GEMINI_CALLS_PER_RUN`), fake-Gemini test suite & docs |
 | 2026-11-19 | 6.8, 6.1b | Approved, merged `4fdc08a` | UI polish pass & 4-part compact cards (`task-6.8-ui-polish`): 6.1b compact cards `why_it_matters` (line-clamp 2), lead card dead space removed, equal-height card pinning, metadata/body scaling & AA contrast, unified "Read source" & "Details" labels, broadsheet banner replaced, accessible tone radiogroup & live prompt counter & accurate privacy/account copy |
-| 2026-11-19 | 6.9 | Pending Approval | Home-page search investigation & removal (`task-2.1-source-registry`): removed search input/states/handlers/pagination from `/`, restored clean finite broadsheet header, removed `/api/briefings/search` route, `search_topic_briefings` & `BriefingSearchResponse`, upheld 1.7b Gemini hardening guarantees on remaining endpoints, added 404 test, deferred DB-only archive search to 6.5 |
-| 2026-11-19 | 2.1, 2.2 | Pending Approval | Source registry & curated official sources (DATA ONLY, `task-2.1-source-registry`): migration 0004 for `source_professions` join table with PostgreSQL RLS, `Source` model synonyms (`homepage_url`, `source_type`, `poll_interval_minutes`, `is_active`), `SourceSeedItem` Pydantic v2 DTO with https enforcement, 38 live-verified official developer feeds in `sources.json`, idempotent seeder, offline test suite + marker-gated network test |
+| 2026-11-19 | 6.9 | Approved, merged `b98f9dd` | Home-page search investigation & removal (`task-2.1-source-registry`): removed search input/states/handlers/pagination from `/`, restored clean finite broadsheet header, removed `/api/briefings/search` route, `search_topic_briefings` & `BriefingSearchResponse`, upheld 1.7b Gemini hardening guarantees on remaining endpoints, added 404 test, deferred DB-only archive search to 6.5 |
+| 2026-11-19 | 2.1, 2.2 | Approved, merged `b98f9dd` | Source registry & curated official sources (DATA ONLY, `task-2.1-source-registry`): migration 0004 for `source_professions` join table with PostgreSQL RLS, `Source` model synonyms (`homepage_url`, `source_type`, `poll_interval_minutes`, `is_active`), `SourceSeedItem` Pydantic v2 DTO with https enforcement, 38 live-verified official developer feeds in `sources.json`, idempotent seeder, offline test suite + marker-gated network test |
+| 2026-11-19 | 2.3 | Pending Approval | Fetchers framework (RSS/Atom, GitHub Releases, advisory APIs): safe httpx client with SSRF guards, conditional GET, plain-text sanitization, raw_items metadata column (migration 0005), GHSA/CISA KEV/NVD advisory fetchers, runner and dev.ps1 fetch |
