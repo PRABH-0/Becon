@@ -171,7 +171,11 @@ def seed_sources(
         trust_tier_int = tier_map.get(validated.trust_tier, 1)
         normalized_type = type_map.get(validated.source_type, "rss")
 
-        source = db.query(Source).filter(Source.slug == slug).first()
+        source = (
+            db.query(Source)
+            .filter((Source.slug == slug) | (Source.feed_url == str(validated.feed_url)))
+            .first()
+        )
         if not source:
             source = Source(
                 slug=slug,
@@ -186,6 +190,7 @@ def seed_sources(
             db.add(source)
             db.flush()
         else:
+            source.slug = slug
             source.name = validated.name
             source.site_url = str(validated.homepage_url)
             source.feed_url = str(validated.feed_url)
@@ -237,6 +242,17 @@ def seed_sources(
             if not link:
                 link = SourceProfession(source_id=source.id, profession_id=prof.id)
                 db.add(link)
+                db.flush()
+
+    # Deactivate or remove sources no longer present in seed data
+    valid_slugs = {s["slug"] for s in data}
+    for old_source in db.query(Source).all():
+        if old_source.slug not in valid_slugs:
+            if not old_source.raw_items:
+                db.delete(old_source)
+                db.flush()
+            else:
+                old_source.enabled = False
                 db.flush()
 
     return source_map
