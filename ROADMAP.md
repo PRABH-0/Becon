@@ -84,7 +84,7 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 - [x] 2.1 Source registry model and admin seed script (approved, merged `b98f9dd`)
 - [x] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories) (approved, merged `b98f9dd`)
 - [x] 2.3 Fetchers: RSS/Atom, GitHub Releases API, advisories (GHSA/NVD); conditional GET; full-text extraction; sanitization (approved, merged `85cbd62`)
-- [ ] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint *(Note: needs per-source timeouts; slowest sources took 14-25s, probably the full-text fallback)*
+- [~] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint *(Note: needs per-source timeouts; slowest sources took 14-25s, probably the full-text fallback)*
 - [ ] 2.5 Remove Google News and dev.to as primary sources
 
 *Exit: scheduled run fills raw_items reliably; source health visible.*
