@@ -21,13 +21,13 @@ export function LeadCard({
   return (
     <article
       data-testid="lead-card"
-      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col justify-between h-full"
+      className="rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 p-4 sm:p-5 md:p-6 shadow-sm dark:shadow-slate-950/50 flex flex-col"
     >
       <div>
         {/* Top Badges & Actions */}
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border border-slate-800 dark:border-amber-400 uppercase tracking-wider shadow-xs">
+            <span className="inline-flex items-center text-[11px] font-mono font-black px-2 py-0.5 rounded-md bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border border-slate-800 dark:border-amber-400 uppercase tracking-wider shadow-xs">
               LEAD // 01
             </span>
             {card.target_stack.slice(0, 2).map((tag) =>
@@ -36,15 +36,15 @@ export function LeadCard({
               ) : (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 text-[10px] font-sans font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs"
+                  className="inline-flex items-center gap-1 text-[11px] font-sans font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md bg-slate-100/90 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs"
                 >
-                  <span className="text-slate-400 font-mono text-[9px]">/</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">/</span>
                   <span>{tag.replace(/^#/, "").trim()}</span>
                 </span>
               )
             )}
-            <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+            <span className="text-[11px] font-sans font-medium text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-slate-500 dark:text-slate-400" />
               <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
           </div>
@@ -85,9 +85,9 @@ export function LeadCard({
       </div>
 
       {/* Action Bar with Details & Source Link */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 font-mono mt-auto">
-        <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
-          Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
+      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 font-mono mt-2">
+        <span className="text-slate-600 dark:text-slate-400 text-xs truncate">
+          Role: <strong className="text-slate-900 dark:text-slate-200 font-semibold">{card.target_role}</strong>
         </span>
         <div className="flex items-center gap-2 shrink-0">
           <button

@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-18  
 Current phase: 1 (Foundation & Pre-Gemini Hardening)  
-Current task: 1.7b (Close Gemini spend/abuse holes — pending approval; next: Phase 2 or 6.1b / 1.8)  
+Current task: 6.8 (UI polish pass — in progress; includes 6.1b)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -124,13 +124,14 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 
 ## PHASE 6: Frontend completion
 - [~] 6.1 Render all 4 Action Card parts and action badge on every card; card detail drawer *(committed `376852d`; compact cards omit `why_it_matters`; tracked in `6.1b`)*
-- [ ] 6.1b Compact cards render all 4 parts (short `why_it_matters` line), full text in `CardDrawer`
+- [~] 6.1b Compact cards render all 4 parts (short `why_it_matters` line), full text in `CardDrawer` *(folded into Task 6.8)*
 - [x] 6.2 Remove infinite scroll and page-lift (D12); finite briefing with "you're done" end state *(committed `4afb33f`)*
 - [ ] 6.3 Remove ~1,300 lines of mock fallback generators from `page.tsx`; split `page.tsx` into components
 - [ ] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles)
 - [ ] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive; drop deprecated legacy `saved_briefings` table once `saved_cards` UI ships
 - [ ] 6.6 Typography (load editorial serif — *resolved in `1.12` via self-hosted Source Serif 4*), token cleanup, accessibility fixes (focus, Escape, contrast, aria; *note: Profile Menu dropdown Escape/`aria-expanded`/keyboard a11y resolved in `1.10`*)
 - [ ] 6.7 Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow
+- [~] 6.8 UI polish pass (small fixes, NOT a redesign): compact cards 4-part rendering (6.1b), lead card dead space removal, equal-height card pinning, metadata/body text scaling & AA contrast, unified "Read source" & "Details" labels, remove full broadsheet density jargon, /profile placeholder & primary accent button & accessible tone radiogroup & live prompt counter & accurate privacy & account email copy *(in progress)*
 
 *Exit: full user flow works against real data.*
 

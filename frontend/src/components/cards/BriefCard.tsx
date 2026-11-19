@@ -26,15 +26,15 @@ export function BriefCard({
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-1.5 truncate">
             {rankNumber !== undefined && rankNumber <= 5 && (
-              <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 dark:bg-slate-800 text-amber-300 border border-slate-800 dark:border-slate-700 shrink-0">
+              <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 dark:bg-slate-800 text-amber-300 border border-slate-800 dark:border-slate-700 shrink-0">
                 #{String(rankNumber).padStart(2, "0")}
               </span>
             )}
             {renderStackTag ? (
               renderStackTag(card.target_stack[0])
             ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] font-sans font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                <span className="text-slate-400 font-mono text-[9px]">/</span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-sans font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md bg-slate-100/90 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">/</span>
                 <span>{card.target_stack[0]?.replace(/^#/, "").trim()}</span>
               </span>
             )}
@@ -43,10 +43,10 @@ export function BriefCard({
             href={card.source_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono transition-all border border-slate-200 dark:border-slate-700 shrink-0"
-            title="Open original resource documentation"
+            className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-800 dark:text-slate-200 font-mono transition-all border border-slate-200 dark:border-slate-700 shrink-0"
+            title="Read source"
           >
-            <span>Resource</span>
+            <span>Read source</span>
             <ExternalLink className="w-3 h-3" />
           </a>
         </div>
@@ -69,15 +69,15 @@ export function BriefCard({
       </div>
 
       {/* Footer */}
-      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-auto">
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-600 dark:text-slate-400 mt-auto">
         <span className="truncate flex items-center gap-1">
-          <Calendar className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500" />
+          <Calendar className="w-3 h-3 text-slate-500 dark:text-slate-400" />
           <span>{card.published_at || "Oct 23, 2026"}</span>
         </span>
         <button
           type="button"
           onClick={() => onOpenDrawer?.(card)}
-          className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
+          className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
         >
           <Info className="w-3 h-3" />
           <span>Details</span>
