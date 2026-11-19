@@ -40,6 +40,21 @@ class FetchResult:
     error: str | None = None
     http_status: int | None = None
     duration_seconds: float = 0.0
+    retry_after_seconds: float | None = None
+
+
+@dataclass
+class SourceFetchSummary:
+    """Execution summary for a single source fetch run."""
+
+    slug: str
+    status: str  # "ok", "not_modified", "error", "skipped"
+    items_fetched: int = 0
+    new_inserted: int = 0
+    duplicates_skipped: int = 0
+    duration_seconds: float = 0.0
+    next_fetch_at: datetime | None = None
+    error: str | None = None
 
 
 class BaseFetcher(ABC):

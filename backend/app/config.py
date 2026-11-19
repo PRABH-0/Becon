@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str | None = Field(default=None, description="Optional GitHub API token for higher advisory rate limits")
     NVD_API_KEY: str | None = Field(default=None, description="Optional NVD API key for higher CVE rate limits")
 
+    # Scheduler and Source Fetching settings (Task 2.4)
+    SCHEDULER_ENABLED: bool = Field(default=True, description="Enable periodic background scheduler")
+    SCHEDULER_TICK_SECONDS: int = Field(default=10, ge=1, description="Interval between scheduler due checks")
+    FETCH_GLOBAL_CONCURRENCY: int = Field(default=4, ge=1, le=32, description="Maximum concurrent active source fetches")
+    FETCH_SOURCE_TIMEOUT_SECONDS: int = Field(default=45, ge=5, le=300, description="Hard cap timeout per source fetch")
+    FETCH_MAX_BACKOFF_MINUTES: int = Field(default=360, ge=1, description="Maximum exponential retry backoff cap in minutes")
+    FETCH_FAILING_THRESHOLD: int = Field(default=10, ge=1, description="Consecutive failure threshold to mark source status as failing")
+
     # Rate limiting & Gemini quota caps (in-process; use Redis/shared store when horizontally scaled)
     RATE_LIMIT_ENABLED: bool = Field(default=True)
     RATE_LIMIT_PUBLIC_PER_MIN: int = Field(default=30, ge=1)

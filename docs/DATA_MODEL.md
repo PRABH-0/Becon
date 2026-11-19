@@ -97,7 +97,7 @@ Many-to-many relationship linking professions to suggested focus topics displaye
 Explicit topic preferences selected by users with optional version constraints (e.g., Python 3.12, Next.js 15) to drive personal briefing ranking.
 
 ### `sources`
-Authoritative external feeds (RSS, Atom, GitHub releases, security advisories). Tracks fetch intervals, ETag/Last-Modified HTTP caching headers, health state (`last_fetched_at`, `last_success_at`, `consecutive_failures`, `last_error`), and trust tiers.
+Authoritative external feeds (RSS, Atom, GitHub releases, security advisories). Tracks fetch intervals, ETag/Last-Modified HTTP caching headers, health state (`last_fetched_at`, `last_success_at`, `consecutive_failures`, `last_error`, `status`), scheduling (`next_fetch_at`), distributed lease locking (`lease_expires_at`, `fetch_started_at`), and trust tiers.
 
 ### `source_topics`
 Mapping of external content sources to the focus topics they reliably cover.

@@ -23,6 +23,9 @@ In two separate terminal windows:
 
 # Terminal 2: Frontend (Next.js on http://localhost:3000)
 .\scripts\dev.ps1 dev-frontend
+
+# Optional Terminal 3: Source Scheduler Worker (runs due fetches in background)
+.\scripts\dev.ps1 scheduler
 ```
 
 ## Testing & Code Quality

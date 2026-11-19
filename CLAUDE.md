@@ -52,6 +52,8 @@ Run the test and migration commands below to check current test and table counts
 | **Migrate** | N/A | `cd backend && .\.venv\Scripts\alembic upgrade head` | `.\scripts\dev.ps1 migrate` |
 | **Make Migration** | N/A | `cd backend && .\.venv\Scripts\alembic revision --autogenerate -m "..."` | `.\scripts\dev.ps1 makemigration -Message "..."` |
 | **Seed** | N/A | `cd backend && .\.venv\Scripts\python -m app.seed` | `.\scripts\dev.ps1 seed` |
+| **Fetch** | N/A | `cd backend && .\.venv\Scripts\python -m app.fetchers` | `.\scripts\dev.ps1 fetch` |
+| **Scheduler** | N/A | `cd backend && .\.venv\Scripts\python -m app.scheduler` | `.\scripts\dev.ps1 scheduler` |
 | **Typecheck** | `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` |
 | **Build** | `cd frontend && npm run build` | N/A | N/A |
@@ -75,6 +77,12 @@ Run the test and migration commands below to check current test and table counts
   - `FEED_CACHE_TTL_SECONDS`: Stale-while-revalidate TTL in seconds for persisted briefing cards (default: `1800`).
   - `GITHUB_TOKEN`: Optional GitHub API token for higher advisory rate limits.
   - `NVD_API_KEY`: Optional NVD API key for higher CVE rate limits.
+  - `SCHEDULER_ENABLED`: Enable/disable background scheduler worker (default: `true`).
+  - `SCHEDULER_TICK_SECONDS`: Polling tick interval in seconds for due sources (default: `10`).
+  - `FETCH_GLOBAL_CONCURRENCY`: Global concurrent source fetch cap (default: `4`).
+  - `FETCH_SOURCE_TIMEOUT_SECONDS`: Per-source hard timeout cap including full-text fallback in seconds (default: `45`).
+  - `FETCH_MAX_BACKOFF_MINUTES`: Maximum exponential retry backoff cap in minutes (default: `360`).
+  - `FETCH_FAILING_THRESHOLD`: Consecutive failure threshold to mark source status as failing (default: `10`).
   - `RATE_LIMIT_ENABLED`: Enable/disable in-process rate limits and daily Gemini quotas (default: `true`).
   - `RATE_LIMIT_PUBLIC_PER_MIN`: Per-IP requests/min limit on public endpoints (default: `30`).
   - `RATE_LIMIT_AUTH_AI_PER_MIN`: Per-user requests/min limit on authenticated AI-triggering endpoints (default: `10`).

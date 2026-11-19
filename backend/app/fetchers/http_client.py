@@ -88,6 +88,21 @@ def is_ip_restricted(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     )
 
 
+def parse_retry_after(headers: Dict[str, str]) -> float | None:
+    """Extract retry-after seconds from response headers (supports integer seconds or HTTP-date)."""
+    ra = headers.get("retry-after")
+    if not ra:
+        return None
+    try:
+        return float(ra)
+    except ValueError:
+        try:
+            dt = parsedate_to_datetime(ra)
+            return max(1.0, (dt.timestamp() - time.time()))
+        except Exception:
+            return None
+
+
 def validate_url_safety(url: str, skip_dns: bool = False) -> None:
     """Validate that a URL is HTTPS and does not resolve to a private/loopback/restricted IP.
 
