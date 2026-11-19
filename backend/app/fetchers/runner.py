@@ -5,7 +5,6 @@ updates source health records, and persists clean raw_items without invoking Gem
 """
 
 import logging
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import List
 

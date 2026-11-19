@@ -3,7 +3,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC
 
 from fastapi import (
     BackgroundTasks,
