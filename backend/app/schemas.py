@@ -2,6 +2,8 @@ from typing import List, Literal
 
 from pydantic import BaseModel, Field
 
+CUSTOM_PROMPT_MAX_LENGTH: int = 500
+
 
 # 1. Action Guidance Sub-Model (Target action: learn, apply, avoid, prepare)
 class ActionGuidance(BaseModel):
@@ -58,6 +60,7 @@ class UserProfileBase(BaseModel):
     )
     customPrompt: str = Field(
         default="",
+        max_length=CUSTOM_PROMPT_MAX_LENGTH,
         description="Custom AI tuning directive or editorial prompt instruction",
         examples=["Focus on architectural trade-offs, system design, and security updates."],
     )

@@ -33,6 +33,7 @@ from app.rate_limit import (
     enforce_public_rate_limit,
 )
 from app.schemas import (
+    CUSTOM_PROMPT_MAX_LENGTH,
     BriefingCard,
     ChatRequest,
     ChatResponse,
@@ -285,7 +286,7 @@ def get_briefings(
     ),
     custom_prompt: str = Query(
         default="",
-        max_length=500,
+        max_length=CUSTOM_PROMPT_MAX_LENGTH,
         description="Custom user editorial instruction for Gemini AI personalization",
         examples=["Focus on architectural trade-offs, security, and scalability."],
     ),

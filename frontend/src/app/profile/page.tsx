@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { apiFetch, deleteAccount, type UserMe } from "@/lib/api";
 import { clearBeconCaches, syncIdentityCache } from "@/lib/cache";
 import { resolveUserIdentity } from "@/lib/identity";
+import { CUSTOM_PROMPT_MAX_LENGTH } from "@/lib/constants";
 import { supabase } from "@/lib/supabaseClient";
 import { GuestBanner } from "@/components/GuestBanner";
 import { HeaderActions } from "@/components/HeaderActions";
@@ -332,8 +333,8 @@ export default function ProfilePage() {
     e.preventDefault();
     setValidationError("");
 
-    if (customPrompt.length > 500) {
-      setValidationError("Custom instruction prompt cannot exceed 500 characters.");
+    if (customPrompt.length > CUSTOM_PROMPT_MAX_LENGTH) {
+      setValidationError(`Custom instruction prompt cannot exceed ${CUSTOM_PROMPT_MAX_LENGTH} characters.`);
       return;
     }
 
@@ -863,19 +864,19 @@ export default function ProfilePage() {
                 />
                 <div className="flex items-center justify-between text-xs font-mono">
                   <span className="text-slate-500 dark:text-slate-400 text-[11px]">
-                    Max 500 characters (validated by Becon AI).
+                    Max {CUSTOM_PROMPT_MAX_LENGTH} characters (validated by Becon AI).
                   </span>
                   <span
                     data-testid="prompt-char-counter"
                     className={`font-bold text-xs ${
-                      customPrompt.length > 500
+                      customPrompt.length > CUSTOM_PROMPT_MAX_LENGTH
                         ? "text-rose-600 dark:text-rose-400"
-                        : customPrompt.length >= 450
+                        : customPrompt.length >= CUSTOM_PROMPT_MAX_LENGTH - 50
                         ? "text-amber-600 dark:text-amber-400"
                         : "text-slate-500 dark:text-slate-400"
                     }`}
                   >
-                    {customPrompt.length} / 500
+                    {customPrompt.length} / {CUSTOM_PROMPT_MAX_LENGTH}
                   </span>
                 </div>
               </div>

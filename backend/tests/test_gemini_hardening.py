@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 import app.ai_service as ai_service
 import app.database as app_db
 import app.ingestion as ingestion_mod
+import app.schemas as schemas
 from app.config import settings
 from app.deps import get_current_user, get_optional_user
 from app.main import app
@@ -162,10 +163,22 @@ def test_oversize_inputs_return_422_and_max_output_tokens_set_on_all_gemini_call
     assert client.get("/api/briefings", params={"interests": topic_too_long}).status_code == 422
 
     assert client.get("/api/briefings", params={"role": "r" * 121}).status_code == 422
-    assert client.get("/api/briefings", params={"custom_prompt": "p" * 501}).status_code == 422
+    assert client.get("/api/briefings", params={"custom_prompt": "p" * (schemas.CUSTOM_PROMPT_MAX_LENGTH + 1)}).status_code == 422
+
+    # 1b. POST /api/profile caps customPrompt at CUSTOM_PROMPT_MAX_LENGTH (501 chars -> 422)
+    fake_user = UserProfile(id=8801, email="caps@example.com", name="Caps User", is_anonymous=False)
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    oversize_profile = {
+        "name": "Caps User",
+        "role": "Engineer",
+        "email": "caps@example.com",
+        "experience": "Senior",
+        "interests": "Python",
+        "customPrompt": "p" * (schemas.CUSTOM_PROMPT_MAX_LENGTH + 1),
+    }
+    assert client.post("/api/profile", json=oversize_profile).status_code == 422
 
     # 2. POST /api/onboarding/chat caps
-    fake_user = UserProfile(id=8801, email="caps@example.com", name="Caps User", is_anonymous=False)
     app.dependency_overrides[get_current_user] = lambda: fake_user
 
     too_many_msgs = {"messages": [{"role": "user", "content": f"msg {i}"} for i in range(21)]}

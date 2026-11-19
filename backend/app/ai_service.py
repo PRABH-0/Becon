@@ -9,7 +9,13 @@ from google.genai import types
 
 from app.config import settings
 from app.rate_limit import GeminiQuotaExceededError, rate_limiter
-from app.schemas import ActionGuidance, BriefingCardContent, ChatMessage, ChatResponse
+from app.schemas import (
+    CUSTOM_PROMPT_MAX_LENGTH,
+    ActionGuidance,
+    BriefingCardContent,
+    ChatMessage,
+    ChatResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +38,7 @@ def sanitize_custom_prompt(raw: str) -> str:
         return ""
     cleaned = re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", raw)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned[:500]
+    return cleaned[:CUSTOM_PROMPT_MAX_LENGTH]
 
 
 def extract_rich_fallback_bullets(raw_summary: str, clean_headline: str, tech_tag: str) -> list[str]:
