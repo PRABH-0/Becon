@@ -12,7 +12,16 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import FocusTopic, Profession, ProfessionTopic, TopicAlias
+from app.models import (
+    FocusTopic,
+    Profession,
+    ProfessionTopic,
+    Source,
+    SourceProfession,
+    SourceTopic,
+    TopicAlias,
+)
+from app.schemas import SourceSeedItem
 
 logger = logging.getLogger("becon.seed")
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -135,6 +144,104 @@ def seed_topics(
     return topic_map
 
 
+def seed_sources(
+    db: Session,
+    data: List[Dict[str, Any]],
+    profession_map: Dict[str, Profession],
+    topic_map: Dict[str, FocusTopic],
+) -> Dict[str, Source]:
+    source_map: Dict[str, Source] = {}
+    tier_map = {"official": 1, "vendor": 2, "curated_creator": 3, 1: 1, 2: 2, 3: 3}
+    type_map = {
+        "github_releases": "github_release",
+        "github_release": "github_release",
+        "rss": "rss",
+        "atom": "atom",
+        "advisory": "advisory",
+        "changelog_html": "changelog_html",
+        "youtube_channel": "youtube_channel",
+        "x_account": "x_account",
+        "instagram_account": "instagram_account",
+    }
+
+    for raw_item in data:
+        # Pydantic v2 validation enforces https, constraints, and valid types/tiers
+        validated = SourceSeedItem(**raw_item)
+        slug = validated.slug
+        trust_tier_int = tier_map.get(validated.trust_tier, 1)
+        normalized_type = type_map.get(validated.source_type, "rss")
+
+        source = db.query(Source).filter(Source.slug == slug).first()
+        if not source:
+            source = Source(
+                slug=slug,
+                name=validated.name,
+                site_url=str(validated.homepage_url),
+                feed_url=str(validated.feed_url),
+                type=normalized_type,
+                trust_tier=trust_tier_int,
+                fetch_interval_minutes=validated.poll_interval_minutes,
+                enabled=validated.is_active,
+            )
+            db.add(source)
+            db.flush()
+        else:
+            source.name = validated.name
+            source.site_url = str(validated.homepage_url)
+            source.feed_url = str(validated.feed_url)
+            source.type = normalized_type
+            source.trust_tier = trust_tier_int
+            source.fetch_interval_minutes = validated.poll_interval_minutes
+            source.enabled = validated.is_active
+            db.flush()
+
+        source_map[slug] = source
+
+        # Topic links
+        for topic_slug in validated.topics:
+            topic = topic_map.get(topic_slug)
+            if not topic:
+                topic = db.query(FocusTopic).filter(FocusTopic.slug == topic_slug).first()
+            if not topic:
+                raise ValueError(f"Unknown topic slug '{topic_slug}' in source '{slug}'")
+
+            link = (
+                db.query(SourceTopic)
+                .filter(
+                    SourceTopic.source_id == source.id,
+                    SourceTopic.topic_id == topic.id,
+                )
+                .first()
+            )
+            if not link:
+                link = SourceTopic(source_id=source.id, topic_id=topic.id)
+                db.add(link)
+                db.flush()
+
+        # Profession links
+        for prof_slug in validated.professions:
+            prof = profession_map.get(prof_slug)
+            if not prof:
+                prof = db.query(Profession).filter(Profession.slug == prof_slug).first()
+            if not prof:
+                raise ValueError(f"Unknown profession slug '{prof_slug}' in source '{slug}'")
+
+            link = (
+                db.query(SourceProfession)
+                .filter(
+                    SourceProfession.source_id == source.id,
+                    SourceProfession.profession_id == prof.id,
+                )
+                .first()
+            )
+            if not link:
+                link = SourceProfession(source_id=source.id, profession_id=prof.id)
+                db.add(link)
+                db.flush()
+
+    return source_map
+
+
 def seed(db: Session = None) -> Dict[str, int]:
     close_session = False
     if db is None:
@@ -144,9 +251,11 @@ def seed(db: Session = None) -> Dict[str, int]:
     try:
         professions_data = load_json("professions.json")
         topics_data = load_json("topics.json")
+        sources_data = load_json("sources.json")
 
         profession_map = seed_professions(db, professions_data)
-        seed_topics(db, topics_data, profession_map)
+        topic_map = seed_topics(db, topics_data, profession_map)
+        seed_sources(db, sources_data, profession_map, topic_map)
 
         db.commit()
 
@@ -155,12 +264,18 @@ def seed(db: Session = None) -> Dict[str, int]:
         topic_count = db.query(FocusTopic).count()
         alias_count = db.query(TopicAlias).count()
         link_count = db.query(ProfessionTopic).count()
+        source_count = db.query(Source).count()
+        source_topic_count = db.query(SourceTopic).count()
+        source_prof_count = db.query(SourceProfession).count()
 
         summary = {
             "professions": prof_count,
             "topics": topic_count,
             "aliases": alias_count,
             "profession_topics": link_count,
+            "sources": source_count,
+            "source_topics": source_topic_count,
+            "source_professions": source_prof_count,
         }
         return summary
     except Exception as e:
@@ -172,13 +287,16 @@ def seed(db: Session = None) -> Dict[str, int]:
 
 
 def run_seed() -> None:
-    print("==> Seeding database with professions and focus topics...")
+    print("==> Seeding database with professions, focus topics, and sources...")
     summary = seed()
     print("Seed completed successfully:")
     print(f"  Professions: {summary['professions']}")
     print(f"  Focus topics: {summary['topics']}")
     print(f"  Topic aliases: {summary['aliases']}")
     print(f"  Profession-topic links: {summary['profession_topics']}")
+    print(f"  Sources: {summary['sources']}")
+    print(f"  Source-topic links: {summary['source_topics']}")
+    print(f"  Source-profession links: {summary['source_professions']}")
 
 
 if __name__ == "__main__":

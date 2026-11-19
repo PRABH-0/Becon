@@ -29,7 +29,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym, validates
 
 from app.database import Base
 
@@ -148,6 +148,9 @@ class Profession(Base):
     )
     card_variants: Mapped[List["CardVariant"]] = relationship(
         "CardVariant", back_populates="profession", cascade="all, delete-orphan"
+    )
+    source_professions: Mapped[List["SourceProfession"]] = relationship(
+        "SourceProfession", back_populates="profession", cascade="all, delete-orphan"
     )
 
 
@@ -313,10 +316,48 @@ class Source(Base):
     source_topics: Mapped[List["SourceTopic"]] = relationship(
         "SourceTopic", back_populates="source", cascade="all, delete-orphan"
     )
+    source_professions: Mapped[List["SourceProfession"]] = relationship(
+        "SourceProfession", back_populates="source", cascade="all, delete-orphan"
+    )
     follows: Mapped[List["UserFollow"]] = relationship(
         "UserFollow", back_populates="source", cascade="all, delete-orphan"
     )
     raw_items: Mapped[List["RawItem"]] = relationship("RawItem", back_populates="source", cascade="all, delete-orphan")
+
+    # Synonyms / Aliases for ergonomic access across schema versions
+    homepage_url = synonym("site_url")
+    source_type = synonym("type")
+    poll_interval_minutes = synonym("fetch_interval_minutes")
+    is_active = synonym("enabled")
+
+    @property
+    def trust_tier_label(self) -> str:
+        mapping = {1: "official", 2: "vendor", 3: "curated_creator"}
+        return mapping.get(self.trust_tier, "official")
+
+
+class SourceProfession(Base):
+    """Professions associated with a source."""
+
+    __tablename__ = "source_professions"
+    __table_args__ = (
+        UniqueConstraint("source_id", "profession_id", name="uq_source_professions_source_id_profession_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    profession_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("professions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
+
+    # Relationships
+    source: Mapped["Source"] = relationship("Source", back_populates="source_professions")
+    profession: Mapped["Profession"] = relationship("Profession", back_populates="source_professions")
 
 
 class SourceTopic(Base):

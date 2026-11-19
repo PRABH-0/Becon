@@ -26,8 +26,8 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `ai_service.py`: Google Gemini integration (`google-genai`), Pydantic schema-constrained JSON extraction, prompt sanitization.
   - `database.py`: SQLAlchemy session and engine management for SQLite and PostgreSQL.
   - `models.py`: Declarative ORM models (full table catalog in [docs/DATA_MODEL.md](docs/DATA_MODEL.md)).
-  - `seed/`: Idempotent data seeder loading professions and focus topics from JSON files in `seed/data/`.
-  - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `TopicSearchResponse`, `UserProfileBase`, `UserMeResponse`, `HealthResponse`).
+  - `seed/`: Idempotent data seeder loading professions, focus topics, and official content sources from JSON files in `seed/data/`.
+  - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `TopicSearchResponse`, `UserProfileBase`, `UserMeResponse`, `HealthResponse`, `SourceSeedItem`, `SourceResponse`).
 - **Frontend ([frontend/src](frontend/src)):** Next.js App Router broadsheet web app using Tailwind CSS v4, Lucide icons, and self-hosted local fonts (full design spec in [docs/UI_DESIGN.md](docs/UI_DESIGN.md)).
   - `app/page.tsx`: Broadsheet layout containing Top Showcase (Lead + Quick Wire), Bento Grid deck, and finite briefing end state.
   - `app/profile/page.tsx`: Profile form (identity prefill, role, focus topics autocomplete, custom prompt, tone, Danger Zone deletion).

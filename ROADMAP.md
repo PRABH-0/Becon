@@ -3,8 +3,8 @@
 Single source of truth for where the project stands. Lives in the repo root. Maintained by the project lead (Claude chat) and updated by Antigravity after each approved task.
 
 Last updated: 2026-11-19  
-Current phase: 2 (Source Registry and Ingestion) / 6 (Frontend Completion)  
-Current task: 6.9 (Home-page topic search investigation)  
+Current phase: 2 (Source Registry and Ingestion)  
+Current task: 2.1 (Source registry model) + 2.2 (Curated official sources)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -81,8 +81,8 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 ---
 
 ## PHASE 2: Source registry and ingestion
-- [ ] 2.1 Source registry model and admin seed script
-- [ ] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories)
+- [~] 2.1 Source registry model and admin seed script
+- [~] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories)
 - [ ] 2.3 Fetchers: RSS/Atom, GitHub Releases API, advisories (GHSA/NVD); conditional GET; full-text extraction; sanitization
 - [ ] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint
 - [ ] 2.5 Remove Google News and dev.to as primary sources
@@ -212,3 +212,4 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-18 | 1.7b | Approved, merged `e4f8b2e` | Pre-`GEMINI_API_KEY` spend/abuse hardening (`task-1.7b-gemini-hardening`): DB-only unauthenticated `/api/briefings/search` & `/api/briefings`, `422` caps on `interests`/`role`/`custom_prompt`/`ChatRequest`, shared `CardVariant` isolated from `custom_prompt` & unauthenticated triggers, configurable `max_output_tokens`, once-per-logical-request retry quota accounting, stricter guest limits & all-guests pool cap, per-run ingest budget (`INGEST_MAX_GEMINI_CALLS_PER_RUN`), fake-Gemini test suite & docs |
 | 2026-11-19 | 6.8, 6.1b | Approved, merged `4fdc08a` | UI polish pass & 4-part compact cards (`task-6.8-ui-polish`): 6.1b compact cards `why_it_matters` (line-clamp 2), lead card dead space removed, equal-height card pinning, metadata/body scaling & AA contrast, unified "Read source" & "Details" labels, broadsheet banner replaced, accessible tone radiogroup & live prompt counter & accurate privacy/account copy |
 | 2026-11-19 | 6.9 | Pending Approval | Home-page search investigation & removal (`task-2.1-source-registry`): removed search input/states/handlers/pagination from `/`, restored clean finite broadsheet header, removed `/api/briefings/search` route, `search_topic_briefings` & `BriefingSearchResponse`, upheld 1.7b Gemini hardening guarantees on remaining endpoints, added 404 test, deferred DB-only archive search to 6.5 |
+| 2026-11-19 | 2.1, 2.2 | Pending Approval | Source registry & curated official sources (DATA ONLY, `task-2.1-source-registry`): migration 0004 for `source_professions` join table with PostgreSQL RLS, `Source` model synonyms (`homepage_url`, `source_type`, `poll_interval_minutes`, `is_active`), `SourceSeedItem` Pydantic v2 DTO with https enforcement, 38 live-verified official developer feeds in `sources.json`, idempotent seeder, offline test suite + marker-gated network test |

@@ -1,6 +1,8 @@
-from typing import List, Literal
+import uuid
+from datetime import datetime
+from typing import Any, List, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 CUSTOM_PROMPT_MAX_LENGTH: int = 500
 
@@ -268,3 +270,82 @@ class IngestResponse(BaseModel):
     cards_created: int = 0
     errors: int = 0
     counts: IngestCounts | None = None
+
+
+# 11. Source Registry Schemas (Phase 2.1)
+SourceTypeLiteral = Literal[
+    "rss",
+    "atom",
+    "github_release",
+    "github_releases",
+    "advisory",
+    "changelog_html",
+    "youtube_channel",
+    "x_account",
+    "instagram_account",
+]
+
+TrustTierLiteral = Literal["official", "vendor", "curated_creator", 1, 2, 3]
+
+
+class SourceSeedItem(BaseModel):
+    """Schema for validating source seed definitions from sources.json."""
+
+    name: str = Field(..., min_length=1, max_length=200, description="Display name of source")
+    slug: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$", description="Unique URL slug")
+    homepage_url: str = Field(..., description="Canonical source homepage URL (https required)")
+    feed_url: str = Field(..., description="Direct RSS/Atom feed URL (https required)")
+    source_type: SourceTypeLiteral = Field(default="rss", description="Feed format or channel type")
+    trust_tier: TrustTierLiteral = Field(default="official", description="Source credibility tier")
+    poll_interval_minutes: int = Field(default=60, ge=5, description="Polling frequency in minutes")
+    is_active: bool = Field(default=True, description="Whether polling is enabled")
+    topics: List[str] = Field(default_factory=list, description="Target focus topic slugs covered by source")
+    professions: List[str] = Field(default_factory=list, description="Associated profession slugs")
+
+    @field_validator("homepage_url", "feed_url")
+    @classmethod
+    def validate_https_url(cls, v: str) -> str:
+        trimmed = v.strip()
+        if not trimmed.startswith("https://"):
+            raise ValueError(f"URL must use secure https protocol: {v}")
+        return trimmed
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Support site_url as alias for homepage_url
+            if "homepage_url" not in data and "site_url" in data:
+                data["homepage_url"] = data["site_url"]
+            # Support type as alias for source_type
+            if "source_type" not in data and "type" in data:
+                data["source_type"] = data["type"]
+            # Support fetch_interval_minutes as alias for poll_interval_minutes
+            if "poll_interval_minutes" not in data and "fetch_interval_minutes" in data:
+                data["poll_interval_minutes"] = data["fetch_interval_minutes"]
+            # Support enabled as alias for is_active
+            if "is_active" not in data and "enabled" in data:
+                data["is_active"] = data["enabled"]
+        return data
+
+
+class SourceResponse(BaseModel):
+    """DTO for returning source details."""
+
+    id: uuid.UUID
+    slug: str
+    name: str
+    homepage_url: str
+    feed_url: str
+    source_type: str
+    trust_tier: int
+    trust_tier_label: str
+    poll_interval_minutes: int
+    is_active: bool
+    topics: List[str] = Field(default_factory=list)
+    professions: List[str] = Field(default_factory=list)
+    consecutive_failures: int = 0
+    last_error: str | None = None
+    last_fetched_at: datetime | None = None
+    last_success_at: datetime | None = None
+    created_at: datetime

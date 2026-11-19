@@ -46,6 +46,9 @@ erDiagram
     sources ||--o{ source_topics : "covers"
     focus_topics ||--o{ source_topics : "covered_by"
     
+    sources ||--o{ source_professions : "serves"
+    professions ||--o{ source_professions : "served_by"
+    
     user_profiles ||--o{ user_follows : "follows"
     sources ||--o{ user_follows : "followed_by"
     
@@ -99,43 +102,46 @@ Authoritative external feeds (RSS, Atom, GitHub releases, security advisories). 
 ### 7. `source_topics`
 Mapping of external content sources to the focus topics they reliably cover.
 
-### 8. `user_follows`
+### 8. `source_professions`
+Many-to-many relationship linking external content sources to the target professions they serve.
+
+### 9. `user_follows`
 Prepares creator and specific source following functionality (Phase 9), enabling users to subscribe to trusted individual publishers.
 
-### 9. `raw_items`
+### 10. `raw_items`
 Unprocessed items retrieved by background ingesters from external sources. Enforces unique URL hashes per source and records raw content, processing status, and linked event.
 
-### 10. `events`
+### 11. `events`
 Canonical, deduplicated career occurrences distilled from one or more raw items. Captures event category, breaking change flags, and severity scores ($0$–$100$).
 
-### 11. `event_topics`
+### 12. `event_topics`
 Connects events to relevant focus topics along with version metadata and topic-matching confidence scores ($0.0$–$1.0$).
 
-### 12. `cards`
+### 13. `cards`
 The core briefing artifact: exactly one shared canonical Action Card per event. Grounded exclusively in source text with strict structure (`what_happened` JSON list, `why_it_matters`, `how_it_affects_you`, and `action_guidance`).
 
-### 13. `card_variants`
+### 14. `card_variants`
 Role- and topic-specific adaptations of the personalized sections (`how_it_affects_you` and `action_guidance`) tailored to specific professions or sub-specializations.
 
-### 14. `saved_cards`
+### 15. `saved_cards`
 User bookmarks for archiving important Action Cards for long-term reference.
 
-### 15. `card_feedback`
+### 16. `card_feedback`
 User quality feedback (+1 helpful / -1 not helpful) used to calibrate ranking and AI prompt quality.
 
-### 16. `error_reports`
+### 17. `error_reports`
 User reports flagging factual inaccuracies or hallucinations in Action Cards for review and prompt iteration.
 
-### 17. `deliveries`
+### 18. `deliveries`
 Schedules and logs outbound notifications and digest briefings via email or Telegram.
 
-### 18. `metrics_events`
+### 19. `metrics_events`
 Product telemetry and interaction logs. **Rule**: Strict privacy boundary — absolutely no personal data (emails, passwords, tokens) allowed in properties JSON.
 
-### 19. `user_profiles` (Existing Table, Migrated)
+### 20. `user_profiles` (Existing Table, Migrated)
 Stores user identity, authentication provider, delivery preferences, timezone, and profession link.
 
-### 20. `saved_briefings` (Legacy Table, Retained)
+### 21. `saved_briefings` (Legacy Table, Retained)
 Retained for backwards compatibility; marked `DEPRECATED`. No longer created by modern pipeline and will be dropped in Phase 6.5 (after `saved_cards` UI ships).
 
 ---
