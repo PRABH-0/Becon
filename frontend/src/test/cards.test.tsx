@@ -76,12 +76,15 @@ describe("ActionCardBody", () => {
     expect(screen.getByText(/Evaluate replication failover slot/)).toBeInTheDocument();
   });
 
-  it("renders compact 1-bullet + how it affects you + action badge in compact variant", () => {
+  it("renders compact 1-bullet + why it matters + how it affects you + action badge in compact variant (Task 6.1b)", () => {
     render(<ActionCardBody content={mockCard.card_content} variant="compact" />);
 
     expect(screen.getByText(/Logical replication now supports/)).toBeInTheDocument();
     expect(screen.queryByText(/Memory consumption for vacuuming/)).not.toBeInTheDocument();
+    expect(screen.getByText("WHY IT MATTERS:")).toBeInTheDocument();
+    expect(screen.getByText(/High availability clusters/)).toBeInTheDocument();
     expect(screen.getByText("HOW IT AFFECTS YOU:")).toBeInTheDocument();
+    expect(screen.getByText(/Upgrading to PG17 eliminates/)).toBeInTheDocument();
     expect(screen.getByText("APPLY")).toBeInTheDocument();
     expect(screen.getByText(/Evaluate replication failover slot/)).toBeInTheDocument();
   });
@@ -129,22 +132,26 @@ describe("Card Components (LeadCard, RectangleCard, SquareCard, BriefCard)", () 
     expect(onOpen).toHaveBeenCalledWith(mockCard);
   });
 
-  it("SquareCard renders compact body, title button, and triggers drawer", () => {
+  it("SquareCard renders compact body, Details button, Read source link, and triggers drawer", () => {
     const onOpen = vi.fn();
     render(<SquareCard card={mockCard} onOpenDrawer={onOpen} />);
 
     expect(screen.getByTestId("square-card")).toBeInTheDocument();
+    expect(screen.getByText("Details")).toBeInTheDocument();
+    expect(screen.getByText("Read source")).toBeInTheDocument();
     const titleBtn = screen.getByRole("button", { name: mockCard.title });
     fireEvent.click(titleBtn);
     expect(onOpen).toHaveBeenCalledWith(mockCard);
   });
 
-  it("BriefCard renders rank badge and compact body", () => {
+  it("BriefCard renders rank badge, compact body, and unified 'Read source' label (not 'Resource')", () => {
     const onOpen = vi.fn();
     render(<BriefCard card={mockCard} rankNumber={2} onOpenDrawer={onOpen} />);
 
     expect(screen.getByTestId("brief-card")).toBeInTheDocument();
     expect(screen.getByText("#02")).toBeInTheDocument();
+    expect(screen.getByText("Read source")).toBeInTheDocument();
+    expect(screen.queryByText("Resource")).not.toBeInTheDocument();
     const titleBtn = screen.getByRole("button", { name: mockCard.title });
     fireEvent.click(titleBtn);
     expect(onOpen).toHaveBeenCalledWith(mockCard);

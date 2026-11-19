@@ -29,7 +29,7 @@ export function RectangleCard({
         isFullWidth
           ? "col-span-1 md:col-span-2 xl:col-span-3"
           : "col-span-1 md:col-span-2 xl:col-span-2"
-      } rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-4 sm:p-5 md:p-6 shadow-xs hover:shadow-md flex flex-col justify-between`}
+      } rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 hover:border-slate-900 dark:hover:border-slate-600 transition-all p-4 sm:p-5 md:p-6 shadow-xs hover:shadow-md flex flex-col justify-between h-full`}
     >
       <div>
         {/* Top Header Row */}
@@ -41,29 +41,18 @@ export function RectangleCard({
               ) : (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 text-[10px] font-sans font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs"
+                  className="inline-flex items-center gap-1 text-[11px] font-sans font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md bg-slate-100/90 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs"
                 >
-                  <span className="text-slate-400 font-mono text-[9px]">/</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">/</span>
                   <span>{tag.replace(/^#/, "").trim()}</span>
                 </span>
               )
             )}
-            <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+            <span className="text-[11px] font-sans font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-slate-500 dark:text-slate-400" />
               <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
           </div>
-
-          <a
-            href={card.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-mono text-[11px] font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0"
-            title="Read source"
-          >
-            <span>Read source</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
         </div>
 
         {/* Content Body: Media Split or Full Text */}
@@ -117,15 +106,15 @@ export function RectangleCard({
       </div>
 
       {/* Footer */}
-      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 text-xs mt-3 font-mono">
-        <span className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
-          Role: <strong className="text-slate-800 dark:text-slate-200 font-semibold">{card.target_role}</strong>
+      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-xs mt-3 font-mono">
+        <span className="text-slate-600 dark:text-slate-400 text-xs truncate">
+          Role: <strong className="text-slate-900 dark:text-slate-200 font-semibold">{card.target_role}</strong>
         </span>
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => onOpenDrawer?.(card)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
           >
             <Info className="w-3.5 h-3.5" />
             <span>Details</span>
@@ -134,7 +123,7 @@ export function RectangleCard({
             href={card.source_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[11px] px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-700 dark:text-slate-200 font-bold flex items-center gap-1.5 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer shrink-0 font-mono"
+            className="text-xs px-3 py-1.5 rounded-lg bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 hover:text-amber-200 font-bold flex items-center gap-1.5 transition-colors border border-slate-800 dark:border-slate-700 cursor-pointer shrink-0 font-mono shadow-xs"
             title="Read source"
           >
             <span>Read source</span>

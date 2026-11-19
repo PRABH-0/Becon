@@ -77,6 +77,12 @@ const EXTENDED_TECH_CATALOG = [
   "PostgreSQL & Database Optimization"
 ];
 
+const TONE_OPTIONS = [
+  "Clear & Actionable (Executive Summary)",
+  "Practical Business & Financial Takeaways",
+  "In-Depth Professional Analysis",
+];
+
 export default function ProfilePage() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
@@ -306,9 +312,30 @@ export default function ProfilePage() {
     }
   };
 
+  const handleToneKeyDown = (e: React.KeyboardEvent, currentIdx: number) => {
+    let nextIdx = -1;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault();
+      nextIdx = (currentIdx + 1) % TONE_OPTIONS.length;
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      nextIdx = (currentIdx - 1 + TONE_OPTIONS.length) % TONE_OPTIONS.length;
+    }
+    if (nextIdx >= 0) {
+      setAiTone(TONE_OPTIONS[nextIdx]);
+      const btn = document.getElementById(`tone-radio-${nextIdx}`);
+      btn?.focus();
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError("");
+
+    if (customPrompt.length > 500) {
+      setValidationError("Custom instruction prompt cannot exceed 500 characters.");
+      return;
+    }
 
     if (interests.length === 0) {
       setValidationError("Please select at least 1 interested field so our AI can curate your Gazette feed.");
@@ -510,7 +537,7 @@ export default function ProfilePage() {
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 rounded-lg px-3.5 py-2 text-slate-950 dark:text-slate-100 font-semibold text-sm transition-colors outline-none shadow-xs"
-                  placeholder="e.g. Accountant, Shop Owner, Software Engineer, Manager"
+                  placeholder="e.g. Software Engineer, Tech Lead"
                   required
                 />
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -536,7 +563,7 @@ export default function ProfilePage() {
 
               <div>
                 <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                  Email Address (For Daily Gazette Digest)
+                  Email Address (Used for your account)
                 </label>
                 <input
                   type="email"
@@ -566,10 +593,10 @@ export default function ProfilePage() {
             
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-300 dark:border-slate-800 font-mono text-xs space-y-2">
               <div className="font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                <span><Shield className="w-4 h-4" /></span> PRIVACY GUARANTEE
+                <span><Shield className="w-4 h-4" /></span> PRIVACY &amp; AI TRANSPARENCY
               </div>
-              <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed font-sans font-medium">
-                Your profile settings are kept locally in your browser storage and transmitted directly to your private AI processing endpoint. Zero third-party telemetry.
+              <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed font-sans font-medium">
+                Your profile is stored in your Becon account. Your topics and custom prompt may be sent to our AI provider (Google Gemini) to write your cards.
               </p>
             </div>
           </section>
@@ -831,38 +858,73 @@ export default function ProfilePage() {
                   rows={4}
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
-                  className="w-full bg-slate-950 text-emerald-300 font-mono text-xs sm:text-sm p-4 rounded-xl border border-slate-800 leading-relaxed outline-none shadow-inner resize-y"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono text-xs sm:text-sm p-4 rounded-xl leading-relaxed outline-none shadow-xs resize-y"
                   placeholder="e.g. Highlight practical takeaways, business and financial impacts, and actionable steps tailored to my daily work..."
                 />
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-slate-500 dark:text-slate-400 text-[11px]">
+                    Max 500 characters (validated by Becon AI).
+                  </span>
+                  <span
+                    data-testid="prompt-char-counter"
+                    className={`font-bold text-xs ${
+                      customPrompt.length > 500
+                        ? "text-rose-600 dark:text-rose-400"
+                        : customPrompt.length >= 450
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
+                    {customPrompt.length} / 500
+                  </span>
+                </div>
               </div>
 
               <div className="pt-4 space-y-3">
                 <label className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Action Card Tone & Depth Density
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    "Clear & Actionable (Executive Summary)",
-                    "Practical Business & Financial Takeaways",
-                    "In-Depth Professional Analysis"
-                  ].map((tone) => (
-                    <button
-                      key={tone}
-                      type="button"
-                      onClick={() => setAiTone(tone)}
-                      className={`p-3 rounded-xl border text-left text-xs font-mono font-bold tracking-wider cursor-pointer transition-all ${
-                        aiTone === tone
-                          ? "bg-indigo-50 dark:bg-indigo-950/50 border-2 border-indigo-700 dark:border-indigo-500 text-indigo-950 dark:text-indigo-200 font-black shadow-xs"
-                          : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] uppercase opacity-75">TONE STYLE</span>
-                        <span className="text-base">{aiTone === tone ? "◉" : "◯"}</span>
-                      </div>
-                      <div className="leading-snug">{tone}</div>
-                    </button>
-                  ))}
+                <div
+                  role="radiogroup"
+                  aria-label="Action Card Tone & Depth Density"
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+                >
+                  {TONE_OPTIONS.map((tone, idx) => {
+                    const isSelected = aiTone === tone;
+                    return (
+                      <button
+                        key={tone}
+                        id={`tone-radio-${idx}`}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        tabIndex={isSelected ? 0 : -1}
+                        onClick={() => setAiTone(tone)}
+                        onKeyDown={(e) => handleToneKeyDown(e, idx)}
+                        className={`p-3 rounded-xl border text-left text-xs font-mono font-bold tracking-wider cursor-pointer transition-all outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-amber-400 ${
+                          isSelected
+                            ? "bg-slate-950 dark:bg-amber-400 text-amber-300 dark:text-slate-950 border-2 border-slate-950 dark:border-amber-400 shadow-sm"
+                            : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] uppercase opacity-75">TONE STYLE</span>
+                          <span
+                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              isSelected
+                                ? "border-amber-300 dark:border-slate-950"
+                                : "border-slate-400 dark:border-slate-600"
+                            }`}
+                          >
+                            {isSelected && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-300 dark:bg-slate-950" />
+                            )}
+                          </span>
+                        </div>
+                        <div className="leading-snug">{tone}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -873,7 +935,7 @@ export default function ProfilePage() {
               </span>
               <button
                 type="submit"
-                className="w-full sm:w-auto px-8 py-3.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-mono font-black text-sm uppercase tracking-widest rounded-xl transition-colors shadow-lg cursor-pointer flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-8 py-3.5 bg-slate-950 hover:bg-slate-800 text-amber-300 dark:bg-amber-400 dark:hover:bg-amber-300 dark:text-slate-950 border border-slate-800 dark:border-amber-400 font-mono font-black text-sm uppercase tracking-widest rounded-xl transition-colors shadow-md cursor-pointer flex items-center justify-center gap-2"
               >
                 <span><Save className="w-4 h-4" /> {isSetupMode ? "Save Preferences & Launch Gazette Feed" : "Save Preferences & Enter Home Page"}</span>
                 <ArrowRight className="w-4 h-4" />

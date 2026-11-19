@@ -710,19 +710,19 @@ export default function Home() {
         <div className="space-y-6 sm:space-y-8">
           
           {/* TOP BALANCED SHOWCASE: #1 CRITICAL UPDATE (LEFT) + THE QUICK WIRE (RIGHT) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 items-stretch pb-8 sm:pb-10 border-b-2 border-slate-900 dark:border-slate-800">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 items-start pb-8 sm:pb-10 border-b-2 border-slate-900 dark:border-slate-800">
             
             {/* TOP MOST IMPORTANT UPDATE (LEFT 5 COLS) */}
-            <div className="lg:col-span-5 flex flex-col h-full">
+            <div className="lg:col-span-5 flex flex-col">
               <div className="flex items-center justify-between border-b-2 border-slate-900 dark:border-slate-800 pb-2 mb-3 font-mono">
                 <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase bg-rose-600 text-white shadow-xs">
                   <Flame className="w-3.5 h-3.5" /> #1 CRITICAL UPDATE
                 </span>
-                <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase font-mono">
+                <span className="text-slate-600 dark:text-slate-400 text-[11px] font-bold uppercase font-mono">
                   • TOP SIGNAL
                 </span>
               </div>
-              <div className="flex-1 flex flex-col">
+              <div className="flex flex-col">
                 {loading || !leadStory ? (
                   renderLeadSkeleton()
                 ) : (
@@ -832,8 +832,8 @@ export default function Home() {
                         <span className="sm:hidden">SYNTHESIZING...</span>
                       </span>
                     ) : (
-                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-bold hidden xl:inline">
-                        FULL BROADSHEET DENSITY • ALL COLUMNS UNIFIED
+                      <span className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-bold hidden xl:inline">
+                        Daily Briefing
                       </span>
                     )}
                   </div>

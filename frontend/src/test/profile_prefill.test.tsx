@@ -299,5 +299,107 @@ describe("Profile identity prefill & Google OAuth prompt (Task 1.9)", () => {
   });
 });
 
+describe("Profile UI Polish (Task 6.8)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockAuthState.isAnonymous = false;
+    mockAuthState.user = {
+      id: "test-user-1",
+      email: "user@example.com",
+      is_anonymous: false,
+    };
+    mockAuthState.me = null;
+  });
+
+  it("renders accessible tone radiogroup with keyboard arrow navigation (Item 9)", async () => {
+    vi.spyOn(apiModule, "apiFetch").mockImplementation(async (path: string) => {
+      if (path === "/api/profile") {
+        return { name: "Test User", email: "user@example.com", role: "Software Engineer", interests: "Python" };
+      }
+      return [];
+    });
+
+    render(<ProfilePage />);
+
+    const radioGroup = await screen.findByRole("radiogroup", { name: /Action Card Tone & Depth Density/i });
+    expect(radioGroup).toBeInTheDocument();
+
+    const radios = screen.getAllByRole("radio");
+    expect(radios.length).toBe(3);
+
+    // Initial tone is "Practical & Actionable" (default or first matching)
+    const secondRadio = radios[1];
+    fireEvent.click(secondRadio);
+    expect(secondRadio).toHaveAttribute("aria-checked", "true");
+
+    // ArrowRight moves to third radio
+    fireEvent.keyDown(secondRadio, { key: "ArrowRight" });
+    expect(radios[2]).toHaveAttribute("aria-checked", "true");
+
+    // ArrowRight wraps around to first radio
+    fireEvent.keyDown(radios[2], { key: "ArrowRight" });
+    expect(radios[0]).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("renders custom prompt textarea with normal styling, live character counter, and 500-char validation (Item 10)", async () => {
+    vi.spyOn(apiModule, "apiFetch").mockImplementation(async (path: string) => {
+      if (path === "/api/profile") {
+        return { name: "Test User", email: "user@example.com", role: "Software Engineer", interests: "Python" };
+      }
+      return [];
+    });
+
+    render(<ProfilePage />);
+
+    const counter = await screen.findByTestId("prompt-char-counter");
+    expect(counter).toBeInTheDocument();
+    expect(counter).toHaveTextContent("/ 500");
+
+    const textarea = screen.getByPlaceholderText(/Highlight practical takeaways/i);
+    expect(textarea.className).not.toContain("text-emerald-300");
+
+    // Over-500 character test
+    const longPrompt = "A".repeat(505);
+    fireEvent.change(textarea, { target: { value: longPrompt } });
+    expect(counter).toHaveTextContent("505 / 500");
+
+    // Attempt save with overlong prompt triggers validation error
+    const saveBtn = screen.getByRole("button", { name: /Save Preferences/i });
+    fireEvent.click(saveBtn);
+
+    expect(await screen.findByText(/cannot exceed 500 characters/i)).toBeInTheDocument();
+  });
+
+  it("shortens profession placeholder, updates email label and privacy copy, and uses primary accent on save button (Items 7, 8, 11, 12)", async () => {
+    vi.spyOn(apiModule, "apiFetch").mockImplementation(async (path: string) => {
+      if (path === "/api/profile") {
+        return { name: "Test User", email: "user@example.com", role: "", interests: "Python" };
+      }
+      return [];
+    });
+
+    render(<ProfilePage />);
+
+    // Item 7: Shortened placeholder
+    const roleInput = await screen.findByPlaceholderText("e.g. Software Engineer, Tech Lead");
+    expect(roleInput).toBeInTheDocument();
+
+    // Item 8: Save button does NOT use rose-600
+    const saveBtn = screen.getByRole("button", { name: /Save Preferences/i });
+    expect(saveBtn.className).not.toContain("bg-rose-600");
+    expect(saveBtn.className).toContain("bg-slate-950");
+
+    // Item 11: Accurate privacy copy
+    expect(
+      screen.getByText(/Your profile is stored in your Becon account.*Google Gemini/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/kept locally in your browser storage/i)).toBeNull();
+
+    // Item 12: Account email label
+    expect(screen.getByText("Email Address (Used for your account)")).toBeInTheDocument();
+    expect(screen.queryByText(/For Daily Gazette Digest/i)).toBeNull();
+  });
+});
+
 // Keep imported useAuth referenced to avoid unused-import lint warnings
 void useAuth;

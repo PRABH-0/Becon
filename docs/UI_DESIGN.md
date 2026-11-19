@@ -91,7 +91,7 @@ All web fonts are self-hosted as Latin `.woff2` files with SIL OFL 1.1 licenses 
 | **`ThemeToggle`** | [`frontend/src/components/ThemeToggle.tsx`](../frontend/src/components/ThemeToggle.tsx) | Accessible light/dark switch (`role="switch"`, `aria-checked`, `sm`/`md` sizes). |
 | **`AuthShell` & `AuthForm`** | [`frontend/src/components/AuthShell.tsx`](../frontend/src/components/AuthShell.tsx), [`AuthForm.tsx`](../frontend/src/components/AuthForm.tsx) | Viewport-fitted auth layout and unified email/password, Google OAuth (`prompt=select_account`), Guest sign-in, and Supabase misconfiguration banner. |
 | **`RequireAuth` & `GuestBanner`** | [`frontend/src/components/RequireAuth.tsx`](../frontend/src/components/RequireAuth.tsx), [`GuestBanner.tsx`](../frontend/src/components/GuestBanner.tsx) | Route protection (`?next=` redirect) and guest upgrade prompt banner (`/register?upgrade=1`). |
-| **Action Cards** | [`frontend/src/components/cards/`](../frontend/src/components/cards) | `LeadCard`, `RectangleCard`, `SquareCard`, `BriefCard`, `ActionBadge`, `ActionCardBody`. Wide cards render all 4 Action Card parts; clicking a card opens `CardDrawer`. |
+| **Action Cards** | [`frontend/src/components/cards/`](../frontend/src/components/cards) | `LeadCard`, `RectangleCard`, `SquareCard`, `BriefCard`, `ActionBadge`, `ActionCardBody`. Wide and compact cards render all 4 Action Card parts (`SquareCard`, `BriefCard`, `RectangleCard` include concise `why_it_matters` line, Task 6.1b/6.8). Equal-height row pinning with bottom-pinned footers (`mt-auto`), unified `"Read source"` and `"Details"` labels. Clicking a card opens `CardDrawer`. |
 | **`CardDrawer`** | [`frontend/src/components/CardDrawer.tsx`](../frontend/src/components/CardDrawer.tsx) | Accessible slide-over deep-dive drawer (`role="dialog"`, `aria-modal`, Escape close, focus management) displaying all 4 card parts, source link, and optional `deep_detail` code snippets. |
 | **Global Progress Bar** | [`frontend/src/context/LoadingContext.tsx`](../frontend/src/context/LoadingContext.tsx) | Fixed top shimmer bar triggered on route transitions and profile saves. |
 
@@ -115,11 +115,20 @@ All authenticated calls go through [`apiFetch`](../frontend/src/lib/api.ts) (Bea
 
 ## 7. Accessibility Highlights & Tracked Open UI Work
 
-- **Implemented a11y:** `ThemeToggle` (`role="switch"`, `aria-checked`), `UserMenu` (ARIA menu semantics, Escape refocus, arrow/Home/End/Tab nav, click-outside), `CardDrawer` (`aria-modal`, Escape, focus handling), responsive back-link `aria-label`, back-to-top `sr-only` label, and React-state avatar error fallback (no DOM mutation).
+- **Implemented a11y:** `ThemeToggle` (`role="switch"`, `aria-checked`), `UserMenu` (ARIA menu semantics, Escape refocus, arrow/Home/End/Tab nav, click-outside), `CardDrawer` (`aria-modal`, Escape, focus handling), responsive back-link `aria-label`, back-to-top `sr-only` label, React-state avatar error fallback (no DOM mutation), `/profile` Tone selector `role="radiogroup"` / `role="radio"` with keyboard arrow navigation, and live 500-char prompt validation counter (Task 6.8).
 - **Open UI work is tracked exclusively in [ROADMAP.md](../ROADMAP.md):**
-  - `6.1` — Compact cards (`SquareCard`, `BriefCard`) omitting `why_it_matters` when `how_it_affects_you` is set.
+  - `6.1` / `6.1b` — Compact cards 4-part rendering *(resolved under Task `6.8`)*.
   - `6.3` — Remove remaining mock fallback generators from `frontend/src/app/page.tsx` and split page modules.
   - `6.4` — Rebuild onboarding around dynamic `professions` + `focus_topics` instead of static suggestion lists.
   - `6.5` — Add save/bookmark (`saved_cards`), useful/not-useful feedback, error reporting, clickable coverage pills, and archive UI.
   - `6.6` — Remaining dark-mode color contrast polish, canvas background token alignment (`#090d16` vs `#070b12`), and interactive card keyboard focusability.
   - `1.8` — Resolve remaining pre-existing frontend ESLint errors so CI `continue-on-error` can be removed.
+
+---
+
+## 8. Change Log
+
+| Date | Task | Result | Notes |
+| :--- | :--- | :--- | :--- |
+| 2026-11-18 | 1.12 | Done | Self-hosted fonts via `next/font/local` (`Source Serif 4`, `Plus Jakarta Sans`, `Space Grotesk`) |
+| 2026-11-19 | 6.8 | Pending Approval | UI polish pass (folds `6.1b`): compact cards 4-part rendering, equal-height cards & footer pinning, unified "Read source" & "Details" labels, Lead card dead space removal, `/profile` tone radiogroup & live counter & primary accent save button |
