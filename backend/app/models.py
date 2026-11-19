@@ -426,6 +426,7 @@ class RawItem(Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    raw_metadata: Mapped[dict | None] = mapped_column(PortableJSON, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False

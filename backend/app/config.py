@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     INGEST_API_TOKEN: str | None = Field(default=None)
     LOG_LEVEL: str = Field(default="INFO")
     FEED_CACHE_TTL_SECONDS: int = Field(default=1800, description="Stale-while-revalidate TTL in seconds")
+    # Optional API keys for advisory source rate limits (Task 2.3)
+    GITHUB_TOKEN: str | None = Field(default=None, description="Optional GitHub API token for higher advisory rate limits")
+    NVD_API_KEY: str | None = Field(default=None, description="Optional NVD API key for higher CVE rate limits")
 
     # Rate limiting & Gemini quota caps (in-process; use Redis/shared store when horizontally scaled)
     RATE_LIMIT_ENABLED: bool = Field(default=True)
