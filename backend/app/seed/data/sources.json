@@ -176,8 +176,7 @@
     "poll_interval_minutes": 60,
     "is_active": true,
     "topics": [
-      "kubernetes",
-      "docker"
+      "kubernetes"
     ],
     "professions": [
       "software-development"
@@ -299,9 +298,9 @@
     ]
   },
   {
-    "slug": "gitlab-releases",
-    "name": "GitLab Releases",
-    "homepage_url": "https://about.gitlab.com",
+    "slug": "gitlab-blog",
+    "name": "GitLab Blog",
+    "homepage_url": "https://about.gitlab.com/blog",
     "feed_url": "https://about.gitlab.com/atom.xml",
     "source_type": "atom",
     "trust_tier": "official",
@@ -389,8 +388,8 @@
     "poll_interval_minutes": 60,
     "is_active": true,
     "topics": [
-      "postgresql",
-      "rest-api"
+      "supabase",
+      "postgresql"
     ],
     "professions": [
       "software-development"
@@ -490,8 +489,7 @@
     "poll_interval_minutes": 60,
     "is_active": true,
     "topics": [
-      "graphql",
-      "rest-api"
+      "graphql"
     ],
     "professions": [
       "software-development"
@@ -532,17 +530,17 @@
     ]
   },
   {
-    "slug": "google-security-blog",
-    "name": "Google Security Blog",
-    "homepage_url": "https://security.googleblog.com",
-    "feed_url": "https://security.googleblog.com/feeds/posts/default",
-    "source_type": "atom",
+    "slug": "aws-security-blog",
+    "name": "AWS Security Blog",
+    "homepage_url": "https://aws.amazon.com/blogs/security",
+    "feed_url": "https://aws.amazon.com/blogs/security/feed/",
+    "source_type": "rss",
     "trust_tier": "official",
     "poll_interval_minutes": 60,
     "is_active": true,
     "topics": [
       "cve-security",
-      "owasp-security"
+      "aws"
     ],
     "professions": [
       "software-development"
@@ -558,7 +556,7 @@
     "poll_interval_minutes": 60,
     "is_active": true,
     "topics": [
-      "rest-api"
+      "flutter"
     ],
     "professions": [
       "software-development"
@@ -574,7 +572,7 @@
     "poll_interval_minutes": 60,
     "is_active": true,
     "topics": [
-      "java"
+      "android"
     ],
     "professions": [
       "software-development"
@@ -590,8 +588,7 @@
     "poll_interval_minutes": 60,
     "is_active": true,
     "topics": [
-      "linux",
-      "cpp"
+      "linux"
     ],
     "professions": [
       "software-development"
@@ -607,7 +604,8 @@
     "poll_interval_minutes": 60,
     "is_active": true,
     "topics": [
-      "system-design"
+      "swift",
+      "ios"
     ],
     "professions": [
       "software-development"
