@@ -1,6 +1,6 @@
 "use client";
 
-import { Layers, Radio, Flame, Pin, ChevronLeft, ChevronRight, ArrowUp, X, Search, Loader2, Sparkles, CheckCircle2, ArrowRight } from "lucide-react";
+import { Layers, Radio, Flame, Pin, ChevronLeft, ChevronRight, ArrowUp, X, Loader2, CheckCircle2, ArrowRight } from "lucide-react";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -148,13 +148,6 @@ export default function Home() {
   const [drawerCard, setDrawerCard] = useState<BriefingCard | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingRemaining, setLoadingRemaining] = useState<boolean>(false);
-
-  // Favorite Subject / Topic Search States
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [activeSearchTopic, setActiveSearchTopic] = useState<string>("");
-  const [isSearchingTopic, setIsSearchingTopic] = useState<boolean>(false);
-  const [searchedStories, setSearchedStories] = useState<BriefingCard[] | null>(null);
-  const [searchError, setSearchError] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("Professional");
@@ -180,17 +173,11 @@ export default function Home() {
     [userName, userRole, userEmail, userAvatar, me, user, isAnonymous, isGuest]
   );
 
-  // Finite Search Pagination States (10 items, explicit button)
-  const [searchOffset, setSearchOffset] = useState<number>(0);
-  const [hasMoreSearch, setHasMoreSearch] = useState<boolean>(false);
-  const [isLoadingMoreSearch, setIsLoadingMoreSearch] = useState<boolean>(false);
-
   // Dynamic Reading Time Estimate across active cards (~200 words per minute)
   const readingTimeMinutes = useMemo(() => {
-    const cardsToCount = searchedStories !== null ? searchedStories : briefings;
-    if (!cardsToCount || cardsToCount.length === 0) return 1;
+    if (!briefings || briefings.length === 0) return 1;
     let totalWords = 0;
-    for (const card of cardsToCount) {
+    for (const card of briefings) {
       totalWords += (card.title || "").split(/\s+/).filter(Boolean).length;
       if (card.card_content) {
         if (Array.isArray(card.card_content.what_happened)) {
@@ -208,7 +195,7 @@ export default function Home() {
       }
     }
     return Math.max(1, Math.ceil(totalWords / 200));
-  }, [searchedStories, briefings]);
+  }, [briefings]);
 
   // Smart Auto-Hide Header (Hide on scroll down, reveal on scroll up)
   const [headerVisible, setHeaderVisible] = useState<boolean>(true);
@@ -277,108 +264,6 @@ export default function Home() {
   }, [hideLoader, user?.id]);
 
   const router = useRouter();
-
-  // Topic AI Search Handlers (Finite: 10 items, explicit user-initiated "Show 10 more")
-  const handleTopicSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const query = searchQuery.trim();
-    if (!query) return;
-
-    setIsSearchingTopic(true);
-    setActiveSearchTopic(query);
-    setSearchError("");
-    setSearchOffset(10);
-
-    try {
-      const params = new URLSearchParams({
-        q: query,
-        role: userRole,
-        limit: "10",
-        offset: "0",
-      });
-      const res = await apiFetch<{ query: string; matches: string[]; cards: BriefingCard[] }>(
-        `/api/briefings/search?${params.toString()}`
-      );
-      const data = Array.isArray(res?.cards) ? res.cards : [];
-      if (data.length > 0) {
-        setSearchedStories(
-          data.map((c) => ({
-            ...c,
-            rank: undefined,
-          }))
-        );
-        setHasMoreSearch(data.length >= 10);
-      } else {
-        // Fallback keyword filter on current briefings
-        const local = briefings.filter(
-          (b) =>
-            b.title.toLowerCase().includes(query.toLowerCase()) ||
-            b.target_stack.some((s) => s.toLowerCase().includes(query.toLowerCase()))
-        );
-        setSearchedStories(local);
-        setHasMoreSearch(false);
-        if (local.length === 0) {
-          setSearchError(`No live updates found for "${query}". Try another tech subject.`);
-        }
-      }
-    } catch (err) {
-      console.error("Error searching topic:", err);
-      const local = briefings.filter(
-        (b) =>
-          b.title.toLowerCase().includes(query.toLowerCase()) ||
-          b.target_stack.some((s) => s.toLowerCase().includes(query.toLowerCase()))
-      );
-      setSearchedStories(local);
-      setHasMoreSearch(false);
-    } finally {
-      setIsSearchingTopic(false);
-    }
-  };
-
-  const handleLoadMoreSearch = async () => {
-    if (isLoadingMoreSearch || !activeSearchTopic) return;
-    setIsLoadingMoreSearch(true);
-    try {
-      const params = new URLSearchParams({
-        q: activeSearchTopic,
-        role: userRole,
-        limit: "10",
-        offset: String(searchOffset),
-      });
-      const res = await apiFetch<{ query: string; matches: string[]; cards: BriefingCard[] }>(
-        `/api/briefings/search?${params.toString()}`
-      );
-      const data = Array.isArray(res?.cards) ? res.cards : [];
-      if (data.length > 0) {
-        setSearchedStories((prev) => {
-          const base = prev || [];
-          const existingIds = new Set(base.map((c) => c.id));
-          const newItems = data.filter((c) => !existingIds.has(c.id));
-          return [...base, ...newItems];
-        });
-        setSearchOffset((prev) => prev + data.length);
-        if (data.length < 10) {
-          setHasMoreSearch(false);
-        }
-      } else {
-        setHasMoreSearch(false);
-      }
-    } catch (err) {
-      console.error("Error loading more search items:", err);
-      setHasMoreSearch(false);
-    } finally {
-      setIsLoadingMoreSearch(false);
-    }
-  };
-
-  const handleClearSearch = () => {
-    setSearchQuery("");
-    setActiveSearchTopic("");
-    setSearchedStories(null);
-    setSearchError("");
-    setSearchOffset(0);
-    setHasMoreSearch(false);
-  };
 
   // Scroll Listener for header auto-hide and back-to-top button
   useEffect(() => {
@@ -574,7 +459,7 @@ export default function Home() {
 
   // The rest of ALL stories go into the rich Bento Deck across the full width!
   const bentoStories = otherStories.filter((b) => !topWireIds.has(b.id));
-  const displayedBentoStories = searchedStories !== null ? searchedStories : bentoStories;
+  const displayedBentoStories = bentoStories;
 
   // Real image mapping for the Lead story: ONLY rendered if the article genuinely has an image
   const leadImageUrl = useMemo(() => {
@@ -786,44 +671,6 @@ export default function Home() {
                     </span>
                   </div>
 
-                  {/* FAVORITE SUBJECT SEARCH FIELD (RESPONSIVE FULL-WIDTH ON MOBILE, FLEXIBLE ON DESKTOP) */}
-                  <form
-                    onSubmit={handleTopicSearch}
-                    className="w-full sm:flex-1 sm:max-w-sm md:max-w-md relative flex items-center min-w-0 order-3 sm:order-none mt-1 sm:mt-0"
-                  >
-                    <div className="relative w-full flex items-center">
-                      <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 absolute left-3 pointer-events-none" />
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search topic (e.g. AI, Retail, Tax, Cloud)..."
-                        className="w-full pl-8 pr-20 py-1.5 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-amber-400 transition-all shadow-2xs"
-                      />
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={handleClearSearch}
-                          className="absolute right-[66px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-0.5 text-xs font-bold cursor-pointer top-1/2 -translate-y-1/2"
-                          title="Clear"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={isSearchingTopic || !searchQuery.trim()}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 h-[22px] px-2 rounded bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 text-[10px] font-black uppercase font-mono tracking-wider transition-all disabled:bg-slate-800 disabled:text-amber-300/80 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1 shadow-2xs border border-slate-700"
-                      >
-                        {isSearchingTopic ? (
-                          <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-                        ) : (
-                          <span>Search</span>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-
                   <div className="flex items-center gap-2 shrink-0">
                     {loadingRemaining ? (
                       <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
@@ -840,72 +687,9 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* ACTIVE SUBJECT SEARCH STATUS BAR */}
-              {activeSearchTopic && (
-                <div className="p-3 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex flex-wrap items-center justify-between gap-3 font-mono text-xs shadow-2xs animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2 text-amber-950 dark:text-amber-200 font-bold">
-                    <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                    <span>
-                      AI Synthesized News for: <strong className="text-slate-950 dark:text-amber-100 underline underline-offset-2">&quot;{activeSearchTopic}&quot;</strong>
-                    </span>
-                    {searchedStories && (
-                      <span className="text-[10px] bg-amber-200/90 dark:bg-amber-900 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded font-black">
-                        {searchedStories.length} UPDATES
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleClearSearch}
-                    className="flex items-center gap-1.5 text-[11px] font-black text-rose-700 dark:text-rose-300 hover:text-rose-950 dark:hover:text-rose-100 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900 px-3 py-1 rounded-lg transition-all cursor-pointer shadow-2xs"
-                  >
-                    <X className="w-3 h-3" />
-                    <span>Reset Bento Feed</span>
-                  </button>
-                </div>
-              )}
-
-              {/* SEARCH ERROR NOTIFICATION */}
-              {searchError && (
-                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 font-mono text-xs flex items-center justify-between">
-                  <span>{searchError}</span>
-                  <button onClick={handleClearSearch} className="font-bold underline cursor-pointer">
-                    Clear Search
-                  </button>
-                </div>
-              )}
-
               {/* FULL-WIDTH DYNAMIC BENTO GRID (GAPLESS GUARANTEE, SPANS ENTIRE WIDTH) */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-                {isSearchingTopic ? (
-                  <>
-                    <div className="col-span-1 md:col-span-2 xl:col-span-3 min-h-[160px] rounded-2xl bg-gradient-to-t from-slate-950 via-[#0a1120] to-[#0f172a] border-2 border-amber-400/80 flex flex-col items-center justify-center p-6 text-center select-none shadow-[inset_0_10px_30px_rgba(0,0,0,0.85)] space-y-2">
-                      <div className="relative w-10 h-10 flex items-center justify-center">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src="/News-Loader.gif"
-                          alt="Loading..."
-                          className="w-full h-full object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(251,191,36,0.45)]"
-                          style={{ filter: "brightness(0) invert(1)" }}
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                        <span className="font-mono text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-300">
-                          DISPATCHING AI NEWS FOR: {activeSearchTopic ? activeSearchTopic.toUpperCase() : searchQuery.toUpperCase()}
-                        </span>
-                      </div>
-
-                      <p className="font-mono text-[11px] text-slate-300 max-w-lg line-clamp-1">
-                        Querying live multi-domain feeds & running AI synthesis…
-                      </p>
-                    </div>
-                    {[2, 1, 1, 2, 3].map((span, idx) =>
-                      renderBentoSkeletonCard(span, idx)
-                    )}
-                  </>
-                ) : displayedBentoStories.length > 0 ? (
+                {displayedBentoStories.length > 0 ? (
                   <>
                     {(() => {
                       const bentoSpans = computeBentoSpans(displayedBentoStories.length);
@@ -954,22 +738,6 @@ export default function Home() {
                       renderBentoSkeletonCard(span, idx)
                     )}
                   </>
-                ) : searchedStories !== null ? (
-                  <div className="col-span-1 md:col-span-2 xl:col-span-3 p-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-center font-mono space-y-3 shadow-xs">
-                    <p className="text-slate-900 dark:text-slate-100 font-bold text-sm">
-                      No live news articles found for &quot;{activeSearchTopic}&quot;.
-                    </p>
-                    <p className="text-slate-500 dark:text-slate-400 text-xs">
-                      Try searching another technology keyword (e.g. Docker, Kubernetes, PostgreSQL, Rust, Go).
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      className="px-4 py-2 rounded-lg bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 text-xs font-bold font-mono transition-colors cursor-pointer border border-slate-700"
-                    >
-                      Reset to Curated Bento Deck
-                    </button>
-                  </div>
                 ) : loadingRemaining ? (
                   <>
                     {[2, 1, 1, 2, 3].map((span, idx) =>
@@ -983,71 +751,44 @@ export default function Home() {
           </div>
 
         {/* 4. FINITE BRIEFING END STATE: ALL CAUGHT UP PANEL */}
-        {searchedStories === null ? (
-          <section
-            data-testid="all-caught-up-panel"
-            className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-12 pt-8 border-t-2 border-slate-300 dark:border-slate-800"
-          >
-            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 p-6 sm:p-8 md:p-10 shadow-xs flex flex-col items-center text-center max-w-2xl mx-auto">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 shadow-xs">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-
-              <h3 className="text-xl sm:text-2xl font-black font-serif text-slate-950 dark:text-slate-50 tracking-tight mb-2">
-                You&apos;re all caught up for today
-              </h3>
-
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-sans leading-relaxed mb-6 max-w-md">
-                You&apos;ve completed all intelligence updates for today. Next daily edition arrives tomorrow.
-              </p>
-
-              {/* Briefing Stats Pill */}
-              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 font-mono text-[11px] text-slate-600 dark:text-slate-400 py-2 px-4 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 mb-6">
-                <span className="font-bold text-slate-900 dark:text-slate-100">
-                  {briefings.length} of {briefings.length} updates completed
-                </span>
-                <span className="text-slate-300 dark:text-slate-600">•</span>
-                <span>~{readingTimeMinutes} min read</span>
-                <span className="text-slate-300 dark:text-slate-600">•</span>
-                <span>{todayDate}</span>
-              </div>
-
-              {/* Link to adjust preferences */}
-              <Link
-                href="/profile"
-                className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-slate-900 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 underline underline-offset-4 transition-colors"
-              >
-                <span>Adjust your topics &amp; preferences</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+        <section
+          data-testid="all-caught-up-panel"
+          className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-12 pt-8 border-t-2 border-slate-300 dark:border-slate-800"
+        >
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 p-6 sm:p-8 md:p-10 shadow-xs flex flex-col items-center text-center max-w-2xl mx-auto">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 shadow-xs">
+              <CheckCircle2 className="w-6 h-6" />
             </div>
-          </section>
-        ) : (
-          /* FINITE TOPIC SEARCH RESULTS PAGINATION */
-          <div className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-8 flex flex-col items-center">
-            {hasMoreSearch ? (
-              <button
-                type="button"
-                onClick={handleLoadMoreSearch}
-                disabled={isLoadingMoreSearch}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-amber-300 font-mono text-xs font-bold transition-all shadow-xs cursor-pointer border border-slate-700"
-              >
-                {isLoadingMoreSearch ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Loading 10 more results...</span>
-                  </>
-                ) : (
-                  <span>Show 10 more results</span>
-                )}
-              </button>
-            ) : (
-              <div className="text-xs font-mono text-slate-500 dark:text-slate-400 py-4 text-center">
-                End of search results for &ldquo;{activeSearchTopic}&rdquo;
-              </div>
-            )}
+
+            <h3 className="text-xl sm:text-2xl font-black font-serif text-slate-950 dark:text-slate-50 tracking-tight mb-2">
+              You&apos;re all caught up for today
+            </h3>
+
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-sans leading-relaxed mb-6 max-w-md">
+              You&apos;ve completed all intelligence updates for today. Next daily edition arrives tomorrow.
+            </p>
+
+            {/* Briefing Stats Pill */}
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 font-mono text-[11px] text-slate-600 dark:text-slate-400 py-2 px-4 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 mb-6">
+              <span className="font-bold text-slate-900 dark:text-slate-100">
+                {briefings.length} of {briefings.length} updates completed
+              </span>
+              <span className="text-slate-300 dark:text-slate-600">•</span>
+              <span>~{readingTimeMinutes} min read</span>
+              <span className="text-slate-300 dark:text-slate-600">•</span>
+              <span>{todayDate}</span>
+            </div>
+
+            {/* Link to adjust preferences */}
+            <Link
+              href="/profile"
+              className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-slate-900 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 underline underline-offset-4 transition-colors"
+            >
+              <span>Adjust your topics &amp; preferences</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
-        )}
+        </section>
 
         {/* EDITORIAL FOOTER */}
         <footer className="max-w-[1600px] mx-auto px-3 sm:px-6 mt-16 pt-8 pb-12 border-t border-slate-300 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 dark:text-slate-400 font-mono text-xs">
