@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = Field(default="http://localhost:3000,http://127.0.0.1:3000")
     ENABLE_DOCS: bool = Field(default=True)
     GEMINI_API_KEY: str | None = Field(default=None)
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash", description="Gemini model name for card generation and AI services")
     INGEST_API_TOKEN: str | None = Field(default=None)
     LOG_LEVEL: str = Field(default="INFO")
     FEED_CACHE_TTL_SECONDS: int = Field(default=1800, description="Stale-while-revalidate TTL in seconds")

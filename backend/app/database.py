@@ -1,7 +1,8 @@
+import os
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from app.config import settings
+from app.config import BACKEND_DIR, settings
 
 POSTGRES_NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -17,6 +18,10 @@ def normalize_database_url(url: str) -> str:
         return url.replace("postgres://", "postgresql+psycopg2://", 1)
     elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
         return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    elif url.startswith("sqlite:///./"):
+        filename = url[len("sqlite:///./") :]
+        abs_path = os.path.join(BACKEND_DIR, filename).replace("\\", "/")
+        return f"sqlite:///{abs_path}"
     return url
 
 

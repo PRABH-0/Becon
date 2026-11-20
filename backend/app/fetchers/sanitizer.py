@@ -128,7 +128,38 @@ def clean_summary_text(
     raw_summary: str | None,
     max_length: int = MAX_SUMMARY_TEXT_LENGTH,
 ) -> str:
-    """Sanitize feed summary snippet to concise plain text."""
+    """Sanitize feed summary snippet to concise plain text.
+
+    Strips social-share buttons (Facebook, Twitter, LinkedIn, Mail), author bylines,
+    and syndication footer markers.
+    """
     text = sanitize_plain_text(raw_summary, max_length=max_length)
-    # Collapse multiple newlines in summary to single spaces for compact previews
+    if not text:
+        return ""
+
+    # 1. Strip social sharing clusters (e.g. "Facebook Twitter LinkedIn Mail")
+    text = re.sub(
+        r"\b(?:Facebook|Twitter|LinkedIn|Mail|Email|Reddit|Share)(?:\s+(?:Facebook|Twitter|LinkedIn|Mail|Email|Reddit|Share))+\b",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # 2. Strip standalone social sharing sequences
+    text = re.sub(
+        r"\bFacebook\s+Twitter\s+LinkedIn\s+Mail\b",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # 3. Strip author bylines like "Posted by [Name]", "By [Name]"
+    text = re.sub(
+        r"\b(?:Posted by|By|Author:)\s+[A-Z][a-zA-Z\s.-]+?(?:\s+(?:on|at|in)\s+[A-Za-z0-9,\s]+?)?(?=[.\n\r]|$)",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # 4. Strip syndication boilerplate ("The post ... appeared first on ...")
+    text = re.sub(r"The post .*? appeared first on .*?\.?", " ", text, flags=re.IGNORECASE)
+
+    # Collapse multiple newlines/spaces in summary to single spaces for compact previews
     return re.sub(r"\s+", " ", text).strip()

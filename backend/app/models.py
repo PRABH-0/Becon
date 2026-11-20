@@ -526,7 +526,7 @@ class Card(Base):
     __table_args__ = (
         CheckConstraint("action_type IN ('learn', 'apply', 'avoid', 'prepare')", name="ck_cards_action_type"),
         CheckConstraint(
-            "validation_status IN ('pending', 'passed', 'failed', 'flagged')",
+            "validation_status IN ('pending', 'passed', 'failed', 'flagged', 'unvalidated')",
             name="ck_cards_validation_status",
         ),
         CheckConstraint("status IN ('draft', 'published', 'retracted')", name="ck_cards_status"),

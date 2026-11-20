@@ -7,7 +7,7 @@ import * as apiModule from "@/lib/api";
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
     user: { id: "test-user-123", email: "test@becon.dev" },
-    me: { id: "test-user-123", email: "test@becon.dev", role: "Software Engineer", interests: ["TypeScript", "PostgreSQL"] },
+    me: { id: "test-user-123", email: "test@becon.dev", role: "Software Engineer", interests: ["TypeScript", "PostgreSQL"], has_completed_setup: true },
     isAnonymous: false,
     signOut: vi.fn(),
   }),
@@ -45,6 +45,16 @@ describe("Finite Briefing & End State (Decision D12)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
+    vi.spyOn(apiModule, "apiFetch").mockImplementation(async (path: string) => {
+      if (path === "/api/profile") {
+        return {
+          name: "Test User",
+          role: "Software Engineer",
+          interests: "TypeScript, PostgreSQL",
+        };
+      }
+      return [];
+    });
   });
 
   it("exports BRIEFING_MAX_CARDS capped at 10", () => {
@@ -102,6 +112,26 @@ describe("Finite Briefing & End State (Decision D12)", () => {
     // Verify NO infinite scroll pull prompt or load more button exists
     expect(screen.queryByText(/Scroll Down Or Click To Load More Updates/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/DISPATCHING NEXT GAZETTE EDITION/i)).not.toBeInTheDocument();
+  });
+
+  it("renders clean empty state when no updates in stack", async () => {
+    vi.spyOn(apiModule, "apiFetch").mockImplementation(async (path: string) => {
+      if (path === "/api/profile") {
+        return {
+          name: "Test User",
+          role: "Software Engineer",
+          interests: "TypeScript, PostgreSQL",
+        };
+      }
+      return [];
+    });
+
+    render(<Home />);
+
+    const emptySection = await screen.findByTestId("empty-briefing-state");
+    expect(emptySection).toBeInTheDocument();
+    expect(screen.getByText(/No updates in your stack yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/We monitor official release notes, engineering blogs, and security advisories continuously/i)).toBeInTheDocument();
   });
 
   it("does not attach wheel or touchmove listeners to trigger infinite scroll", async () => {

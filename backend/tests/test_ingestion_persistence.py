@@ -237,7 +237,7 @@ def test_briefings_persisted_across_restarts(test_client, db_session, monkeypatc
             {
                 "title": f"Production Advisory {unique_marker}",
                 "link": f"https://advisory.becon.dev/{unique_marker}",
-                "summary": "Critical production architectural note.",
+                "summary": "Critical production architectural note. This advisory outlines key performance implications, system vulnerability mitigations, and upgrade instructions across all operational deployment clusters.",
             }
         ]
     )

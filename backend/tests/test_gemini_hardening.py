@@ -34,7 +34,7 @@ class FakeGeminiClient:
         return SimpleNamespace(
             text=json.dumps(
                 {
-                    "what_happened": ["Fake Gemini summary bullet."],
+                    "what_happened": ["Official updates and architectural improvements announced for this release."],
                     "why_it_matters": "Fake Gemini why it matters.",
                     "how_it_affects_you": "Fake Gemini role-tailored impact.",
                     "what_to_do_next": {
@@ -417,7 +417,7 @@ def test_ingest_stops_at_per_run_gemini_budget_and_defers_remaining_raw_items(cl
         {
             "title": f"Budget Release {marker}-{i}",
             "link": f"https://releases.becon.dev/{marker}/{i}",
-            "summary": f"Official release notes for {marker} item {i}.",
+            "summary": f"Official release notes for {marker} item {i}. This release provides important architectural updates, stability bug fixes, and critical performance enhancements across all production backend service pipelines.",
         }
         for i in range(5)
     ]

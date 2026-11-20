@@ -27,130 +27,43 @@ logger = logging.getLogger(__name__)
 # Set socket timeout to prevent hanging feeds from stalling generation
 socket.setdefaulttimeout(7.0)
 
-# Comprehensive mapping from popular topics and industries to live RSS feeds
+# Mapping from popular topics to official, verified RSS/Atom feeds (Task 2.5: Official sources only)
 TOPIC_FEED_MAP: Dict[str, Tuple[str, str]] = {
-    # Beauty, Cosmetics & Fashion
-    "beauty": ("Beauty & Cosmetics", "https://news.google.com/rss/search?q=Beauty+Cosmetics+Trends&hl=en-US&gl=US&ceid=US:en"),
-    "fashion": ("Fashion & Style", "https://news.google.com/rss/search?q=Fashion+Apparel+Trends&hl=en-US&gl=US&ceid=US:en"),
-    "cosmetics": ("Cosmetics & Skincare", "https://news.google.com/rss/search?q=Cosmetics+Skincare+Industry&hl=en-US&gl=US&ceid=US:en"),
-    "apparel": ("Fashion & Apparel", "https://news.google.com/rss/search?q=Apparel+Fashion+Retail&hl=en-US&gl=US&ceid=US:en"),
-    "hair": ("Hair Care & Styling", "https://news.google.com/rss/search?q=Hair+Care+Styling+Trends&hl=en-US&gl=US&ceid=US:en"),
-    "skincare": ("Skincare & Wellness", "https://news.google.com/rss/search?q=Skincare+Dermatology+Trends&hl=en-US&gl=US&ceid=US:en"),
-
-    # Accounting, Finance & Tax
-    "tax regulations & gst compliance": ("Tax & Compliance", "https://news.google.com/rss/search?q=Tax+Compliance+GST+Regulations&hl=en-US&gl=US&ceid=US:en"),
-    "tax": ("Tax & Regulations", "https://news.google.com/rss/search?q=Tax+Regulations+Accounting&hl=en-US&gl=US&ceid=US:en"),
-    "gst": ("GST & Tax", "https://news.google.com/rss/search?q=GST+Tax+Compliance&hl=en-US&gl=US&ceid=US:en"),
-    "corporate accounting & audit standards": ("Accounting & Audit", "https://news.google.com/rss/search?q=Corporate+Accounting+Audit+Standards&hl=en-US&gl=US&ceid=US:en"),
-    "accounting": ("Accounting", "https://news.google.com/rss/search?q=Corporate+Accounting+Standards&hl=en-US&gl=US&ceid=US:en"),
-    "audit": ("Audit & Compliance", "https://news.google.com/rss/search?q=Financial+Auditing+Compliance&hl=en-US&gl=US&ceid=US:en"),
-    "financial forecasting & cash flow": ("Finance & Cash Flow", "https://news.google.com/rss/search?q=Financial+Forecasting+Cash+Flow+Business&hl=en-US&gl=US&ceid=US:en"),
-    "finance": ("Finance", "https://news.google.com/rss/search?q=Corporate+Finance+Banking+Markets&hl=en-US&gl=US&ceid=US:en"),
-    "banking, payments & fintech": ("Fintech & Payments", "https://news.google.com/rss/search?q=Fintech+Digital+Banking+Payments&hl=en-US&gl=US&ceid=US:en"),
-    "fintech": ("Fintech", "https://news.google.com/rss/search?q=Fintech+Payments+Innovation&hl=en-US&gl=US&ceid=US:en"),
-
-    # Retail, Shop Owner & Inventory
-    "retail & shop inventory management": ("Retail & Inventory", "https://news.google.com/rss/search?q=Retail+Store+Inventory+Management&hl=en-US&gl=US&ceid=US:en"),
-    "retail": ("Retail Operations", "https://news.google.com/rss/search?q=Retail+Store+Commerce+POS&hl=en-US&gl=US&ceid=US:en"),
-    "shop": ("Shop Management", "https://news.google.com/rss/search?q=Retail+Shop+Operations+Storefront&hl=en-US&gl=US&ceid=US:en"),
-    "inventory": ("Inventory & Supply", "https://news.google.com/rss/search?q=Inventory+Management+Supply+Chain&hl=en-US&gl=US&ceid=US:en"),
-    "customer retention & retail pos": ("Retail POS", "https://news.google.com/rss/search?q=Customer+Retention+Retail+POS&hl=en-US&gl=US&ceid=US:en"),
-    "pos": ("POS & Retail", "https://news.google.com/rss/search?q=Point+of+Sale+Retail+Tech&hl=en-US&gl=US&ceid=US:en"),
-    
-    # Business, E-Commerce & Growth
-    "small business growth & finance": ("Small Business", "https://news.google.com/rss/search?q=Small+Business+Growth+Finance&hl=en-US&gl=US&ceid=US:en"),
-    "small business": ("Small Business", "https://news.google.com/rss/search?q=Small+Business+Strategy+Revenue&hl=en-US&gl=US&ceid=US:en"),
-    "business": ("Business Intelligence", "https://news.google.com/rss/search?q=Business+Strategy+Markets+Commerce&hl=en-US&gl=US&ceid=US:en"),
-    "e-commerce & digital sales": ("E-Commerce", "https://news.google.com/rss/search?q=Ecommerce+Digital+Sales+Trends&hl=en-US&gl=US&ceid=US:en"),
-    "e-commerce": ("E-Commerce", "https://news.google.com/rss/search?q=Ecommerce+Online+Retail+Store&hl=en-US&gl=US&ceid=US:en"),
-    "ecommerce": ("E-Commerce", "https://news.google.com/rss/search?q=Ecommerce+Online+Retail+Store&hl=en-US&gl=US&ceid=US:en"),
-    "digital marketing & social selling": ("Marketing & Sales", "https://news.google.com/rss/search?q=Digital+Marketing+Social+Selling+Retail&hl=en-US&gl=US&ceid=US:en"),
-    "supply chain & vendor management": ("Supply Chain", "https://news.google.com/rss/search?q=Supply+Chain+Logistics+Management&hl=en-US&gl=US&ceid=US:en"),
-    "business law & regulatory filings": ("Business Law", "https://news.google.com/rss/search?q=Business+Law+Corporate+Regulations&hl=en-US&gl=US&ceid=US:en"),
-
-    # Gemini & Generative AI
-    "google gemini & generative ai": ("Generative AI", "https://dev.to/feed/tag/ai"),
-    "generative ai": ("Generative AI", "https://dev.to/feed/tag/ai"),
-    "ai": ("AI Systems", "https://dev.to/feed/tag/ai"),
-    "gemini": ("Generative AI", "https://dev.to/feed/tag/ai"),
-    "machine learning": ("Machine Learning", "https://dev.to/feed/tag/machinelearning"),
-    
-    # Cloud & Azure & AWS
-    "cloud infrastructure & azure": ("Azure & Cloud", "https://dev.to/feed/tag/azure"),
-    "azure": ("Azure", "https://dev.to/feed/tag/azure"),
-    "cloud infrastructure": ("Cloud Infrastructure", "https://dev.to/feed/tag/cloud"),
-    "cloud": ("Cloud Infrastructure", "https://dev.to/feed/tag/cloud"),
-    "aws": ("AWS Cloud", "https://dev.to/feed/tag/aws"),
-    
-    # SQL & Databases & Vector DB
-    "sql & vector databases": ("SQL & Vector DB", "https://dev.to/feed/tag/database"),
-    "database": ("Databases", "https://dev.to/feed/tag/database"),
-    "sql": ("SQL & Data", "https://dev.to/feed/tag/database"),
-    "postgres": ("PostgreSQL", "https://dev.to/feed/tag/postgres"),
-    "postgresql": ("PostgreSQL", "https://dev.to/feed/tag/postgres"),
-    
-    # Micro-Frontends & Module Federation
-    "micro-frontends & module federation": ("Micro-Frontends", "https://dev.to/feed/tag/microfrontends"),
-    "micro-frontends": ("Micro-Frontends", "https://dev.to/feed/tag/microfrontends"),
-    "microfrontends": ("Micro-Frontends", "https://dev.to/feed/tag/microfrontends"),
-    "module federation": ("Module Federation", "https://dev.to/feed/tag/microfrontends"),
-    
-    # Security & Zero-Trust
-    "zero-trust cloud security": ("Cloud Security", "https://dev.to/feed/tag/security"),
-    "zero-trust": ("Zero-Trust Security", "https://dev.to/feed/tag/security"),
-    "security": ("Security", "https://dev.to/feed/tag/security"),
-    "cybersecurity": ("Cybersecurity", "https://dev.to/feed/tag/security"),
-    
     # .NET & C#
-    ".net core & minimal apis": (".NET Core", "https://devblogs.microsoft.com/dotnet/feed/"),
-    ".net core": (".NET Core", "https://devblogs.microsoft.com/dotnet/feed/"),
     ".net": (".NET Core", "https://devblogs.microsoft.com/dotnet/feed/"),
-    "c# architecture & microservices": ("C# Systems", "https://dev.to/feed/tag/csharp"),
-    "c#": ("C#", "https://dev.to/feed/tag/csharp"),
-    
-    # Angular & Signals
-    "angular & signals architecture": ("Angular", "https://dev.to/feed/tag/angular"),
-    "angular": ("Angular", "https://dev.to/feed/tag/angular"),
-    
-    # Next.js & Server Components
-    "next.js & server components": ("Next.js", "https://dev.to/feed/tag/nextjs"),
-    "next.js": ("Next.js", "https://dev.to/feed/tag/nextjs"),
-    "nextjs": ("Next.js", "https://dev.to/feed/tag/nextjs"),
-    "react": ("React", "https://dev.to/feed/tag/react"),
-    
+    ".net core": (".NET Core", "https://devblogs.microsoft.com/dotnet/feed/"),
+    "c#": ("C#", "https://devblogs.microsoft.com/dotnet/feed/"),
+    # React & Next.js
+    "react": ("React", "https://react.dev/rss.xml"),
+    "next.js": ("Next.js", "https://github.com/vercel/next.js/releases.atom"),
+    "nextjs": ("Next.js", "https://github.com/vercel/next.js/releases.atom"),
+    # TypeScript & JavaScript
+    "typescript": ("TypeScript", "https://devblogs.microsoft.com/typescript/feed/"),
+    "nodejs": ("Node.js", "https://nodejs.org/en/feed/blog.xml"),
+    "node.js": ("Node.js", "https://nodejs.org/en/feed/blog.xml"),
     # Python & FastAPI
-    "python & fastml": ("Python & AI", "https://dev.to/feed/tag/python"),
-    "python": ("Python", "https://dev.to/feed/tag/python"),
-    "fastapi": ("FastAPI", "https://dev.to/feed/tag/fastapi"),
-    
-    # Docker, Kubernetes & DevSecOps
-    "docker & kubernetes systems": ("Containers", "https://dev.to/feed/tag/docker"),
-    "docker": ("Docker", "https://dev.to/feed/tag/docker"),
-    "kubernetes": ("Kubernetes", "https://dev.to/feed/tag/kubernetes"),
-    "k8s": ("Kubernetes", "https://dev.to/feed/tag/kubernetes"),
-    
-    # Rust & Systems Programming
-    "rust systems & memory safety": ("Rust", "https://dev.to/feed/tag/rust"),
-    "rust": ("Rust", "https://dev.to/feed/tag/rust"),
-    
-    # Kafka & Event-Driven Architecture
-    "apache kafka & event streaming": ("Kafka & Events", "https://dev.to/feed/tag/kafka"),
-    "kafka": ("Kafka", "https://dev.to/feed/tag/kafka"),
-    "event-driven": ("Event Architecture", "https://dev.to/feed/tag/architecture"),
-    
-    # eBPF & Observability
-    "ebpf & system observability": ("Observability", "https://dev.to/feed/tag/observability"),
-    "observability": ("Observability", "https://dev.to/feed/tag/observability"),
-    "ebpf": ("eBPF", "https://dev.to/feed/tag/linux"),
+    "python": ("Python", "https://pythoninsider.blogspot.com/feeds/posts/default"),
+    "fastapi": ("FastAPI", "https://github.com/fastapi/fastapi/releases.atom"),
+    # Containers & Cloud
+    "docker": ("Docker", "https://www.docker.com/blog/feed/"),
+    "kubernetes": ("Kubernetes", "https://kubernetes.io/feed.xml"),
+    "k8s": ("Kubernetes", "https://kubernetes.io/feed.xml"),
+    "aws": ("AWS News", "https://aws.amazon.com/about-aws/whats-new/recent/feed/"),
+    "azure": ("Azure Updates", "https://azurecomcdn.azureedge.net/en-us/updates/feed/"),
+    # Systems & Security
+    "rust": ("Rust", "https://blog.rust-lang.org/feed.xml"),
+    "go": ("Go", "https://go.dev/blog/feed.atom"),
+    "golang": ("Go", "https://go.dev/blog/feed.atom"),
+    "security": ("GitHub Security Advisories", "https://github.com/advisories.atom"),
+    "advisories": ("GitHub Security Advisories", "https://github.com/advisories.atom"),
 }
 
 DEFAULT_FEED_SOURCES = {
-    "Business & Markets": "https://feeds.bbci.co.uk/news/business/rss.xml",
-    "Generative AI": "https://dev.to/feed/tag/ai",
-    "Finance & Accounting": "https://news.google.com/rss/search?q=Corporate+Finance+Accounting&hl=en-US&gl=US&ceid=US:en",
-    "Retail & Commerce": "https://news.google.com/rss/search?q=Retail+Store+Commerce+POS&hl=en-US&gl=US&ceid=US:en",
-    "Technology": "https://feeds.bbci.co.uk/news/technology/rss.xml",
-    "Cloud & Systems": "https://dev.to/feed/tag/cloud",
+    "React Blog": "https://react.dev/rss.xml",
+    "Next.js Releases": "https://github.com/vercel/next.js/releases.atom",
+    "Node.js Blog": "https://nodejs.org/en/feed/blog.xml",
+    "TypeScript Blog": "https://devblogs.microsoft.com/typescript/feed/",
+    "Python Insider": "https://blog.python.org/feeds/posts/default",
 }
 
 
@@ -202,9 +115,7 @@ def resolve_feed_for_topic(topic: str) -> Tuple[str, str]:
         if k in t_clean or t_clean in k:
             return v
 
-    encoded = urllib.parse.quote(topic.strip())
-    display_name = topic.strip().title()
-    return (display_name, f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en")
+    return ("", "")
 
 
 def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str, str]:
@@ -291,6 +202,8 @@ def parse_feed_entry(entry: dict, tag_name: str, fallback_url: str) -> Dict[str,
 
 def fetch_topic_feed_items(topic: str, limit: int = 30) -> Tuple[str, List[Dict[str, str]]]:
     tag_name, url = resolve_feed_for_topic(topic)
+    if not url:
+        return tag_name, []
     try:
         feed = feedparser.parse(url)
         items = []
@@ -445,7 +358,13 @@ def get_live_briefings(
 
     from app.ingestion import run_ingestion_pipeline
 
-    total_published = db.query(func.count(Card.id)).filter(Card.status == "published").scalar() or 0
+    count_query = db.query(func.count(Card.id)).filter(Card.status == "published")
+    if settings.ENVIRONMENT == "production":
+        count_query = count_query.filter(
+            Card.model_name != "fallback-heuristic",
+            Card.validation_status == "passed",
+        )
+    total_published = count_query.scalar() or 0
 
     # 1. Synchronous bootstrap on empty database or explicit force_refresh (authenticated non-guests only)
     if allow_ingestion and (total_published == 0 or force_refresh):
@@ -477,6 +396,11 @@ def get_live_briefings(
         .join(Event, Card.event_id == Event.id)
         .filter(Card.status == "published")
     )
+    if settings.ENVIRONMENT == "production":
+        base_query = base_query.filter(
+            Card.model_name != "fallback-heuristic",
+            Card.validation_status == "passed",
+        )
 
     topics_list = [t.strip() for t in user_interests.split(",") if t.strip()]
     if topics_list:

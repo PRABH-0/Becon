@@ -15,7 +15,7 @@ import re
 import urllib.parse
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import List, Tuple
 
 import feedparser
@@ -24,7 +24,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import app.ai_service as ai_service
-from app.ai_service import MODEL_NAME, generate_action_card
+from app.ai_service import MODEL_NAME, PROMPT_VERSION, generate_action_card
+from app.classification import (
+    calculate_severity_score,
+    classify_event_category as classification_classify_category,
+    normalize_event_title,
+    populate_event_topics,
+)
 from app.config import settings
 from app.models import (
     Card,
@@ -36,6 +42,8 @@ from app.models import (
     RawItem,
     Source,
 )
+from app.rate_limit import GeminiQuotaExceededError
+from app.validation import is_source_text_sufficient, validate_card_content
 
 logger = logging.getLogger("becon.ingestion")
 
@@ -114,40 +122,42 @@ def sanitize_text(text: str | None, max_length: int = 2000) -> str:
     return cleaned[:max_length]
 
 
-def classify_event_category(title: str, summary: str) -> str:
-    """Classify event into category: release, deprecation, security, eol, industry, content."""
-    combined = (title + " " + summary).lower()
-    if any(k in combined for k in ["cve-", "vulnerability", "security", "patch", "exploit", "advisory", "zero-day"]):
-        return "security"
-    if any(k in combined for k in ["deprecated", "deprecation"]):
-        return "deprecation"
-    if any(k in combined for k in ["end of life", "eol", "sunset", "retire"]):
-        return "eol"
-    if any(k in combined for k in ["release", "v1.", "v2.", "v3.", "v4.", "v5.", "version", "launch", "announced"]):
-        return "release"
-    if any(k in combined for k in ["market", "acquisition", "funding", "ipo", "layoff", "tax", "gst", "regulation"]):
-        return "industry"
-    return "content"
+def classify_event_category(
+    title: str,
+    summary: str = "",
+    source_type: str = "",
+    source_slug: str = "",
+) -> str:
+    """Classify event into category: release, deprecation, security, eol, industry."""
+    cat, _ = classification_classify_category(
+        title=title,
+        text=summary,
+        source_type=source_type,
+        source_slug=source_slug,
+    )
+    return cat
 
 
-def evaluate_severity_score(category: str, title: str, summary: str) -> int:
-    """Calculate severity score 0-100 based on event category and impact markers."""
-    combined = (title + " " + summary).lower()
-    score = 45
-    if category == "security":
-        score = 85
-        if any(k in combined for k in ["critical", "rce", "zero-day", "high severity"]):
-            score = 98
-    elif category in ("deprecation", "eol"):
-        score = 75
-    elif category == "release":
-        score = 60
-        if any(k in combined for k in ["breaking", "major release", "incompatible"]):
-            score = 80
-    elif category == "industry":
-        score = 50
-
-    return min(100, max(0, score))
+def evaluate_severity_score(
+    category: str,
+    title: str,
+    summary: str,
+    is_breaking: bool = False,
+    raw_metadata: dict | None = None,
+    source_slug: str = "",
+    published_at: datetime | None = None,
+    matched_topics_count: int = 0,
+) -> int:
+    """Calculate severity score 0-100 based on event category, metadata, and impact markers."""
+    return calculate_severity_score(
+        category=category,
+        is_breaking=is_breaking,
+        raw_metadata=raw_metadata,
+        source_slug=source_slug,
+        published_at=published_at,
+        matched_topics_count=matched_topics_count,
+        text=f"{title} {summary}",
+    )
 
 
 def get_or_create_source(
@@ -260,20 +270,56 @@ def process_raw_item_entry(
         db.flush()
         stats.raw_items_new += 1
 
-    # 2. Exact Deduplication into Events
+    return process_raw_item(
+        db=db,
+        raw_item=raw_item,
+        tag_name=tag_name,
+        stats=stats,
+        max_gemini_calls=max_gemini_calls,
+        user_key=user_key,
+    )
+
+
+def process_raw_item(
+    db: Session,
+    raw_item: RawItem,
+    tag_name: str = "",
+    stats: IngestionStats | None = None,
+    max_gemini_calls: int | None = None,
+    user_key: str | None = None,
+) -> Card | None:
+    """Bridge a single RawItem into a deduplicated Event and canonical Card."""
+    if raw_item.status != "new" and raw_item.event_id is not None:
+        if stats:
+            stats.raw_items_duplicate += 1
+        return db.query(Card).filter(Card.event_id == raw_item.event_id).first()
+
+    norm_url = raw_item.url
+    raw_title = raw_item.title
+    raw_summary = raw_item.summary or ""
+    content_hash = raw_item.content_hash or compute_hash(raw_summary or raw_title)
+    pub_dt = raw_item.published_at or datetime.now(UTC)
+
+    normalized_title = normalize_event_title(raw_title)
+
+    # 1. Exact Deduplication into Events
     # Check 1: exact normalized URL across all sources
     event = db.query(Event).filter(Event.canonical_url == norm_url).first()
 
     # Check 2: exact normalized title across all sources
     if not event:
-        title_lower = raw_title.lower()
-        event = db.query(Event).filter(func.lower(Event.canonical_title) == title_lower).first()
+        title_lower = normalized_title.lower()
+        event = db.query(Event).filter(
+            (func.lower(Event.canonical_title) == title_lower)
+            | (func.lower(Event.canonical_title) == raw_title.lower())
+        ).first()
 
     existing_card = db.query(Card).filter(Card.event_id == event.id).first() if event else None
     if (
         existing_card is None
         and ai_service.client is not None
         and max_gemini_calls is not None
+        and stats is not None
         and stats.gemini_calls_used >= max_gemini_calls
     ):
         stats.raw_items_deferred += 1
@@ -290,18 +336,20 @@ def process_raw_item_entry(
         raw_item.event_id = event.id
         db.flush()
     else:
-        cat = classify_event_category(raw_title, raw_summary)
-        sev = evaluate_severity_score(cat, raw_title, raw_summary)
-        is_breaking = any(
-            w in (raw_title + " " + raw_summary).lower()
-            for w in ["breaking change", "incompatible", "deprecated"]
+        src_type = raw_item.source.type if raw_item.source else ""
+        src_slug = raw_item.source.slug if raw_item.source else ""
+        cat, is_breaking = classification_classify_category(
+            title=normalized_title,
+            text=raw_summary,
+            source_type=src_type,
+            source_slug=src_slug,
         )
 
         event = Event(
-            canonical_title=raw_title,
+            canonical_title=normalized_title,
             canonical_url=norm_url,
             category=cat,
-            severity_score=sev,
+            severity_score=50,
             is_breaking=is_breaking,
             first_seen_at=datetime.now(UTC),
             published_at=pub_dt,
@@ -311,10 +359,19 @@ def process_raw_item_entry(
         db.flush()
         raw_item.event_id = event.id
         db.flush()
-        stats.events_created += 1
+        if stats:
+            stats.events_created += 1
 
-        # Link FocusTopic to EventTopic
-        if tag_name:
+        # Populate FocusTopic matches via classification tagger
+        matched_topics = populate_event_topics(
+            db=db,
+            event=event,
+            raw_item=raw_item,
+            source=raw_item.source,
+        )
+
+        # Fallback to tag_name if no topics matched
+        if not matched_topics and tag_name:
             tag_slug = re.sub(r"[^a-z0-9]+", "-", tag_name.lower()).strip("-")
             topic = db.query(FocusTopic).filter(
                 (FocusTopic.slug == tag_slug) | (func.lower(FocusTopic.name) == tag_name.lower())
@@ -329,21 +386,123 @@ def process_raw_item_entry(
                 EventTopic.topic_id == topic.id,
             ).first()
             if not existing_et:
-                db.add(EventTopic(event_id=event.id, topic_id=topic.id, confidence=1.0))
+                db.add(EventTopic(event_id=event.id, topic_id=topic.id, confidence=0.70))
                 db.flush()
+                matched_topics = [(topic.id, None, 0.70)]
 
-    # 3. Create Shared Canonical Card (1 per event)
+        # Calculate severity score with matched topics count and metadata
+        sev = calculate_severity_score(
+            category=cat,
+            is_breaking=is_breaking,
+            raw_metadata=raw_item.raw_metadata,
+            source_slug=src_slug,
+            published_at=pub_dt,
+            matched_topics_count=len(matched_topics),
+            text=f"{normalized_title} {raw_summary}",
+        )
+        event.severity_score = sev
+        db.flush()
+
+    # 2. Create Shared Canonical Card (1 per event)
     card = existing_card or db.query(Card).filter(Card.event_id == event.id).first()
     if not card:
-        card_content = generate_action_card(
-            article_title=event.canonical_title,
-            source_url=event.canonical_url,
-            raw_summary=raw_summary,
-            tech_tag=tag_name,
-            user_key=user_key,
-        )
-        if ai_service.client is not None:
-            stats.gemini_calls_used += 1
+        effective_tag = tag_name
+        if not effective_tag:
+            # Check event topics first
+            top_et = (
+                db.query(EventTopic)
+                .filter(EventTopic.event_id == event.id)
+                .order_by(EventTopic.confidence.desc())
+                .first()
+            )
+            if top_et and top_et.topic:
+                effective_tag = top_et.topic.name
+
+        if not effective_tag and raw_item.source and getattr(raw_item.source, "source_topics", None):
+            for st in raw_item.source.source_topics:
+                if getattr(st, "topic", None):
+                    effective_tag = st.topic.name
+                    break
+        if not effective_tag:
+            effective_tag = "General"
+
+        # Check source text length (> ~200 chars)
+        is_sufficient, short_reason = is_source_text_sufficient(raw_summary)
+        active_client = (ai_service.client is not None) or (ai_service.get_gemini_client() is not None)
+
+        if not is_sufficient:
+            # Too-short source text -> unvalidated fallback, no Gemini call
+            logger.info("Skipping Gemini call for '%s': %s", event.canonical_title[:40], short_reason)
+            clean_headline = event.canonical_title.split(" - ")[0].strip() if " - " in event.canonical_title else event.canonical_title.strip()
+            fallback_bullets = ai_service.extract_rich_fallback_bullets(raw_summary, clean_headline, effective_tag)
+            from app.schemas import ActionGuidance, BriefingCardContent
+            card_content = BriefingCardContent(
+                what_happened=fallback_bullets,
+                why_it_matters=f"Directly impacts operational workflows and standards across {effective_tag}.",
+                how_it_affects_you=f"Tracking updates in {clean_headline} enables you to optimize workflows.",
+                what_to_do_next=ActionGuidance(action_type="apply", guidance=f"Review official notes for {clean_headline}."),
+            )
+            val_status = "flagged"
+            card_status = "draft"
+            val_notes = {
+                "reason": "source_too_short",
+                "detail": short_reason,
+                "length": len(raw_summary.strip()) if raw_summary else 0,
+            }
+            model_name = "fallback-heuristic"
+        elif not active_client:
+            card_content = generate_action_card(
+                article_title=event.canonical_title,
+                source_url=event.canonical_url,
+                raw_summary=raw_summary,
+                tech_tag=effective_tag,
+                user_key=user_key,
+            )
+            val_status = "unvalidated"
+            card_status = "draft" if settings.ENVIRONMENT != "development" else "published"
+            val_notes = {"reason": "fallback_no_gemini_client"}
+            model_name = "fallback-heuristic"
+        else:
+            # Active Gemini client: Call Gemini + Validate + Retry once if invalid
+            card_content = generate_action_card(
+                article_title=event.canonical_title,
+                source_url=event.canonical_url,
+                raw_summary=raw_summary,
+                tech_tag=effective_tag,
+                user_key=user_key,
+            )
+            if stats:
+                stats.gemini_calls_used += 1
+
+            val_result = validate_card_content(card_content, raw_summary)
+            if not val_result.is_valid:
+                logger.warning(
+                    "Card validation failed on attempt 1 for '%s': %s. Retrying once...",
+                    event.canonical_title[:40],
+                    val_result.notes,
+                )
+                retry_content = generate_action_card(
+                    article_title=event.canonical_title,
+                    source_url=event.canonical_url,
+                    raw_summary=raw_summary,
+                    tech_tag=effective_tag,
+                    custom_prompt="Previous generation contained claims not in source. Ground strictly on provided source.",
+                    user_key=user_key,
+                )
+                if stats:
+                    stats.gemini_calls_used += 1
+
+                val_result_retry = validate_card_content(retry_content, raw_summary)
+                if val_result_retry.is_valid:
+                    card_content = retry_content
+                    val_result = val_result_retry
+                else:
+                    val_result = val_result_retry
+
+            model_name = settings.GEMINI_MODEL
+            val_status = val_result.status
+            val_notes = val_result.notes
+            card_status = "published" if val_result.is_valid else "draft"
 
         card = Card(
             event_id=event.id,
@@ -354,19 +513,219 @@ def process_raw_item_entry(
             action_guidance=card_content.what_to_do_next.guidance,
             source_url=event.canonical_url,
             source_text_hash=content_hash,
-            model_name="fallback-heuristic" if not ai_service.client else MODEL_NAME,
-            prompt_version="1.0",
-            validation_status="passed",
+            model_name=model_name,
+            prompt_version=PROMPT_VERSION if active_client and is_sufficient else "1.0",
+            validation_status=val_status,
+            validation_notes=val_notes,
             published_at=event.published_at or datetime.now(UTC),
-            status="published",
+            status=card_status,
         )
         db.add(card)
         db.flush()
-        stats.cards_created += 1
+        if stats:
+            stats.cards_created += 1
 
     raw_item.status = "processed"
     db.flush()
     return card
+
+
+def process_unprocessed_raw_items(
+    db: Session,
+    stats: IngestionStats | None = None,
+    max_gemini_calls: int | None = None,
+    limit: int | None = None,
+    source_id: uuid.UUID | None = None,
+) -> IngestionStats:
+    """Process pending raw_items (status='new') into Events and Cards, newest items first."""
+    if stats is None:
+        stats = IngestionStats()
+
+    effective_budget = (
+        settings.INGEST_MAX_GEMINI_CALLS_PER_RUN
+        if max_gemini_calls is None
+        else max_gemini_calls
+    )
+
+    query = db.query(RawItem).filter(RawItem.status == "new")
+    if source_id:
+        query = query.filter(RawItem.source_id == source_id)
+
+    query = query.order_by(RawItem.published_at.desc().nullslast(), RawItem.fetched_at.desc())
+    if limit:
+        query = query.limit(limit)
+
+    raw_items = query.all()
+    for raw in raw_items:
+        try:
+            process_raw_item(
+                db=db,
+                raw_item=raw,
+                stats=stats,
+                max_gemini_calls=effective_budget,
+            )
+            db.commit()
+        except GeminiQuotaExceededError as qe:
+            db.rollback()
+            logger.warning(
+                "Gemini daily quota or rate limit exceeded: %s. Leaving remaining raw_items pending.",
+                qe,
+            )
+            break
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error processing raw_item {raw.id}: {e}")
+            stats.errors += 1
+
+    return stats
+
+
+def backfill_synthesize_cards(
+    db: Session,
+    limit: int | None = None,
+    days: int = 30,
+    user_key: str | None = None,
+) -> dict[str, int]:
+    """Backfill / regenerate cards for existing fallback-heuristic cards, newest-first.
+
+    Only targets items published in the last `days` days.
+    Capped by `limit` or `settings.INGEST_MAX_GEMINI_CALLS_PER_RUN`.
+    Superseded fallback cards stay draft.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    max_calls = (
+        settings.INGEST_MAX_GEMINI_CALLS_PER_RUN
+        if limit is None
+        else limit
+    )
+
+    query = (
+        db.query(Card, Event, RawItem)
+        .join(Event, Card.event_id == Event.id)
+        .outerjoin(RawItem, RawItem.event_id == Event.id)
+        .filter(
+            Card.model_name == "fallback-heuristic",
+            (Event.published_at >= cutoff) | (Card.created_at >= cutoff),
+        )
+        .order_by(Event.published_at.desc().nullslast(), Card.created_at.desc())
+    )
+    if max_calls:
+        query = query.limit(max_calls)
+
+    candidates = query.all()
+    active_client = ai_service.get_gemini_client()
+    if not active_client:
+        logger.error("Cannot run backfill synthesis: GEMINI_API_KEY is not configured or Gemini client is inactive.")
+        return summary
+
+    logger.info(
+        "Starting backfill synthesis across %d candidate cards (limit=%s, days=%d)...",
+        len(candidates),
+        max_calls,
+        days,
+    )
+
+    summary = {
+        "candidates": len(candidates),
+        "synthesized": 0,
+        "flagged": 0,
+        "skipped_short": 0,
+        "errors": 0,
+    }
+
+    for card, event, raw_item in candidates:
+        raw_text = ""
+        if raw_item:
+            raw_text = raw_item.content_text or raw_item.summary or ""
+        if not raw_text:
+            raw_text = card.why_it_matters or event.canonical_title
+
+        is_sufficient, short_reason = is_source_text_sufficient(raw_text)
+        if not is_sufficient:
+            logger.info("Card %s source text too short (%s). Marking flagged.", card.id, short_reason)
+            card.validation_status = "flagged"
+            card.status = "draft"
+            card.validation_notes = {
+                "reason": "source_too_short",
+                "detail": short_reason,
+                "length": len(raw_text.strip()) if raw_text else 0,
+            }
+            db.commit()
+            summary["skipped_short"] += 1
+            continue
+
+        effective_tag = "General"
+        if raw_item and raw_item.source and getattr(raw_item.source, "source_topics", None):
+            for st in raw_item.source.source_topics:
+                if getattr(st, "topic", None):
+                    effective_tag = st.topic.name
+                    break
+
+        try:
+            # 1. Call Gemini
+            card_content = generate_action_card(
+                article_title=event.canonical_title,
+                source_url=event.canonical_url,
+                raw_summary=raw_text,
+                tech_tag=effective_tag,
+                user_key=user_key,
+            )
+
+            # 2. Validate
+            val_result = validate_card_content(card_content, raw_text)
+
+            # Retry once on failure
+            if not val_result.is_valid:
+                logger.warning(
+                    "Backfill card validation failed on attempt 1 for '%s': %s. Retrying once...",
+                    event.canonical_title[:40],
+                    val_result.notes,
+                )
+                retry_content = generate_action_card(
+                    article_title=event.canonical_title,
+                    source_url=event.canonical_url,
+                    raw_summary=raw_text,
+                    tech_tag=effective_tag,
+                    custom_prompt="Previous generation contained claims not in source. Ground strictly on provided source.",
+                    user_key=user_key,
+                )
+                val_result_retry = validate_card_content(retry_content, raw_text)
+                if val_result_retry.is_valid:
+                    card_content = retry_content
+                    val_result = val_result_retry
+                else:
+                    val_result = val_result_retry
+
+            card.what_happened = card_content.what_happened
+            card.why_it_matters = card_content.why_it_matters
+            card.how_it_affects_you = card_content.how_it_affects_you
+            card.action_type = card_content.what_to_do_next.action_type
+            card.action_guidance = card_content.what_to_do_next.guidance
+            card.model_name = settings.GEMINI_MODEL
+            card.prompt_version = PROMPT_VERSION
+            card.validation_status = val_result.status
+            card.validation_notes = val_result.notes
+            card.status = "published" if val_result.is_valid else "draft"
+            db.commit()
+
+            if val_result.is_valid:
+                summary["synthesized"] += 1
+            else:
+                summary["flagged"] += 1
+
+        except GeminiQuotaExceededError as qe:
+            db.rollback()
+            logger.warning(
+                "Gemini quota or rate limit exceeded during backfill: %s. Halting backfill gracefully.",
+                qe,
+            )
+            break
+        except Exception as e:
+            db.rollback()
+            logger.error("Error backfilling card %s: %s", card.id, e)
+            summary["errors"] += 1
+
+    return summary
 
 
 def ingest_single_feed(
@@ -474,6 +833,9 @@ def run_ingestion_pipeline(
             max_gemini_calls=effective_budget,
             user_key=user_key,
         )
+
+    # Process any deferred or unbridged raw_items from database fetchers
+    process_unprocessed_raw_items(db, stats=stats, max_gemini_calls=effective_budget)
 
     logger.info(
         "Ingestion pipeline finished: sources_fetched=%d, raw_items_new=%d, raw_items_duplicate=%d, raw_items_deferred=%d, events_created=%d, cards_created=%d, gemini_calls_used=%d, errors=%d",

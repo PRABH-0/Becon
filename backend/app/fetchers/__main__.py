@@ -27,7 +27,36 @@ def main() -> None:
         default=None,
         help="Maximum items to fetch per source (default: source default, typically 30)",
     )
+    parser.add_argument(
+        "--synthesize-pending",
+        action="store_true",
+        help="Synthesize grounded Gemini Action Cards for existing fallback-heuristic cards from the last 30 days",
+    )
     args = parser.parse_args()
+
+    if args.synthesize_pending:
+        print("\n" + "=" * 90)
+        print("  BECON GROUNDED GEMINI SYNTHESIS BACKFILL (Task F3)")
+        print("=" * 90)
+        if args.limit:
+            print(f"Batch synthesis limit: {args.limit}")
+        print("=" * 90 + "\n")
+
+        db = SessionLocal()
+        try:
+            from app.ingestion import backfill_synthesize_cards
+            summary = backfill_synthesize_cards(db=db, limit=args.limit)
+            print("-" * 60)
+            print("BACKFILL SUMMARY:")
+            print(f"  Candidates Found: {summary.get('candidates', 0)}")
+            print(f"  Synthesized:      {summary.get('synthesized', 0)}")
+            print(f"  Flagged:          {summary.get('flagged', 0)}")
+            print(f"  Skipped (Short):  {summary.get('skipped_short', 0)}")
+            print(f"  Errors:           {summary.get('errors', 0)}")
+            print("-" * 60 + "\n")
+        finally:
+            db.close()
+        return
 
     slugs = [s.strip() for s in args.slugs.split(",") if s.strip()] or None
 
@@ -72,6 +101,19 @@ def main() -> None:
     print(
         f"TOTALS: {len(summaries)} sources | Fetched: {total_fetched} | Inserted: {total_inserted} | Duplicates: {total_skipped} | Wall Time: {total_duration:.2f}s\n"
     )
+
+    # Live Database Counts
+    db_report = SessionLocal()
+    try:
+        from app.models import Card, Event, RawItem, Source
+
+        print("LIVE DATABASE COUNTS:")
+        print(f"  Sources:    {db_report.query(Source).count()}")
+        print(f"  Raw Items:  {db_report.query(RawItem).count()}")
+        print(f"  Events:     {db_report.query(Event).count()}")
+        print(f"  Cards:      {db_report.query(Card).count()}\n")
+    finally:
+        db_report.close()
 
 
 if __name__ == "__main__":

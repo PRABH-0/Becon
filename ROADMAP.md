@@ -2,9 +2,9 @@
 
 Single source of truth for where the project stands. Lives in the repo root. Maintained by the project lead (Claude chat) and updated by Antigravity after each approved task.
 
-Last updated: 2026-11-19  
-Current phase: 2 (Source Registry and Ingestion)  
-Current task: 2.5 (Remove Google News and dev.to as primary sources)  
+Last updated: 2026-11-20  
+Current phase: Fast-track MVP  
+Current task: F2 (Title normalization, alias-based focus tags, category, severity)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -55,18 +55,18 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 
 ## PHASE 1: Foundation
 - [x] 1.1 Hygiene and security guardrails (secrets check, central config, protect `/api/ingest`, rate-limit guest, JWT expiry fix, remove personal defaults, prompt-injection hardening, first tests)
-- [~] 1.1b Remote secrets scan and local history rewrite *(remote history scrub unverified)*
+- [~] 1.1b [DEFERRED] Remote secrets scan and local history rewrite *(remote history scrub unverified)*
 - [x] 1.2 Tooling: pytest and ruff setup, GitHub Actions CI, Dockerfile and docker-compose, structured logging
 - [x] 1.3 Alembic and full schema: professions, focus_topics (aliases, versions), sources, raw_items, events, cards, card_variants, user_follows, saved_cards (with user link), feedback, error_reports, deliveries, metrics_events; unique email
 - [x] 1.4 Auth consolidated on Supabase Auth: email/password plus Google, verification, reset, account deletion; retire custom JWT and guest hack; dedupe login/register pages
-- [~] 1.4c Post-auth cleanup and docs drift: docker-compose cleanup, .env.example matching CLAUDE.md, docs/UI_DESIGN.md and README.md updated, CI PostgreSQL service container job added *(remote history verification still open under 1.1b)*
+- [~] 1.4c [DEFERRED] Post-auth cleanup and docs drift: docker-compose cleanup, .env.example matching CLAUDE.md, docs/UI_DESIGN.md and README.md updated, CI PostgreSQL service container job added *(remote history verification still open under 1.1b)*
 - [x] 1.4d Viewport fitting: auth pages fit within one viewport without scrollbars via AuthShell and responsive height queries
 - [x] 1.5 Persist cards and events in the database; replace in-memory `_USER_CACHES`
 - [x] 1.6 Pre-push stabilization: back up and discard dirty `page.tsx` diff, verify green `tsc`/`test`/`build`, fix trivial ESLint errors, update `dev.ps1 test` to run frontend + backend tests, fix high-priority doc drift, commit & push *(approved; commits `74dccc7`, `695ed3e`, `d35c4dd`)*
 - [x] 1.6b Supabase URL misconfiguration handling (normalize trailing slash, reject non-root paths like `/rest/v1` & `/auth/v1`, fail fast in prod, friendly `AuthForm` error) + lower signup/reset password min length to 6 via shared `PASSWORD_MIN_LENGTH` constant (login allows short existing passwords) *(merged in `a59f089`)*
 - [x] 1.7 Pre-Phase-2 hardening: fix `/api/search-topic` and `/api/topic-search` vs `/api/briefings/search` contract, add `/api/topics/search`, in-process rate limiting & daily Gemini caps with `TRUSTED_PROXIES`, `hmac.compare_digest` for ingest token, gate `refresh=true` and `/api/ai/match-topics`, tighten CORS, test for soft-delete 401, stop auto-creating `Profession` rows *(merged in `a59f089`)*
 - [x] 1.7b Close Gemini spend/abuse holes (pre-`GEMINI_API_KEY` hardening): unauthenticated `/api/briefings/search` & `/api/briefings` strictly DB-only (`422` caps on `interests`/`role`/`custom_prompt`/`ChatRequest`, `live=true` auth-gated), shared `CardVariant` isolated from `custom_prompt` & unauthenticated generation, configurable `max_output_tokens` on all Gemini calls, retries capped at 1 & counted once per logical request (unreached failures consume 0), stricter guest limits (`GUEST_AI_PER_MIN`, `GEMINI_DAILY_CAP_GUEST`, `GEMINI_DAILY_CAP_ALL_GUESTS`), per-run ingest budget (`INGEST_MAX_GEMINI_CALLS_PER_RUN`), docs & fake-Gemini test suite *(approved, merged `e4f8b2e`)*
-- [ ] 1.8 Frontend ESLint cleanup: resolve remaining pre-existing React hook & explicit `any` errors across `page.tsx`, `profile/page.tsx`, `onboarding/page.tsx`, and `ThemeContext.tsx`, then remove CI `continue-on-error: true` *(docs consolidation split into `1.8a`)*
+- [ ] 1.8 [DEFERRED] Frontend ESLint cleanup: resolve remaining pre-existing React hook & explicit `any` errors across `page.tsx`, `profile/page.tsx`, `onboarding/page.tsx`, and `ThemeContext.tsx`, then remove CI `continue-on-error: true` *(docs consolidation split into `1.8a`)*
 - [x] 1.8a Documentation consolidation: fold concise baseline into `ROADMAP.md`, remove superseded report files (`AUDIT_REPORT.md`, `docs/COMPLETION_REPORT.md`, `docs/MERGE_READINESS_REPORT.md`, `frontend/README.md`), move & refresh `UI_DESIGN.md` -> `docs/UI_DESIGN.md`, replace `file:///` links with relative links, deduplicate env vars/auth setup/hardcoded counts, add doc guardrails to `CLAUDE.md` *(approved, merged `0ec76d9`)*
 - [x] 1.9 Show real user identity (prefill + avatar + name) from Supabase: backend backfills empty `name`/`email` without overwriting saved values and enforces `https://`-only `picture_url`; shared `UserAvatar`/`UserChip` + `resolveUserIdentity` replace hardcoded `"Reader"`/`"Professional"`/`"P"` headers on `/` and `/profile`; `/profile` prefills empty fields (non-guests only, no auto-save); `becon_user_name`/`becon_user_avatar` refresh & cross-reload purge on account switch; Google OAuth uses `prompt=select_account` *(merged in `a59f089`)*
 - [x] 1.10 Header cleanup: shared accessible `UserMenu` (`aria-haspopup`, `aria-expanded`, `role="menu"`/`menuitem`, Escape refocus, click-outside, arrow-key/Home/End/Tab nav, `max-w-[280px]` email truncation with `title`, guest `"Create account"` -> `/register?upgrade=1`, quiet rose `Sign out`) and shared `HeaderActions` right-side cluster (`[backLink] [ThemeToggle] [UserMenu]`, uniform `h-9` / `rounded-lg` / `gap-2`, zero overflow at 360px) adopted on `/` and `/profile` *(merged in `a59f089`)*
@@ -77,6 +77,39 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 *Pending manual QA (to be done post-push): email signup + verification, Google OAuth, guest upgrade, forgot/reset password, account deletion, token refresh, and `alembic upgrade head` against the Supabase dev project (RLS role check).*
 
 *Exit: one-command local run, CI green, schema migrated, auth works end to end, data survives restart.*
+
+---
+
+## FAST-TRACK MVP (F1 – F8)
+
+Approved code-first fast-track sequence delivering an end-to-end working briefing product:  
+**F1 -> F3 -> F2 -> F4 -> F5 -> F6 -> F7 -> F8**.  
+*Deferred (do not touch until MVP complete):* CI polish, Docker polish, ESLint 1.8 cleanup, history scrub (1.1b), docs drift (1.4c), monitoring (8.2), legal pages (8.3), landing page & waitlist (8.4), metrics dashboards (7.3), Telegram alerts (8.6), Phase 9 creator follows.
+
+- [x] **F1: Pipeline bridge + real data + remove mocks**  
+  *Goal:* Dev DB migrated & seeded (38 official feeds), remove Google News/dev.to, bridge `fetch_and_store_source` raw_items to events/cards, delete frontend mock generators & show clean empty state.  
+  *Acceptance:* Zero "news.google"/"dev.to" feed refs, live DB has 38 sources and >0 raw_items & events after one run, mock generators gone from page.tsx, tests green.
+- [~] **F3: Grounded Gemini synthesis & claim validation**  
+  *Goal:* Live `GEMINI_API_KEY`, source-only prompt with `<untrusted_source>` injection guard, schema validation + claim-in-source check, flag-on-failure.  
+  *Acceptance:* Real cards generated from official source text, 0 hallucinations on spot check, unvalidated cards marked flagged/unpublishable. *(Partial: awaiting live Gemini verification by lead)*
+- [x] **F2: Title normalization, alias-based tagging & simple severity**  
+  *Goal:* Strip title noise, map raw items to `FocusTopic` via keyword/alias taxonomy, compute 0–100 severity score.  
+  *Acceptance:* Normalized titles, events tagged with DB topics, severity formula scores CVE/breaking/recency accurately. Fallback cards set to unvalidated.
+- [ ] **F4: Relevance ranking & daily briefing builder**  
+  *Goal:* Score cards against user's profession + focus topics, select daily Lead Story, cap 5–10 cards, cache per user per UTC day.  
+  *Acceptance:* Topic & alias matched cards ranked higher than generic cards, lead card designated, daily cached briefing served.
+- [ ] **F5: Frontend component split & profession/focus onboarding**  
+  *Goal:* Decompose `page.tsx` into clean components, rebuild onboarding wizard around DB professions and focus topics.  
+  *Acceptance:* `page.tsx` under 400 lines, onboarding connects directly to `/api/topics/search` and saves profile.
+- [ ] **F6: Card actions (Save, Feedback, Error Reporting)**  
+  *Goal:* Enable interactive actions on Action Cards backed by DB tables.  
+  *Acceptance:* Save to `saved_cards`, thumbs feedback to `feedback`, report error to `error_reports`.
+- [ ] **F7: Daily email digest via Resend**  
+  *Goal:* HTML daily briefing email sent via Resend API matching user morning schedule with unsubscribe link.  
+  *Acceptance:* Responsive 4-part card email received by test recipient, unsubscribe functions correctly.
+- [ ] **F8: Basic production deployment**  
+  *Goal:* Deploy Next.js to Vercel and FastAPI to cloud host with Supabase PostgreSQL.  
+  *Acceptance:* Live web signup -> onboarding -> real Gemini-synthesized daily briefing works end-to-end.
 
 ---
 
@@ -215,3 +248,6 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-19 | 2.1, 2.2 | Approved, merged `b98f9dd` | Source registry & curated official sources (DATA ONLY, `task-2.1-source-registry`): migration 0004 for `source_professions` join table with PostgreSQL RLS, `Source` model synonyms (`homepage_url`, `source_type`, `poll_interval_minutes`, `is_active`), `SourceSeedItem` Pydantic v2 DTO with https enforcement, 38 live-verified official developer feeds in `sources.json`, idempotent seeder, offline test suite + marker-gated network test |
 | 2026-11-19 | 2.3 | Approved, merged `85cbd62` | Fetchers framework (RSS/Atom, GitHub Releases, advisory APIs): safe httpx client with SSRF guards, conditional GET, plain-text sanitization, raw_items metadata column (migration 0005), GHSA/CISA KEV/NVD advisory fetchers, runner and dev.ps1 fetch |
 | 2026-11-19 | 2.4 | Approved, merged `29aca4e` | Scheduler worker, retries/exponential backoff, per-source health, health endpoint (`task-2.4-scheduler`): migration 0006 for status/next_fetch_at/lease columns, asyncio scheduler worker engine (`python -m app.scheduler`, `dev.ps1 scheduler`, docker-compose service), atomic DB leasing & expired lease reclaim, 45s per-source timeout & concurrency semaphores, consecutive failure tracking & backoff with Retry-After, GET /api/sources/health endpoint with X-Ingest-Token protection & slowapi rate limiting, CLI `--status` & `--once` flags, 11 deterministic offline tests |
+| 2026-11-20 | F1 | Done | Approved by lead: Migrations 0001-0006 applied, 41 sources seeded in becon.db, Google News/dev.to removed, pipeline bridged to deduplicated events & cards, mock generators removed from page.tsx, clean empty state, live fetch executed (538 raw items, 535 events, 535 cards) |
+| 2026-11-20 | F3 | Partial | Grounded Gemini synthesis & claim validation: source-only prompt with <untrusted_source>, entity check validator, backfill CLI, rate-limit/quota handling; pending live Gemini verification by lead |
+| 2026-11-20 | F2 | Done | Normalization, alias-based focus tags, category, simple severity (0-100), fallback cards set to unvalidated, live DB backfilled (559 events, 559 fallback cards unvalidated) |

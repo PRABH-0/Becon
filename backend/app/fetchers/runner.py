@@ -26,6 +26,7 @@ def fetch_and_store_source(
     source: Source,
     client: SafeHTTPClient,
     limit: int | None = None,
+    bridge_to_events: bool = True,
 ) -> SourceFetchSummary:
     """Fetch a single source, deduplicate items, and persist new raw_items to DB."""
     fetcher = registry.get(source.source_type)
@@ -185,6 +186,12 @@ def fetch_and_store_source(
 
     summary.new_inserted = new_count
     summary.duplicates_skipped = dup_count
+
+    if bridge_to_events and new_count > 0:
+        from app.ingestion import process_unprocessed_raw_items
+
+        process_unprocessed_raw_items(db, source_id=source.id)
+
     return summary
 
 
@@ -193,6 +200,7 @@ def run_fetch(
     source_slugs: List[str] | None = None,
     limit: int | None = None,
     client: SafeHTTPClient | None = None,
+    bridge_to_events: bool = True,
 ) -> List[SourceFetchSummary]:
     """Execute fetch run across active sources and return summary results."""
     close_session = False
@@ -216,7 +224,13 @@ def run_fetch(
 
         for source in sources:
             try:
-                res = fetch_and_store_source(db, source, client, limit=limit)
+                res = fetch_and_store_source(
+                    db,
+                    source,
+                    client,
+                    limit=limit,
+                    bridge_to_events=bridge_to_events,
+                )
                 summaries.append(res)
             except Exception as e:
                 # Isolate source failure so entire run never aborts

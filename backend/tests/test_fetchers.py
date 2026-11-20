@@ -615,7 +615,7 @@ def test_gemini_is_never_called_during_fetch(test_db):
     with patch("app.ai_service.generate_action_card") as mock_gen_card:
         with patch("app.ai_service.ai_onboarding_chat") as mock_chat:
             with patch("app.ai_service.ai_match_topics") as mock_match:
-                run_fetch(db=test_db, client=client)
+                run_fetch(db=test_db, client=client, bridge_to_events=False)
                 mock_gen_card.assert_not_called()
                 mock_chat.assert_not_called()
                 mock_match.assert_not_called()
