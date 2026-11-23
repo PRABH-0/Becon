@@ -38,7 +38,9 @@ class TestTitleNormalizer:
 
     def test_strip_boilerplate_prefixes(self):
         assert normalize_event_title("Announcing TypeScript 5.6") == "TypeScript 5.6"
-        assert normalize_event_title("What's new in Python 3.13") == "Python 3.13"
+        assert normalize_event_title("Introducing Turbo 2.0") == "Turbo 2.0"
+        # "What's new in" is informative editorial phrasing and must NOT be stripped
+        assert normalize_event_title("What's new in Python 3.13") == "What's new in Python 3.13"
 
     def test_preserves_versions_and_cves(self):
         assert normalize_event_title("CVE-2024-12345 in OpenSSL") == "CVE-2024-12345 in OpenSSL"

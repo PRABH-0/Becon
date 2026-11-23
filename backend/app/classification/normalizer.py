@@ -23,10 +23,10 @@ RELEASE_PATTERN_2 = re.compile(
     re.IGNORECASE,
 )
 
-# Common blog/vendor prefixes
+# Common blog/vendor prefixes (strip only noise prefixes; preserve informative phrases like "What's new in")
 LEADING_PREFIX_RE = re.compile(
     r"^\s*(?:Blog\s*[-–—|:]\s*[A-Za-z0-9_\s]+?[-–—|:]\s*|Company\s*[-–—|:]\s*[A-Za-z0-9_\s]+?[-–—|:]\s*|"
-    r"Announcing\s+|Announcement:\s*|Release:\s*|New\s+Release:\s*|Updates?:\s*|What's\s+new\s+in\s+(?:the\s+)?)\s*",
+    r"Announcing\s+|Announcement:\s*|Release:\s*|New\s+Release:\s*|Updates?:\s*|Introducing\s+)\s*",
     re.IGNORECASE,
 )
 

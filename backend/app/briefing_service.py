@@ -48,7 +48,10 @@ BRIEFING_MAX_CARDS: int = 10
 WORDS_PER_MINUTE: int = 150
 
 PRERELEASE_RE = re.compile(
-    r"(?i)(?:[-._](?:rc|beta|alpha|preview|nightly|pre|next)[-._\d]*|\b(?:rc|beta|alpha|preview|nightly|pre|release\s+candidate)\b)",
+    r"(?i)(?:[-._](?:rc|beta|alpha|preview|nightly|pre|next|canary|dev|snapshot|insiders)[-._\d]*"
+    r"|\b(?:rc\d*|beta\d*|alpha\d*|preview\d*|nightly|canary|snapshot|insiders|pre-?release|release\s+candidate)\b"
+    r"|\bnext\b(?!\.js)"
+    r"|\b(?:dev|pre)[-._\d]+)",
     re.IGNORECASE,
 )
 
@@ -357,10 +360,9 @@ def build_daily_briefing(
 
     has_user_preferences = bool(user_topic_ids or user_topic_names_lower or user_profession_id)
     if not has_user_preferences:
-        # Cold start fallback: resolve default profession so cold start matches industry standard
+        # Cold start fallback: resolve DB-driven default profession if configured; otherwise fall back to severity + recency
         default_profession = (
-            db.query(Profession).filter(Profession.slug == "software-development").first()
-            or db.query(Profession).first()
+            db.query(Profession).filter(Profession.is_default.is_(True), Profession.is_active.is_(True)).first()
         )
         if default_profession:
             user_profession_id = default_profession.id

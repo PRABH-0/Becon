@@ -47,6 +47,7 @@ def seed_professions(db: Session, data: List[Dict[str, Any]]) -> Dict[str, Profe
                 description=item.get("description"),
                 sort_order=item.get("sort_order", 0),
                 is_active=item.get("is_active", True),
+                is_default=item.get("is_default", False),
             )
             db.add(prof)
             db.flush()
@@ -55,6 +56,7 @@ def seed_professions(db: Session, data: List[Dict[str, Any]]) -> Dict[str, Profe
             prof.description = item.get("description")
             prof.sort_order = item.get("sort_order", 0)
             prof.is_active = item.get("is_active", True)
+            prof.is_default = item.get("is_default", False)
             db.flush()
         profession_map[slug] = prof
     return profession_map

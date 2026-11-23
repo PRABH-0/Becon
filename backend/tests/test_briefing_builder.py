@@ -625,6 +625,49 @@ class TestBriefingQualityRules:
         finally:
             db.close()
 
+    def test_extended_prerelease_matching(self):
+        """Extended PRERELEASE_RE matches next, canary, dev, snapshot, pre, insiders."""
+        from app.briefing_service import is_prerelease
+
+        assert is_prerelease("22.3.0-next.4") is True
+        assert is_prerelease("Node.js 22.3.0-next.4") is True
+        assert is_prerelease("Next.js 15.0") is False  # Next.js product name must not be flagged
+        assert is_prerelease("TypeScript 5.5 Canary") is True
+        assert is_prerelease("VS Code Insiders") is True
+        assert is_prerelease("Spring Boot 3.3.0-SNAPSHOT") is True
+        assert is_prerelease("Go 1.23-dev.1") is True
+        assert is_prerelease("Docker v29.10.0") is False
+
+    def test_cold_start_without_default_profession(self):
+        """When no default profession is set, cold start still succeeds via severity + recency."""
+        db = app_db.SessionLocal()
+        try:
+            # Temporarily set all professions is_default to False
+            profs = db.query(Profession).all()
+            orig_defaults = {p.id: p.is_default for p in profs}
+            for p in profs:
+                p.is_default = False
+            db.commit()
+
+            src = _create_source(db, "Raw Feed", f"feed-{uuid.uuid4().hex[:6]}")
+            _, c1 = _create_event_and_card(db, src, "High Sev Update", severity=90)
+            _, c2 = _create_event_and_card(db, src, "Low Sev Update", severity=10)
+            db.commit()
+
+            briefing = build_daily_briefing(db=db, user=None, user_interests="", max_cards=5)
+            # Cold start without default profession still successfully returns cards based on severity and recency
+            assert len(briefing) >= 1
+            for b in briefing:
+                assert b.id is not None
+                assert b.title is not None
+
+            # Restore defaults
+            for p in profs:
+                p.is_default = orig_defaults[p.id]
+            db.commit()
+        finally:
+            db.close()
+
     def test_generic_cards_capped_at_2(self):
         """A user with preferences receives at most 2 generic/unmatched cards."""
         db = app_db.SessionLocal()

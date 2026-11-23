@@ -164,7 +164,8 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [x] 6.2 Remove infinite scroll and page-lift (D12); finite briefing with "you're done" end state *(committed `4afb33f`)*
 - [x] 6.3 Remove ~1,300 lines of mock fallback generators from `page.tsx`; split `page.tsx` into components *(page.tsx is 241 lines, components under `frontend/src/components/briefing/`)*
 - [x] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles) *(completed in F5)*
-- [x] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive; future archive search over saved/stored cards, DB-only, no Gemini, after Phase 2; drop deprecated legacy `saved_briefings` table once `saved_cards` UI ships *(card actions and /saved page completed in F6)*
+- [x] 6.5a Save cards, useful/not-useful feedback, report error modal, and /saved cards view *(completed in F6)*
+- [ ] 6.5b Clickable topic filters, archive search over stored cards (DB-only, no Gemini), drop deprecated legacy `saved_briefings` table
 - [ ] 6.6 Typography (load editorial serif — *resolved in `1.12` via self-hosted Source Serif 4*), token cleanup, accessibility fixes (focus, Escape, contrast, aria; *note: Profile Menu dropdown Escape/`aria-expanded`/keyboard a11y resolved in `1.10`*)
 - [ ] 6.7 Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow
 - [x] 6.8 UI polish pass (small fixes, NOT a redesign): compact cards 4-part rendering (6.1b), lead card dead space removal, equal-height card pinning, metadata/body text scaling & AA contrast, unified "Read source" & "Details" labels, remove full broadsheet density jargon, /profile placeholder & primary accent button & accessible tone radiogroup & live prompt counter & accurate privacy & account email copy *(approved, merged `4fdc08a`)*
