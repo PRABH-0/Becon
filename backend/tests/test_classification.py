@@ -281,5 +281,178 @@ class TestFallbackCardValidationStatus:
             assert event.severity_score > 0
         finally:
             db.close()
-        assert event.category == "release"
-        assert event.severity_score > 0
+
+
+def _ensure_test_topics(db):
+    definitions = [
+        ("TypeScript", "typescript", ["ts", "typescript"]),
+        (".NET", "dotnet", [".net", "dotnet"]),
+        ("ASP.NET Core", "aspnet-core", ["asp.net", "aspnet"]),
+        ("C#", "csharp", ["c#", "csharp"]),
+        ("Python", "python", ["py", "python3"]),
+        ("Go", "golang", ["go", "golang"]),
+        ("Next.js", "nextjs", ["next", "nextjs"]),
+        ("Vite", "vite", ["vite", "vitejs"]),
+        ("React", "react", ["react", "reactjs"]),
+        ("Linux", "linux", ["linux", "ubuntu", "debian"]),
+        ("Android", "android", ["android"]),
+        ("Node.js", "nodejs", ["node", "node.js"]),
+    ]
+    topic_map = {}
+    for name, slug, aliases in definitions:
+        t = db.query(FocusTopic).filter(FocusTopic.slug == slug).first()
+        if not t:
+            t = FocusTopic(
+                id=uuid.uuid4(),
+                name=name,
+                slug=slug,
+                kind="technology",
+                is_active=True,
+            )
+            db.add(t)
+            db.flush()
+            for al in aliases:
+                existing_al = db.query(TopicAlias).filter(TopicAlias.alias == al).first()
+                if not existing_al:
+                    db.add(TopicAlias(id=uuid.uuid4(), topic_id=t.id, alias=al))
+        topic_map[slug] = t
+    db.commit()
+    return topic_map
+
+
+class TestTagPrecisionFix:
+    """Regression tests for F2.1 tag precision fix."""
+
+    def test_typescript_6_no_spurious_tags(self):
+        db = app_db.SessionLocal()
+        try:
+            topics = _ensure_test_topics(db)
+            ts_topic = topics["typescript"]
+            source = Source(
+                id=uuid.uuid4(),
+                slug=f"ts-test-{uuid.uuid4().hex[:6]}",
+                name="TypeScript Blog",
+                feed_url=f"https://devblogs.microsoft.com/typescript/feed-{uuid.uuid4().hex[:6]}",
+                site_url="https://devblogs.microsoft.com/typescript",
+                type="rss",
+            )
+            db.add(source)
+            db.add(SourceTopic(source_id=source.id, topic_id=ts_topic.id))
+            db.commit()
+
+            title = "Announcing TypeScript 6.0"
+            body = (
+                "TypeScript 6.0 is here! We are thrilled to share new features. "
+                "Bundlers like Vite and Next.js can prepare. You can go try it out now."
+            )
+            matches = match_event_topics(db=db, title=title, text=body, source=source)
+            matched_names = [db.query(FocusTopic).filter(FocusTopic.id == m[0]).first().name for m in matches]
+
+            # Primary tag must be TypeScript with version 6.0
+            assert len(matches) > 0
+            primary_topic_name = matched_names[0]
+            assert primary_topic_name == "TypeScript"
+            assert matches[0][1] == "6.0"
+
+            # Spurious tags must NOT be present
+            assert "Go" not in matched_names
+            assert "Vite" not in matched_names
+            assert "Next.js" not in matched_names
+        finally:
+            db.close()
+
+    def test_dotnet_11_no_spurious_tags(self):
+        db = app_db.SessionLocal()
+        try:
+            topics = _ensure_test_topics(db)
+            dotnet_topic = topics["dotnet"]
+            source = Source(
+                id=uuid.uuid4(),
+                slug=f"dotnet-test-{uuid.uuid4().hex[:6]}",
+                name=".NET Blog",
+                feed_url=f"https://devblogs.microsoft.com/dotnet/feed-{uuid.uuid4().hex[:6]}",
+                site_url="https://devblogs.microsoft.com/dotnet",
+                type="rss",
+            )
+            db.add(source)
+            db.add(SourceTopic(source_id=source.id, topic_id=dotnet_topic.id))
+            db.commit()
+
+            title = "Announcing .NET 11"
+            body = (
+                "Today we announce .NET 11 preview with updates across ASP.NET Core and C#. "
+                "Developers can react to changes and run containers across linux and android devices."
+            )
+            matches = match_event_topics(db=db, title=title, text=body, source=source)
+            matched_names = [db.query(FocusTopic).filter(FocusTopic.id == m[0]).first().name for m in matches]
+
+            # Primary tag must be .NET with version 11
+            assert len(matches) > 0
+            assert matched_names[0] == ".NET"
+            assert matches[0][1] == "11"
+
+            # Spurious tags from casual words / single body mentions must NOT be matched
+            assert "React" not in matched_names
+            assert "Linux" not in matched_names
+            assert "Android" not in matched_names
+        finally:
+            db.close()
+
+    def test_refitter_advisory_no_python_tag(self):
+        db = app_db.SessionLocal()
+        try:
+            _ensure_test_topics(db)
+            title = "GHSA-p32v-8v8j-j534: Refitter allows arbitrary code execution through unescaped OpenAPI content-type values"
+            body = (
+                "Refitter generates C# API clients from OpenAPI specs. "
+                "In setup.py or test.py scripts, arbitrary code execution could occur if malformed OpenAPI is parsed."
+            )
+            matches = match_event_topics(db=db, title=title, text=body, source=None)
+            matched_names = [db.query(FocusTopic).filter(FocusTopic.id == m[0]).first().name for m in matches]
+
+            # Python must NOT match from 'py' tokens in body
+            assert "Python" not in matched_names
+        finally:
+            db.close()
+
+    def test_untagged_event_allowed(self):
+        db = app_db.SessionLocal()
+        try:
+            _ensure_test_topics(db)
+            title = "General tech industry salary and career progression trends 2026"
+            body = "A comprehensive analysis of compensation trends, engineering management practices, and interview loops."
+            matches = match_event_topics(db=db, title=title, text=body, source=None)
+            assert matches == []
+        finally:
+            db.close()
+
+    def test_populate_event_topics_stores_is_primary(self):
+        db = app_db.SessionLocal()
+        try:
+            _ensure_test_topics(db)
+            event = Event(
+                id=uuid.uuid4(),
+                canonical_title="Announcing TypeScript 5.8 and Node.js 22 updates",
+                canonical_url=f"https://example.com/item-{uuid.uuid4().hex[:6]}",
+                category="release",
+                severity_score=60,
+                status="published",
+            )
+            db.add(event)
+            db.commit()
+
+            created = populate_event_topics(db=db, event=event, raw_item=None, source=None)
+            db.commit()
+
+            assert len(created) >= 2
+            # First tag must have is_primary=True, rest False
+            assert created[0].is_primary is True
+            for other in created[1:]:
+                assert other.is_primary is False
+
+            # Model property primary_topic returns the primary FocusTopic
+            reloaded_event = db.query(Event).filter(Event.id == event.id).first()
+            assert reloaded_event.primary_topic is not None
+            assert reloaded_event.primary_topic.name == "TypeScript"
+        finally:
+            db.close()

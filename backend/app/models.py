@@ -494,6 +494,15 @@ class Event(Base):
         "Card", back_populates="event", uselist=False, cascade="all, delete-orphan"
     )
 
+    @property
+    def primary_topic(self) -> Optional["FocusTopic"]:
+        for et in self.event_topics:
+            if getattr(et, "is_primary", False) and et.topic:
+                return et.topic
+        if self.event_topics and self.event_topics[0].topic:
+            return self.event_topics[0].topic
+        return None
+
 
 class EventTopic(Base):
     """Topics linked to a canonical event with confidence."""
@@ -510,6 +519,7 @@ class EventTopic(Base):
     )
     version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
@@ -762,3 +772,34 @@ class MetricsEvent(Base):
 
     # Relationships
     user: Mapped[Optional["UserProfile"]] = relationship("UserProfile")
+
+
+class DailyBriefing(Base):
+    """Cached daily intelligence briefing generated for a user per UTC day."""
+
+    __tablename__ = "daily_briefings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "briefing_date", name="uq_daily_briefings_user_id_date"),
+        Index("ix_daily_briefings_user_id_date", "user_id", "briefing_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    briefing_date: Mapped[str] = mapped_column(String(10), nullable=False)  # YYYY-MM-DD (UTC)
+    cards_payload: Mapped[dict | list] = mapped_column(PortableJSON, nullable=False)
+    reading_time_minutes: Mapped[int] = mapped_column(Integer, default=3, server_default="3", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+    # Relationships
+    user: Mapped["UserProfile"] = relationship("UserProfile", backref="daily_briefings")
+
