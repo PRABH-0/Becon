@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-23  
 Current phase: Fast-track MVP  
-Current task: F7 (Daily email digest via Resend)  
+Current task: F8 (Basic production deployment)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -107,9 +107,15 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [x] **F6: Card actions (Save, Feedback, Error Reporting)**  
   *Goal:* Enable interactive actions on Action Cards backed by DB tables, with optimistic UI updates and finite /saved page.  
   *Acceptance:* Save to `saved_cards`, thumbs feedback to `card_feedback`, report error to `error_reports`, `/saved` page with finite pagination.
-- [ ] **F7: Daily email digest via Resend**  
-  *Goal:* HTML daily briefing email sent via Resend API matching user morning schedule with unsubscribe link.  
-  *Acceptance:* Responsive 4-part card email received by test recipient, unsubscribe functions correctly.
+- [x] **F4.2: Small fixes (DB-driven default profession, extended prerelease matching, normalizer prefix fix)**  
+  *Goal:* DB-driven cold start default via `is_default` boolean on professions (migration 0009), extend prerelease matching (next, canary, dev, snapshot, pre, insiders), strip noise prefixes in normalizer while preserving "What's new in".  
+  *Acceptance:* Zero hardcoded profession slugs in code, prerelease patterns detected & penalized, backfill preserves "What's new in".
+- [x] **F3.1: Production synthesis queue, scheduler job, and limited-briefing fallback**  
+  *Goal:* Prioritized background synthesis queue (severity DESC, published_at DESC, topic_count DESC), daily/per-run quota enforcement, retry-once, clean Gemini backoff without flagging, scheduler job, CLI `app.synthesize`, `dev.ps1 synthesize`, `GET /api/synthesis/status`, and calm limited-today briefing fallback.  
+  *Acceptance:* Production serves only validated non-fallback cards, queue synthesizes highest-value events first, CLI & endpoint return live counts, UI shows limited-today banner when <3 cards.
+- [x] **F7: Daily email digest via Resend**  
+  *Goal:* Responsive 4-part HTML + ASCII plain-text daily briefing email sent via Resend API matching user morning schedule, RFC 8058 one-click and web unsubscribe flows, bounce/complaint webhook handling, and delivery idempotency.  
+  *Acceptance:* Responsive 4-part card email received by test recipient, unsubscribe functions correctly with token verification, deliveries table prevents duplicate sends.
 - [ ] **F8: Basic production deployment**  
   *Goal:* Deploy Next.js to Vercel and FastAPI to cloud host with Supabase PostgreSQL.  
   *Acceptance:* Live web signup -> onboarding -> real Gemini-synthesized daily briefing works end-to-end.
@@ -260,3 +266,6 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-23 | F4.1 | Done (`3bd55e6`) | Briefing quality: relevance floor (cap generic cards at 2), suppress prereleases when final release exists and apply score penalty/lead prohibition, bare-version title prefixing with source name; live DB backfilled (110 bare version titles canonicalized) |
 | 2026-11-23 | F5 | Done (`e6af673`) | Frontend component split & DB-driven onboarding: split page.tsx to 241 lines via extracted briefing components (TopShowcase, BentoDeck, CoverageRibbon, BriefingHeader, BriefingEndState) and useBriefing hook; rebuilt 4-step onboarding wizard around /api/professions & /api/topics/search; deleted AI onboarding chat dependency |
 | 2026-11-23 | F6 | Done (`916a9bc`) | Card actions & saved page: POST/DELETE /api/cards/{id}/save, GET /api/saved with finite pagination, POST /api/cards/{id}/feedback (+1/-1 toggle/upsert), POST /api/cards/{id}/report with rate limit & deduplication, BriefingCard annotated with is_saved & my_feedback, compact SaveButton on cards, action bar in CardDrawer, accessible ReportModal, /saved page |
+| 2026-11-23 | F4.2 | Done (`9798693`) | Small quality fixes: migration 0009 for `is_default` boolean on professions table, DB-driven cold-start fallback in briefing service (zero hardcoded strings), extended prerelease regex (next, canary, dev, snapshot, pre, insiders), title normalizer strips noise prefixes ("Announcing", "Release:", "Introducing") while preserving "What's new in", ROADMAP 6.5 split into 6.5a/6.5b |
+| 2026-11-23 | F3.1 | Done (`4220110`) | Production synthesis queue: background queue selecting eligible events ordered by severity/recency/topics, respects daily global and per-run caps, retry-once on invalid claims, clean quota backoff without flagging cards, CLI `python -m app.synthesize`, `dev.ps1 synthesize`, scheduler integration, GET /api/synthesis/status endpoint, and limited-today production briefing fallback banner |
+| 2026-11-23 | F7 | Done (`29d8361`) | Daily email digest via Resend: responsive 4-part HTML table layout + ASCII broadsheet plain-text fallback, strict HTML escaping, HMAC-SHA256 token signer/verifier, GET & POST /api/unsubscribe (RFC 8058 one-click), POST /api/webhooks/resend bounce/complaint handling, POST /api/digest/preview endpoint, delivery scheduler batch with timezone support, frontend /unsubscribe page & profile digest settings, 0 ESLint errors |
