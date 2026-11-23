@@ -82,6 +82,15 @@ class UserProfileBase(BaseModel):
     auth_provider: str | None = Field(
         default="local", description="Authentication provider: 'local', 'google', or 'guest'", examples=["google"]
     )
+    profession_id: uuid.UUID | None = Field(
+        default=None, description="UUID of user's chosen profession"
+    )
+    timezone: str | None = Field(
+        default=None, description="User's IANA timezone (e.g. 'America/New_York', 'Asia/Kolkata')"
+    )
+    delivery_time: str | None = Field(
+        default=None, description="Preferred daily delivery time (e.g. '08:00')"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -101,7 +110,31 @@ class UserProfileBase(BaseModel):
 
 
 class UserProfileCreate(UserProfileBase):
-    pass
+    focus_topic_ids: list[uuid.UUID] | None = Field(
+        default=None, description="List of focus topic UUIDs to follow"
+    )
+    topic_versions: dict[str, str] | None = Field(
+        default=None, description="Optional map of topic UUID string -> version string"
+    )
+
+
+class SuggestedTopicResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    kind: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ProfessionResponse(BaseModel):
+    id: uuid.UUID
+    slug: str
+    name: str
+    description: str | None = None
+    suggested_topics: list[SuggestedTopicResponse] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
 
 
 class UserProfileResponse(UserProfileBase):

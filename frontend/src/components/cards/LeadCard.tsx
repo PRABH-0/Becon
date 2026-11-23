@@ -47,8 +47,23 @@ export function LeadCard({
               <Calendar className="w-3 h-3 text-slate-500 dark:text-slate-400" />
               <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
+            {card.reading_time_minutes && (
+              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                • {card.reading_time_minutes} min read
+              </span>
+            )}
           </div>
         </div>
+
+        {card.match_reason && (
+          <div
+            data-testid="card-match-reason"
+            className="text-[11px] font-mono text-emerald-800 dark:text-emerald-400 font-bold mb-2 flex items-center gap-1.5"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+            <span>{card.match_reason}</span>
+          </div>
+        )}
 
         {/* Headline / Title Button (Opens Drawer) */}
         <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-950 dark:text-slate-50 font-serif tracking-tight leading-tight mb-3">

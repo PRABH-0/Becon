@@ -51,6 +51,15 @@ export function BriefCard({
           </a>
         </div>
 
+        {card.match_reason && (
+          <div
+            data-testid="card-match-reason"
+            className="text-[10px] font-mono text-emerald-800 dark:text-emerald-400 font-bold mb-1.5 truncate"
+          >
+            {card.match_reason}
+          </div>
+        )}
+
         {/* Title Button (Opens Drawer) */}
         <h4 className="text-sm sm:text-base font-bold font-serif text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 mb-2">
           <button

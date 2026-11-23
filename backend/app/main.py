@@ -28,7 +28,7 @@ from app.deps import get_current_user, get_optional_user, sanitize_https_avatar_
 from app.feed_service import get_live_briefings
 from app.ingestion import run_ingestion_pipeline
 from app.logging_config import request_id_ctx_var, setup_logging
-from app.models import FocusTopic, Source, TopicAlias, UserProfile
+from app.models import FocusTopic, Profession, Source, TopicAlias, UserFocusTopic, UserProfile
 from app.rate_limit import (
     GeminiQuotaExceededError,
     enforce_auth_ai_rate_limit,
@@ -43,9 +43,11 @@ from app.schemas import (
     IngestCounts,
     IngestResponse,
     MatchTopicsRequest,
+    ProfessionResponse,
     SourceHealthItem,
     SourceHealthResponse,
     SourceHealthSummary,
+    SuggestedTopicResponse,
     TopicSearchResponse,
     UserMeResponse,
     UserProfileCreate,
@@ -715,6 +717,51 @@ def get_profile(current_user: UserProfile = Depends(get_current_user)):
     return current_user
 
 
+@app.get(
+    "/api/professions",
+    tags=["Onboarding"],
+    summary="List available professions and their suggested focus topics (DB-only, rate-limited)",
+    response_model=list[ProfessionResponse],
+)
+def list_professions(
+    db: Session = Depends(get_db),
+    _: None = Depends(enforce_public_rate_limit),
+):
+    """
+    Public endpoint returning active professions and their curated suggested topics.
+    Database-only, zero AI calls, rate-limited.
+    """
+    professions = (
+        db.query(Profession)
+        .filter(Profession.is_active.is_(True))
+        .order_by(Profession.sort_order.asc(), Profession.name.asc())
+        .all()
+    )
+    result = []
+    for p in professions:
+        topics = []
+        for pt in p.profession_topics:
+            if pt.topic and pt.topic.is_active:
+                topics.append(
+                    SuggestedTopicResponse(
+                        id=pt.topic.id,
+                        name=pt.topic.name,
+                        slug=pt.topic.slug,
+                        kind=pt.topic.kind,
+                    )
+                )
+        result.append(
+            ProfessionResponse(
+                id=p.id,
+                slug=p.slug,
+                name=p.name,
+                description=p.description,
+                suggested_topics=topics,
+            )
+        )
+    return result
+
+
 @app.post(
     "/api/profile",
     tags=["Profile"],
@@ -732,10 +779,25 @@ def update_profile(
 ):
     """
     Updates the authenticated user's profile settings and preferences in the database.
+    Invalidates the cached daily briefing for the user upon update.
     """
-    for key, value in profile_data.model_dump(exclude_unset=True).items():
-        if key != "id":
+    dumped = profile_data.model_dump(exclude_unset=True)
+    focus_topic_ids = dumped.pop("focus_topic_ids", None)
+    topic_versions = dumped.pop("topic_versions", None)
+
+    for key, value in dumped.items():
+        if key != "id" and hasattr(current_user, key):
             setattr(current_user, key, value)
+
+    # Sync UserFocusTopics if focus_topic_ids is provided
+    if focus_topic_ids is not None:
+        db.query(UserFocusTopic).filter(UserFocusTopic.user_id == current_user.id).delete()
+        for tid in focus_topic_ids:
+            ver = None
+            if topic_versions:
+                ver = topic_versions.get(str(tid))
+            db.add(UserFocusTopic(user_id=current_user.id, topic_id=tid, version=ver))
+
     db.commit()
     invalidate_daily_briefing_cache(db, current_user.id)
     db.refresh(current_user)

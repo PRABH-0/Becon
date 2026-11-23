@@ -164,7 +164,22 @@ export function CardDrawer({ card, isOpen, onClose }: CardDrawerProps) {
               <span>Target Role: <strong className="text-slate-800 dark:text-slate-200">{card.target_role}</strong></span>
               <span>•</span>
               <span>Source: <strong className="text-slate-800 dark:text-slate-200">{domain}</strong></span>
+              {card.reading_time_minutes && (
+                <>
+                  <span>•</span>
+                  <span><strong>{card.reading_time_minutes} min read</strong></span>
+                </>
+              )}
             </div>
+            {card.match_reason && (
+              <div
+                data-testid="drawer-match-reason"
+                className="mt-2 text-[11px] font-mono text-emerald-800 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded px-2.5 py-1 inline-flex items-center gap-1.5"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                <span>{card.match_reason}</span>
+              </div>
+            )}
           </div>
 
           {/* 1. WHAT HAPPENED */}

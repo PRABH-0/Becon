@@ -41,8 +41,23 @@ export function SquareCard({
               <Calendar className="w-3 h-3 text-slate-500 dark:text-slate-400" />
               <span>{card.published_at || "Oct 23, 2026"}</span>
             </span>
+            {card.reading_time_minutes && (
+              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                • {card.reading_time_minutes} min read
+              </span>
+            )}
           </div>
         </div>
+
+        {card.match_reason && (
+          <div
+            data-testid="card-match-reason"
+            className="text-[10px] font-mono text-emerald-800 dark:text-emerald-400 font-bold mb-2 flex items-center gap-1.5 truncate"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />
+            <span className="truncate">{card.match_reason}</span>
+          </div>
+        )}
 
         {/* Optional Image Thumbnail when real image exists */}
         {hasValidImage && (

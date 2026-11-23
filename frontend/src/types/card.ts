@@ -36,4 +36,6 @@ export interface BriefingCard {
   is_lead?: boolean;
   reading_time_minutes?: number;
   match_reason?: string;
+  is_saved?: boolean;
+  my_feedback?: "useful" | "not_useful" | null;
 }
