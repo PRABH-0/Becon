@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-23  
 Current phase: Fast-track MVP  
-Current task: F5 (Frontend component split & profession/focus onboarding)  
+Current task: F7 (Daily email digest via Resend)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -98,12 +98,15 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [x] **F4: Relevance ranking & daily briefing builder**  
   *Goal:* Score cards against user's profession + focus topics, select daily Lead Story, cap 5–10 cards, cache per user per UTC day.  
   *Acceptance:* Topic & alias matched cards ranked higher than generic cards, lead card designated, daily cached briefing served.
-- [ ] **F5: Frontend component split & profession/focus onboarding**  
-  *Goal:* Decompose `page.tsx` into clean components, rebuild onboarding wizard around DB professions and focus topics.  
-  *Acceptance:* `page.tsx` under 400 lines, onboarding connects directly to `/api/topics/search` and saves profile.
-- [ ] **F6: Card actions (Save, Feedback, Error Reporting)**  
-  *Goal:* Enable interactive actions on Action Cards backed by DB tables.  
-  *Acceptance:* Save to `saved_cards`, thumbs feedback to `feedback`, report error to `error_reports`.
+- [x] **F4.1: Briefing quality fixes**  
+  *Goal:* Relevance floor (cap generic cards at 2), suppress/penalize prereleases, bare version title canonicalization.  
+  *Acceptance:* Matched cards prioritized, rc/beta suppressed/penalized, bare versions like "22.2.6" prefixed to "Angular 22.2.6".
+- [x] **F5: Frontend component split & profession/focus onboarding**  
+  *Goal:* Decompose `page.tsx` into clean components (<400 lines), rebuild onboarding wizard around DB professions and focus topics.  
+  *Acceptance:* `page.tsx` is 241 lines, 4-step DB-driven onboarding connects to `/api/professions` & `/api/topics/search`, Gemini chat dependency removed.
+- [x] **F6: Card actions (Save, Feedback, Error Reporting)**  
+  *Goal:* Enable interactive actions on Action Cards backed by DB tables, with optimistic UI updates and finite /saved page.  
+  *Acceptance:* Save to `saved_cards`, thumbs feedback to `card_feedback`, report error to `error_reports`, `/saved` page with finite pagination.
 - [ ] **F7: Daily email digest via Resend**  
   *Goal:* HTML daily briefing email sent via Resend API matching user morning schedule with unsubscribe link.  
   *Acceptance:* Responsive 4-part card email received by test recipient, unsubscribe functions correctly.
@@ -145,11 +148,11 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 ---
 
 ## PHASE 5: Personalization and briefing builder
-- [ ] 5.1 Profile: profession, focus topics with versions, timezone, delivery time
-- [ ] 5.2 Relevance scoring and ranking
-- [ ] 5.3 Briefing builder: 5-10 cards, reading-time estimate, lead story, cached per user per day
+- [x] 5.1 Profile: profession, focus topics with versions, timezone, delivery time *(completed in F5)*
+- [x] 5.2 Relevance scoring and ranking *(completed in F4/F4.1)*
+- [x] 5.3 Briefing builder: 5-10 cards, reading-time estimate, lead story, cached per user per day *(completed in F4)*
 - [ ] 5.4 Per-profession "How it affects you" variants
-- [ ] 5.5 Cold-start seeded briefing and empty states
+- [x] 5.5 Cold-start seeded briefing and empty states *(completed in F4/F4.1)*
 
 *Exit: two different profiles get clearly different, sensible briefings.*
 
@@ -159,9 +162,9 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [~] 6.1 Render all 4 Action Card parts and action badge on every card; card detail drawer *(committed `376852d`; compact cards omit `why_it_matters`; tracked in `6.1b`)*
 - [x] 6.1b Compact cards render all 4 parts (short `why_it_matters` line), full text in `CardDrawer` *(merged in 6.8 via `4fdc08a`)*
 - [x] 6.2 Remove infinite scroll and page-lift (D12); finite briefing with "you're done" end state *(committed `4afb33f`)*
-- [ ] 6.3 Remove ~1,300 lines of mock fallback generators from `page.tsx`; split `page.tsx` into components
-- [ ] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles)
-- [ ] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive; future archive search over saved/stored cards, DB-only, no Gemini, after Phase 2; drop deprecated legacy `saved_briefings` table once `saved_cards` UI ships
+- [x] 6.3 Remove ~1,300 lines of mock fallback generators from `page.tsx`; split `page.tsx` into components *(page.tsx is 241 lines, components under `frontend/src/components/briefing/`)*
+- [x] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles) *(completed in F5)*
+- [x] 6.5 Save cards, useful/not-useful, report error, clickable topic filters, archive; future archive search over saved/stored cards, DB-only, no Gemini, after Phase 2; drop deprecated legacy `saved_briefings` table once `saved_cards` UI ships *(card actions and /saved page completed in F6)*
 - [ ] 6.6 Typography (load editorial serif — *resolved in `1.12` via self-hosted Source Serif 4*), token cleanup, accessibility fixes (focus, Escape, contrast, aria; *note: Profile Menu dropdown Escape/`aria-expanded`/keyboard a11y resolved in `1.10`*)
 - [ ] 6.7 Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow
 - [x] 6.8 UI polish pass (small fixes, NOT a redesign): compact cards 4-part rendering (6.1b), lead card dead space removal, equal-height card pinning, metadata/body text scaling & AA contrast, unified "Read source" & "Details" labels, remove full broadsheet density jargon, /profile placeholder & primary accent button & accessible tone radiogroup & live prompt counter & accurate privacy & account email copy *(approved, merged `4fdc08a`)*
@@ -253,3 +256,6 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-20 | F2 | Done (`a5075bd`) | Normalization, alias-based focus tags, category, simple severity (0-100), fallback cards set to unvalidated, live DB backfilled (559 events, 559 fallback cards unvalidated) |
 | 2026-11-23 | F2.1 | Done (`5374477`) | Tag precision fix: word boundary + alias token matching, decoupled version extraction, deduplicated canonical alias terms, strict body threshold, source prior boost, cap at 4 tags, is_primary flag; live DB backfilled (709 tags, 1.26 avg/event, 6.8% untagged) |
 | 2026-11-23 | F4 | Done (`6f78640`) | Relevance ranking & daily briefing builder: personalized scoring (topic, profession, severity, recency, version boost), max 2 cards per source diversity, lead story selection, reading time estimate, cold-start fallback, daily DB caching in daily_briefings (migration 0008), cache invalidation on profile update, zero Gemini calls for guests |
+| 2026-11-23 | F4.1 | Done (`3bd55e6`) | Briefing quality: relevance floor (cap generic cards at 2), suppress prereleases when final release exists and apply score penalty/lead prohibition, bare-version title prefixing with source name; live DB backfilled (110 bare version titles canonicalized) |
+| 2026-11-23 | F5 | Done (`e6af673`) | Frontend component split & DB-driven onboarding: split page.tsx to 241 lines via extracted briefing components (TopShowcase, BentoDeck, CoverageRibbon, BriefingHeader, BriefingEndState) and useBriefing hook; rebuilt 4-step onboarding wizard around /api/professions & /api/topics/search; deleted AI onboarding chat dependency |
+| 2026-11-23 | F6 | Done (`916a9bc`) | Card actions & saved page: POST/DELETE /api/cards/{id}/save, GET /api/saved with finite pagination, POST /api/cards/{id}/feedback (+1/-1 toggle/upsert), POST /api/cards/{id}/report with rate limit & deduplication, BriefingCard annotated with is_saved & my_feedback, compact SaveButton on cards, action bar in CardDrawer, accessible ReportModal, /saved page |
