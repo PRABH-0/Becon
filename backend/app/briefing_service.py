@@ -304,7 +304,7 @@ def build_daily_briefing(
     today_utc_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
     # 1. Check DB Cache for authenticated non-guest users
-    is_authenticated_non_guest = bool(user and not user.is_anonymous)
+    is_authenticated_non_guest = bool(user and getattr(user, "id", None) is not None and not user.is_anonymous)
     if is_authenticated_non_guest and not force_refresh:
         cached = (
             db.query(DailyBriefing)

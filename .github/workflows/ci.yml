@@ -112,10 +112,8 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      # TODO (ROADMAP Task 6.3 / 1.8: Refactor remaining React hook effects & explicit any types, then remove continue-on-error). Baseline after 1.6 trivial cleanup: 16 problems (12 errors, 4 warnings).
       - name: Run ESLint
         run: npm run lint
-        continue-on-error: true
 
       - name: Run Frontend Tests
         run: npm test

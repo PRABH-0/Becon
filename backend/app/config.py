@@ -84,6 +84,15 @@ class Settings(BaseSettings):
     # Comma-separated trusted reverse proxy IPs allowed to supply X-Forwarded-For (empty = ignore XFF)
     TRUSTED_PROXIES: str = Field(default="")
 
+    # --- Email Digest & Resend Delivery (Task F7) ---
+    RESEND_API_KEY: str | None = Field(default=None)
+    EMAIL_FROM: str = Field(default="Becon <digest@becon.dev>")
+    APP_BASE_URL: str = Field(default="http://localhost:3000")
+    UNSUBSCRIBE_SECRET: str = Field(default="dev-unsubscribe-secret-change-in-production")
+    RESEND_WEBHOOK_SECRET: str | None = Field(default=None)
+    DIGEST_MAX_PER_RUN: int = Field(default=10, ge=1, le=100)
+    DIGEST_SCHEDULER_ENABLED: bool = Field(default=True)
+
     # Supabase Authentication settings
     # Project URL, e.g. https://your-project.supabase.co
     SUPABASE_URL: str | None = Field(default=None)

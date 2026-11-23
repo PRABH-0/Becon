@@ -11,3 +11,4 @@ psycopg2-binary>=2.9.9
 python-multipart>=0.0.9
 alembic>=1.13.0
 PyJWT[crypto]>=2.8.0
+tzdata>=2024.1

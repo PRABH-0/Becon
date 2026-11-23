@@ -12,6 +12,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Trash2,
+  Mail,
 } from "lucide-react";
 
 import { useState, useEffect, useRef } from "react";
@@ -100,6 +101,9 @@ export default function ProfilePage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSetupMode, setIsSetupMode] = useState(false);
   const [validationError, setValidationError] = useState("");
+  const [emailDigestEnabled, setEmailDigestEnabled] = useState(true);
+  const [deliveryTime, setDeliveryTime] = useState("07:00");
+  const [timezone, setTimezone] = useState("UTC");
   const router = useRouter();
   const { showLoader, hideLoader } = useLoader();
   const { isAnonymous, signOut, user, me } = useAuth();
@@ -168,15 +172,17 @@ export default function ProfilePage() {
     const query = topicSearch.trim();
 
     if (!query) {
-      setAiSuggestions([]);
-      setIsAiResult(false);
-      setIsAiSearching(false);
+      queueMicrotask(() => {
+        setAiSuggestions([]);
+        setIsAiResult(false);
+        setIsAiSearching(false);
+      });
       return;
     }
 
     // Debounce backend query
-    setIsAiSearching(true);
     debounceTimerRef.current = setTimeout(async () => {
+      setIsAiSearching(true);
       try {
         const data = await apiFetch<{ matches?: string[] }>(
           `/api/topics/search?q=${encodeURIComponent(query)}`
@@ -228,7 +234,9 @@ export default function ProfilePage() {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get("setup") === "true") {
-        setIsSetupMode(true);
+        queueMicrotask(() => {
+          setIsSetupMode(true);
+        });
       }
     }
 
@@ -248,19 +256,22 @@ export default function ProfilePage() {
       };
 
       try {
-        const parsed = await apiFetch<any>("/api/profile");
+        const parsed = await apiFetch<Record<string, unknown>>("/api/profile");
         savedName = cleanCandidateName(parsed?.name);
         savedEmail = typeof parsed?.email === "string" ? parsed.email.trim() : "";
 
         if (savedName) setName(savedName);
         if (savedEmail) setEmail(savedEmail);
-        if (parsed?.role) setRole(parsed.role);
-        if (parsed?.experience) setExperience(parsed.experience);
-        if (parsed?.interests && parsed.interests.trim().length > 0) {
+        if (typeof parsed?.role === "string") setRole(parsed.role);
+        if (typeof parsed?.experience === "string") setExperience(parsed.experience);
+        if (typeof parsed?.interests === "string" && parsed.interests.trim().length > 0) {
           setInterests(parsed.interests.split(",").map((i: string) => i.trim()).filter(Boolean));
         }
-        if (parsed?.customPrompt) setCustomPrompt(parsed.customPrompt);
-        if (parsed?.aiTone) setAiTone(parsed.aiTone);
+        if (typeof parsed?.customPrompt === "string") setCustomPrompt(parsed.customPrompt);
+        if (typeof parsed?.aiTone === "string") setAiTone(parsed.aiTone);
+        if (typeof parsed?.email_digest_enabled === "boolean") setEmailDigestEnabled(parsed.email_digest_enabled);
+        if (typeof parsed?.delivery_time === "string") setDeliveryTime(parsed.delivery_time);
+        if (typeof parsed?.timezone === "string") setTimezone(parsed.timezone);
       } catch (err) {
         console.error("Failed to load profile from backend", err);
       }
@@ -354,6 +365,9 @@ export default function ProfilePage() {
       interests: interests.join(", "),
       customPrompt,
       aiTone,
+      email_digest_enabled: emailDigestEnabled,
+      delivery_time: deliveryTime,
+      timezone,
     };
 
     showLoader(
@@ -402,8 +416,9 @@ export default function ProfilePage() {
       await supabase.auth.signOut({ scope: "local" });
       clearBeconCaches();
       router.replace("/login?deleted=1");
-    } catch (err: any) {
-      if (err?.status === 503) {
+    } catch (err: unknown) {
+      const status = typeof err === "object" && err !== null && "status" in err ? (err as { status: unknown }).status : undefined;
+      if (status === 503) {
         setDeleteError("Account deletion is not available right now, please try again later.");
       } else {
         setDeleteError("Account could not be deleted at this time. Please check your connection and try again.");
@@ -927,6 +942,75 @@ export default function ProfilePage() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* DAILY EMAIL DIGEST CONFIGURATION */}
+              <div className="pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                <div className="font-mono text-xs font-black uppercase tracking-widest text-slate-950 dark:text-white flex items-center gap-2">
+                  <span><Mail className="w-4 h-4" /></span> DAILY EMAIL DIGEST
+                </div>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium">
+                  Receive a concise, morning broadsheet of your top stories in your inbox every day.
+                </p>
+
+                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <div className="space-y-0.5">
+                    <label htmlFor="email-digest-toggle" className="text-xs sm:text-sm font-bold font-mono text-slate-800 dark:text-slate-200 cursor-pointer">
+                      Enable Daily Morning Digest
+                    </label>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Dispatched once daily to {email || "your registered email address"}.
+                    </p>
+                  </div>
+                  <input
+                    id="email-digest-toggle"
+                    type="checkbox"
+                    checked={emailDigestEnabled}
+                    onChange={(e) => setEmailDigestEnabled(e.target.checked)}
+                    className="w-5 h-5 accent-amber-500 rounded cursor-pointer"
+                  />
+                </div>
+
+                {emailDigestEnabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-1.5">
+                      <label htmlFor="delivery-time-input" className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                        Delivery Time (Local)
+                      </label>
+                      <input
+                        id="delivery-time-input"
+                        type="time"
+                        value={deliveryTime}
+                        onChange={(e) => setDeliveryTime(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 text-slate-900 dark:text-slate-100 font-mono text-xs sm:text-sm p-3 rounded-xl outline-none shadow-xs"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="timezone-select" className="block text-xs font-bold font-mono text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                        Timezone
+                      </label>
+                      <select
+                        id="timezone-select"
+                        value={timezone}
+                        onChange={(e) => setTimezone(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-slate-900 dark:focus:border-amber-400 text-slate-900 dark:text-slate-100 font-mono text-xs sm:text-sm p-3 rounded-xl outline-none shadow-xs"
+                      >
+                        <option value="UTC">UTC (Universal Coordinated Time)</option>
+                        <option value="America/New_York">America/New_York (US Eastern)</option>
+                        <option value="America/Chicago">America/Chicago (US Central)</option>
+                        <option value="America/Denver">America/Denver (US Mountain)</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles (US Pacific)</option>
+                        <option value="Europe/London">Europe/London (GMT/BST)</option>
+                        <option value="Europe/Paris">Europe/Paris (CET)</option>
+                        <option value="Europe/Berlin">Europe/Berlin (CET)</option>
+                        <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                        <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+                        <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                        <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

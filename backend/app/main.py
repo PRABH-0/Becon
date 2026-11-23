@@ -31,6 +31,7 @@ from app.logging_config import request_id_ctx_var, setup_logging
 from app.models import (
     Card,
     CardFeedback,
+    Delivery,
     ErrorReport,
     FocusTopic,
     Profession,
@@ -1195,4 +1196,213 @@ def report_card_error(
     db.add(report)
     db.commit()
     return {"status": "submitted", "card_id": str(card_uuid)}
+
+
+# ==============================================================================
+# EMAIL DIGEST & UNSUBSCRIBE ROUTES (Task F7)
+# ==============================================================================
+
+
+@app.get(
+    "/api/unsubscribe",
+    tags=["Email"],
+    summary="Unsubscribe user from daily email digest via signed HMAC token",
+    responses={
+        400: {"description": "Invalid or expired unsubscribe link"},
+        200: {"description": "Successfully unsubscribed"},
+    },
+)
+def unsubscribe_get(
+    request: Request,
+    token: str = Query(..., description="Signed HMAC-SHA256 unsubscribe token"),
+    db: Session = Depends(get_db),
+):
+    """Handles GET link clicks from email footer to unsubscribe from daily digest."""
+    enforce_public_rate_limit(request)
+    from app.email.signer import verify_unsubscribe_token
+
+    user_id = verify_unsubscribe_token(token)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired unsubscribe link.",
+        )
+
+    user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    user.email_digest_enabled = False
+    db.commit()
+    return {"status": "unsubscribed", "email": user.email}
+
+
+@app.post(
+    "/api/unsubscribe",
+    tags=["Email"],
+    summary="One-click RFC 8058 unsubscribe from daily email digest",
+    responses={
+        400: {"description": "Invalid or expired unsubscribe token"},
+        200: {"description": "Successfully unsubscribed"},
+    },
+)
+async def unsubscribe_post(
+    request: Request,
+    token: str = Query(None, description="Signed HMAC-SHA256 unsubscribe token"),
+    db: Session = Depends(get_db),
+):
+    """RFC 8058 one-click unsubscribe endpoint triggered by email clients or web UI."""
+    enforce_public_rate_limit(request)
+    from app.email.signer import verify_unsubscribe_token
+
+    active_token = token
+    if not active_token:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                active_token = body.get("token")
+        except Exception:
+            pass
+
+    if not active_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing unsubscribe token.",
+        )
+
+    user_id = verify_unsubscribe_token(active_token)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired unsubscribe token.",
+        )
+
+    user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    user.email_digest_enabled = False
+    db.commit()
+    return {"status": "unsubscribed"}
+
+
+@app.post(
+    "/api/webhooks/resend",
+    tags=["Email"],
+    summary="Receive bounce and complaint webhooks from Resend",
+)
+async def resend_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Processes Resend webhook events (bounces, complaints) to automatically suppress digests."""
+    secret = (settings.RESEND_WEBHOOK_SECRET or "").strip()
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook endpoint disabled: RESEND_WEBHOOK_SECRET not configured.",
+        )
+
+    # Simple HMAC verification of webhook signature if provided
+    signature = request.headers.get("svix-signature") or request.headers.get("X-Resend-Signature") or ""
+    if not signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing webhook signature header.",
+        )
+
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid JSON payload: {exc}")
+
+    event_type = payload.get("type", "")
+    if event_type in ("email.bounced", "email.complained"):
+        data = payload.get("data", {})
+        recipients = data.get("to", [])
+        target_email = recipients[0] if isinstance(recipients, list) and recipients else str(recipients)
+
+        if target_email:
+            user = db.query(UserProfile).filter(UserProfile.email == target_email.lower().strip()).first()
+            if user:
+                logger.warning("Disabling email digest for user %s due to Resend event: %s", user.id, event_type)
+                user.email_digest_enabled = False
+
+                latest_deliv = (
+                    db.query(Delivery)
+                    .filter(Delivery.user_id == user.id, Delivery.channel == "email")
+                    .order_by(Delivery.created_at.desc())
+                    .first()
+                )
+                if latest_deliv:
+                    latest_deliv.status = "failed"
+                    latest_deliv.error = f"Resend webhook event: {event_type}"
+                db.commit()
+
+    return {"status": "received", "type": event_type}
+
+
+@app.post(
+    "/api/digest/preview",
+    tags=["Email"],
+    summary="Preview raw HTML digest email for inspection",
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid X-Ingest-Token"},
+        503: {"description": "Service Unavailable - INGEST_API_TOKEN not configured"},
+    },
+)
+def preview_digest(
+    request: Request,
+    email: str | None = Query(default=None, description="Optional target user email address"),
+    db: Session = Depends(get_db),
+    x_ingest_token: str | None = Header(default=None, alias="X-Ingest-Token"),
+):
+    """Renders HTML email preview for authenticated ingestion callers. Zero Gemini calls."""
+    enforce_public_rate_limit(request)
+
+    if not settings.INGEST_API_TOKEN or not settings.INGEST_API_TOKEN.strip():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Endpoint disabled: INGEST_API_TOKEN not configured.",
+        )
+
+    expected = settings.INGEST_API_TOKEN.strip().encode("utf-8")
+    provided = x_ingest_token.strip().encode("utf-8") if x_ingest_token else b""
+    if not hmac.compare_digest(expected, provided):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Ingest-Token header.",
+        )
+
+    from app.email.digest import build_user_digest
+
+    if email:
+        user = db.query(UserProfile).filter(UserProfile.email == email.strip().lower()).first()
+    else:
+        user = db.query(UserProfile).filter(UserProfile.is_anonymous.is_(False)).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No user profile found to build preview.",
+        )
+
+    bundle = build_user_digest(db, user)
+    if not bundle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No briefing cards available today to generate digest preview.",
+        )
+
+    html_content = bundle[0]
+    from fastapi.responses import Response
+
+    return Response(content=html_content, media_type="text/html")
+
 

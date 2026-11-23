@@ -230,6 +230,19 @@ class SchedulerEngine:
             except Exception as e:
                 logger.error("Unhandled error in scheduler tick: %s", sanitize_error_message(str(e)))
 
+            # Periodic daily email digest scheduler check
+            try:
+                from app.email.digest import run_digest_scheduler_batch
+                db_digest = self.db_factory()
+                try:
+                    sent_digests = run_digest_scheduler_batch(db_digest, now=self.clock())
+                    if sent_digests > 0:
+                        logger.info("Scheduler dispatched %d daily digest email(s)", sent_digests)
+                finally:
+                    db_digest.close()
+            except Exception as e:
+                logger.error("Digest scheduler dispatch error: %s", sanitize_error_message(str(e)))
+
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=tick_seconds)
             except TimeoutError:

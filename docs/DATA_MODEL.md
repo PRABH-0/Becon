@@ -211,6 +211,9 @@ Alembic manages all schema lifecycle events across SQLite (local development) an
    - Adds `is_primary` (`BOOLEAN DEFAULT FALSE`) to `event_topics` to denote primary canonical tags.
    - Creates `daily_briefings` table for caching personalized intelligence briefings per user per UTC day (`user_id`, `briefing_date`, `cards_payload`, `reading_time_minutes`).
    - Enables Row Level Security (RLS) on `daily_briefings` in PostgreSQL.
+9. `0009_profession_default`:
+   - Adds `is_default` (`BOOLEAN DEFAULT FALSE`) to `professions` table to designate the DB-driven cold start fallback profession.
+   - Updates seed data and database so `software-development` is default (`is_default = TRUE`).
 
 ### Adoption of Existing Local Database (`becon.db`)
 Existing local databases containing the initial unversioned schema must be stamped with baseline `0001` before upgrading:

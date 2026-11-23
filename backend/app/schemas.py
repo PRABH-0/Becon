@@ -94,6 +94,9 @@ class UserProfileBase(BaseModel):
     delivery_time: str | None = Field(
         default=None, description="Preferred daily delivery time (e.g. '08:00')"
     )
+    email_digest_enabled: bool = Field(
+        default=True, description="Whether daily email digest is enabled for this user"
+    )
 
     model_config = {
         "json_schema_extra": {

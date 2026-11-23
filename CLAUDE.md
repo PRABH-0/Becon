@@ -96,6 +96,13 @@ Run the test and migration commands below to check current test and table counts
   - `GEMINI_MAX_OUTPUT_TOKENS_CHAT`: `max_output_tokens` cap for onboarding chat calls (default: `400`).
   - `GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS`: `max_output_tokens` cap for topic matching calls (default: `200`).
   - `TRUSTED_PROXIES`: Comma-separated reverse proxy IPs allowed to supply `X-Forwarded-For` (default: empty = ignore `X-Forwarded-For`).
+  - `RESEND_API_KEY`: API key for Resend email delivery (if unset or empty, operates in log-only dry-run mode).
+  - `EMAIL_FROM`: Sender email address with display name for email digests (default: `Becon Daily <briefing@becon.dev>`).
+  - `APP_BASE_URL`: Base application URL for unsubscribe and email action links (default: `http://localhost:3000`).
+  - `UNSUBSCRIBE_SECRET`: Secret key used for signing and verifying RFC 8058 HMAC-SHA256 unsubscribe tokens.
+  - `RESEND_WEBHOOK_SECRET`: Secret key for validating incoming Resend bounce and complaint webhooks.
+  - `DIGEST_MAX_PER_RUN`: Maximum email digests sent per scheduler run batch (default: `50`).
+  - `DIGEST_SCHEDULER_ENABLED`: Enable/disable background email digest delivery scheduler (default: `true`).
 - **Frontend (`frontend/.env.local`, template [`frontend/.env.example`](frontend/.env.example)):**
   - `NEXT_PUBLIC_API_URL`: Base URL of the backend FastAPI service (e.g. `http://127.0.0.1:8000`).
   - `NEXT_PUBLIC_SUPABASE_URL`: Bare Supabase project root URL (e.g. `https://<ref>.supabase.co`, no trailing path).
