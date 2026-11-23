@@ -41,6 +41,7 @@ class BriefingCard(BaseModel):
     is_lead: bool = Field(default=False, description="True for the designated lead story")
     reading_time_minutes: int | None = Field(default=None, description="Estimated reading time in minutes")
     match_reason: str | None = Field(default=None, description="Human-readable editorial relevance reason")
+    status_note: str | None = Field(default=None, description="Editorial status note, e.g. limited_today")
     is_saved: bool = Field(default=False, description="Whether the card is bookmarked by the authenticated user")
     my_feedback: Literal["useful", "not_useful"] | None = Field(default=None, description="User feedback (+1 / -1)")
 
@@ -437,4 +438,14 @@ class SavedCardsResponse(BaseModel):
     page: int
     limit: int
     has_more: bool
+
+
+class SynthesisStatusResponse(BaseModel):
+    queue_size: int
+    synthesized_total: int
+    passed_total: int
+    flagged_total: int
+    unvalidated_total: int
+    quota_remaining: int
+
 

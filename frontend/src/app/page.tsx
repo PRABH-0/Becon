@@ -149,6 +149,15 @@ export default function Home() {
             ) : (
               <>
                 <div className="space-y-6 sm:space-y-8">
+                  {briefings.some((b) => b.status_note === "limited_today") && (
+                    <div
+                      data-testid="limited-briefing-banner"
+                      className="px-4 py-2.5 rounded-lg border border-amber-200/80 bg-amber-50/70 dark:bg-amber-950/20 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-sans flex items-center gap-2"
+                    >
+                      <span>Today&apos;s intelligence dispatch is lighter than usual as official sources report low breaking activity.</span>
+                    </div>
+                  )}
+
                   {/* TOP SHOWCASE */}
                   <TopShowcase
                     loading={loading}

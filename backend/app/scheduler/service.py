@@ -191,6 +191,15 @@ class SchedulerEngine:
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=False)
+
+        # Post-ingestion synthesis queue runner
+        try:
+            from app.synthesize import run_synthesis_queue
+            logger.info("Executing post-ingestion synthesis queue...")
+            run_synthesis_queue(limit=getattr(settings, "INGEST_MAX_GEMINI_CALLS_PER_RUN", 10))
+        except Exception as e:
+            logger.error("Post-ingestion synthesis queue execution failed: %s", e)
+
         return results
 
     async def run_continuous(

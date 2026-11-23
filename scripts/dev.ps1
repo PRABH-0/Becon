@@ -18,7 +18,7 @@ Provides standard development workflow tasks: install, dev-backend, dev-frontend
 
 param (
     [Parameter(Position=0, Mandatory=$true)]
-    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed", "fetch", "scheduler")]
+    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed", "fetch", "scheduler", "synthesize")]
     [string]$Command,
 
     [Parameter(Position=1, Mandatory=$false)]
@@ -155,6 +155,16 @@ switch ($Command) {
         Push-Location "$RepoRoot\backend"
         try {
             & .venv\Scripts\python.exe -m app.scheduler
+        } finally {
+            Pop-Location
+        }
+    }
+
+    "synthesize" {
+        Write-Host "==> Running Becon Production Synthesis Queue..." -ForegroundColor Cyan
+        Push-Location "$RepoRoot\backend"
+        try {
+            & .venv\Scripts\python.exe -m app.synthesize
         } finally {
             Pop-Location
         }

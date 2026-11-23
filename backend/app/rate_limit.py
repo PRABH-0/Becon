@@ -138,6 +138,12 @@ class InProcessRateLimiter:
         with self._lock:
             self._assert_quota_available_locked(user_key=user_key, is_guest=is_guest)
 
+    def get_global_gemini_remaining(self) -> int:
+        """Return remaining daily calls under global Gemini quota."""
+        with self._lock:
+            self._roll_day_if_needed()
+            return max(0, settings.GEMINI_DAILY_CAP_GLOBAL - self._global_gemini_count)
+
     def record_gemini_usage(self, user_key: str | None = None, is_guest: bool = False) -> None:
         """Record one completed/reached Gemini logical request against daily caps."""
         if not settings.RATE_LIMIT_ENABLED:

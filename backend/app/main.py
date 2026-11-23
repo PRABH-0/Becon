@@ -64,6 +64,7 @@ from app.schemas import (
     SourceHealthResponse,
     SourceHealthSummary,
     SuggestedTopicResponse,
+    SynthesisStatusResponse,
     TopicSearchResponse,
     UserMeResponse,
     UserProfileCreate,
@@ -362,6 +363,82 @@ def get_sources_health(
     ]
 
     return SourceHealthResponse(summary=summary, sources=items)
+
+
+@app.get(
+    "/api/synthesis/status",
+    tags=["Synthesis"],
+    summary="Get synthesis queue size and card validation status counts",
+    response_model=SynthesisStatusResponse,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid X-Ingest-Token"},
+        503: {"description": "Service Unavailable - INGEST_API_TOKEN is not configured"},
+    },
+)
+def get_synthesis_status(
+    request: Request,
+    db: Session = Depends(get_db),
+    x_ingest_token: str | None = Header(default=None, alias="X-Ingest-Token"),
+):
+    """
+    Returns synthesis queue size, card counts by validation status, and remaining Gemini quota.
+    Protected by X-Ingest-Token header (constant-time comparison). Strictly DB-only.
+    """
+    enforce_public_rate_limit(request)
+
+    if not settings.INGEST_API_TOKEN or not settings.INGEST_API_TOKEN.strip():
+        logger.error("GET /api/synthesis/status triggered but INGEST_API_TOKEN is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Endpoint is disabled because INGEST_API_TOKEN is not configured.",
+        )
+
+    expected = settings.INGEST_API_TOKEN.strip().encode("utf-8")
+    provided = x_ingest_token.strip().encode("utf-8") if x_ingest_token else b""
+    if not hmac.compare_digest(expected, provided):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Ingest-Token header.",
+        )
+
+    from app.synthesize import get_synthesis_queue
+
+    queue = get_synthesis_queue(db)
+    passed_total = (
+        db.query(func.count(Card.id))
+        .filter(Card.validation_status == "passed", Card.model_name != "fallback-heuristic")
+        .scalar()
+        or 0
+    )
+    flagged_total = (
+        db.query(func.count(Card.id))
+        .filter(Card.validation_status == "flagged")
+        .scalar()
+        or 0
+    )
+    unvalidated_total = (
+        db.query(func.count(Card.id))
+        .filter(Card.validation_status == "unvalidated")
+        .scalar()
+        or 0
+    )
+    synthesized_total = (
+        db.query(func.count(Card.id))
+        .filter(Card.model_name != "fallback-heuristic")
+        .scalar()
+        or 0
+    )
+    quota_remaining = rate_limiter.get_global_gemini_remaining()
+
+    return SynthesisStatusResponse(
+        queue_size=len(queue),
+        synthesized_total=synthesized_total,
+        passed_total=passed_total,
+        flagged_total=flagged_total,
+        unvalidated_total=unvalidated_total,
+        quota_remaining=quota_remaining,
+    )
+
 
 
 @app.get(

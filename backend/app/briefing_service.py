@@ -289,6 +289,7 @@ def build_daily_briefing(
     min_cards: int = BRIEFING_MIN_CARDS,
     allow_variant_generation: bool = False,
     user_key: str | None = None,
+    is_production: bool | None = None,
 ) -> List[BriefingCard]:
     """Build a personalized, relevance-ranked daily briefing with DB caching.
 
@@ -375,7 +376,8 @@ def build_daily_briefing(
         .filter(Card.status == "published")
     )
 
-    if settings.ENVIRONMENT == "production":
+    prod_mode = (settings.ENVIRONMENT == "production") if is_production is None else is_production
+    if prod_mode:
         query = query.filter(
             Card.model_name != "fallback-heuristic",
             Card.validation_status == "passed",
@@ -552,6 +554,11 @@ def build_daily_briefing(
         # Match reason
         dto.match_reason = item["match_reason"]
         briefing_cards.append(dto)
+
+    # Production briefing fallback: if fewer than 3 validated cards exist, flag status_note
+    if prod_mode and len(briefing_cards) < 3:
+        for dto in briefing_cards:
+            dto.status_note = "limited_today"
 
     # 7. Persist to DB Cache for authenticated non-guest users
     if is_authenticated_non_guest and briefing_cards:
