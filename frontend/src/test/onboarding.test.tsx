@@ -133,25 +133,24 @@ describe("Card Components render match_reason and reading_time_minutes", () => {
 });
 
 describe("DB-Driven Onboarding Wizard (F5)", () => {
-  let apiFetchSpy: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    apiFetchSpy = vi.spyOn(apiModule, "apiFetch").mockImplementation((async (url: string) => {
-      if (url === "/api/professions") {
-        return sampleProfessions as any;
-      }
-      if (url.startsWith("/api/topics/search")) {
-        return { matches: ["Rust", "Redis"] } as any;
-      }
-      if (url === "/api/profile") {
-        return { success: true } as any;
-      }
-      return {} as any;
-    }) as any);
   });
 
   it("loads professions from /api/professions and executes 4-step wizard", async () => {
+    const apiSpy = vi.spyOn(apiModule, "apiFetch").mockImplementation(async (url: string) => {
+      if (url === "/api/professions") {
+        return sampleProfessions;
+      }
+      if (url.startsWith("/api/topics/search")) {
+        return { matches: ["Rust", "Redis"] };
+      }
+      if (url === "/api/profile") {
+        return { success: true };
+      }
+      return {};
+    });
+
     render(<OnboardingPage />);
 
     // Step 1: Wait for professions to load and show up
@@ -208,7 +207,7 @@ describe("DB-Driven Onboarding Wizard (F5)", () => {
     fireEvent.click(screen.getByTestId("onboarding-save-button"));
 
     await waitFor(() => {
-      expect(apiFetchSpy).toHaveBeenCalledWith(
+      expect(apiSpy).toHaveBeenCalledWith(
         "/api/profile",
         expect.objectContaining({
           method: "POST",

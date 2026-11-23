@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { SaveButton } from "@/components/cards/SaveButton";
 import { CardDrawer } from "@/components/CardDrawer";
-import { ReportModal } from "@/components/ReportModal";
 import SavedPage from "@/app/saved/page";
 import * as apiModule from "@/lib/api";
 import { BriefingCard } from "@/types/card";
@@ -58,14 +57,12 @@ const mockCard: BriefingCard = {
 };
 
 describe("SaveButton Component (F6)", () => {
-  let apiFetchSpy: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    apiFetchSpy = vi.spyOn(apiModule, "apiFetch").mockResolvedValue({ saved: true });
   });
 
   it("toggles save state optimistically on click", async () => {
+    const apiSpy = vi.spyOn(apiModule, "apiFetch").mockResolvedValue({ saved: true });
     const onToggle = vi.fn();
     render(<SaveButton cardId="card-uuid-123" initialSaved={false} onToggle={onToggle} />);
 
@@ -78,14 +75,14 @@ describe("SaveButton Component (F6)", () => {
     expect(onToggle).toHaveBeenCalledWith(true);
 
     await waitFor(() => {
-      expect(apiFetchSpy).toHaveBeenCalledWith("/api/cards/card-uuid-123/save", {
+      expect(apiSpy).toHaveBeenCalledWith("/api/cards/card-uuid-123/save", {
         method: "POST",
       });
     });
   });
 
   it("rolls back save state when API request fails", async () => {
-    apiFetchSpy = vi.spyOn(apiModule, "apiFetch").mockRejectedValue(new Error("Network error"));
+    vi.spyOn(apiModule, "apiFetch").mockRejectedValue(new Error("Network error"));
     const onToggle = vi.fn();
     render(<SaveButton cardId="card-uuid-123" initialSaved={false} onToggle={onToggle} />);
 
@@ -101,14 +98,12 @@ describe("SaveButton Component (F6)", () => {
 });
 
 describe("CardDrawer Actions & Report Modal (F6)", () => {
-  let apiFetchSpy: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    apiFetchSpy = vi.spyOn(apiModule, "apiFetch").mockResolvedValue({ success: true });
   });
 
   it("toggles save in drawer optimistically", async () => {
+    const apiSpy = vi.spyOn(apiModule, "apiFetch").mockResolvedValue({ success: true });
     render(<CardDrawer card={mockCard} isOpen={true} onClose={vi.fn()} />);
 
     const saveBtn = screen.getByTestId("drawer-save-button");
@@ -118,13 +113,14 @@ describe("CardDrawer Actions & Report Modal (F6)", () => {
     expect(saveBtn).toHaveTextContent("Saved");
 
     await waitFor(() => {
-      expect(apiFetchSpy).toHaveBeenCalledWith("/api/cards/card-uuid-123/save", {
+      expect(apiSpy).toHaveBeenCalledWith("/api/cards/card-uuid-123/save", {
         method: "POST",
       });
     });
   });
 
   it("toggles useful and not_useful feedback optimistically", async () => {
+    const apiSpy = vi.spyOn(apiModule, "apiFetch").mockResolvedValue({ success: true });
     render(<CardDrawer card={mockCard} isOpen={true} onClose={vi.fn()} />);
 
     const usefulBtn = screen.getByTestId("drawer-useful-button");
@@ -133,7 +129,7 @@ describe("CardDrawer Actions & Report Modal (F6)", () => {
     // Click useful
     fireEvent.click(usefulBtn);
     await waitFor(() => {
-      expect(apiFetchSpy).toHaveBeenCalledWith(
+      expect(apiSpy).toHaveBeenCalledWith(
         "/api/cards/card-uuid-123/feedback",
         expect.objectContaining({
           method: "POST",
@@ -145,7 +141,7 @@ describe("CardDrawer Actions & Report Modal (F6)", () => {
     // Click not useful
     fireEvent.click(notUsefulBtn);
     await waitFor(() => {
-      expect(apiFetchSpy).toHaveBeenCalledWith(
+      expect(apiSpy).toHaveBeenCalledWith(
         "/api/cards/card-uuid-123/feedback",
         expect.objectContaining({
           method: "POST",
@@ -156,6 +152,7 @@ describe("CardDrawer Actions & Report Modal (F6)", () => {
   });
 
   it("opens report modal from drawer and submits report", async () => {
+    const apiSpy = vi.spyOn(apiModule, "apiFetch").mockResolvedValue({ success: true });
     render(<CardDrawer card={mockCard} isOpen={true} onClose={vi.fn()} />);
 
     const reportBtn = screen.getByTestId("drawer-report-button");
@@ -175,7 +172,7 @@ describe("CardDrawer Actions & Report Modal (F6)", () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(apiFetchSpy).toHaveBeenCalledWith(
+      expect(apiSpy).toHaveBeenCalledWith(
         "/api/cards/card-uuid-123/report",
         expect.objectContaining({
           method: "POST",
@@ -188,11 +185,12 @@ describe("CardDrawer Actions & Report Modal (F6)", () => {
 });
 
 describe("/saved Page (F6)", () => {
-  let apiFetchSpy: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    apiFetchSpy = vi.spyOn(apiModule, "apiFetch").mockImplementation((async (url: string) => {
+  });
+
+  it("renders saved cards list and handles unsave optimistically", async () => {
+    const apiSpy = vi.spyOn(apiModule, "apiFetch").mockImplementation(async (url: string) => {
       if (url.startsWith("/api/saved")) {
         return {
           items: [mockCard],
@@ -206,10 +204,8 @@ describe("/saved Page (F6)", () => {
         return { saved: false };
       }
       return {};
-    }) as any);
-  });
+    });
 
-  it("renders saved cards list and handles unsave optimistically", async () => {
     render(<SavedPage />);
 
     // Wait for saved cards to load
@@ -225,7 +221,7 @@ describe("/saved Page (F6)", () => {
     // Card removed optimistically
     await waitFor(() => {
       expect(screen.getByTestId("empty-saved-cards")).toBeInTheDocument();
-      expect(apiFetchSpy).toHaveBeenCalledWith("/api/cards/card-uuid-123/save", {
+      expect(apiSpy).toHaveBeenCalledWith("/api/cards/card-uuid-123/save", {
         method: "DELETE",
       });
     });
