@@ -3,7 +3,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import UTC
+from datetime import UTC, datetime
 
 from fastapi import (
     BackgroundTasks,
@@ -28,15 +28,30 @@ from app.deps import get_current_user, get_optional_user, sanitize_https_avatar_
 from app.feed_service import get_live_briefings
 from app.ingestion import run_ingestion_pipeline
 from app.logging_config import request_id_ctx_var, setup_logging
-from app.models import FocusTopic, Profession, Source, TopicAlias, UserFocusTopic, UserProfile
+from app.models import (
+    Card,
+    CardFeedback,
+    ErrorReport,
+    FocusTopic,
+    Profession,
+    SavedCard,
+    Source,
+    TopicAlias,
+    UserFocusTopic,
+    UserProfile,
+)
 from app.rate_limit import (
     GeminiQuotaExceededError,
     enforce_auth_ai_rate_limit,
     enforce_public_rate_limit,
+    get_client_ip,
+    rate_limiter,
 )
 from app.schemas import (
     CUSTOM_PROMPT_MAX_LENGTH,
     BriefingCard,
+    CardFeedbackRequest,
+    CardReportRequest,
     ChatRequest,
     ChatResponse,
     HealthResponse,
@@ -44,6 +59,7 @@ from app.schemas import (
     IngestResponse,
     MatchTopicsRequest,
     ProfessionResponse,
+    SavedCardsResponse,
     SourceHealthItem,
     SourceHealthResponse,
     SourceHealthSummary,
@@ -847,3 +863,259 @@ def onboarding_chat_endpoint(
         invalidate_daily_briefing_cache(db, current_user.id)
 
     return response
+
+
+# ==========================================
+# CARD ACTIONS: SAVE, FEEDBACK, ERROR REPORT
+# ==========================================
+
+
+@app.post(
+    "/api/cards/{card_id}/save",
+    tags=["Cards"],
+    summary="Save / bookmark an action card",
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+        404: {"description": "Card not found"},
+    },
+)
+def save_card(
+    card_id: str,
+    current_user: UserProfile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Saves (bookmarks) an action card for the authenticated user (idempotent)."""
+    try:
+        card_uuid = uuid.UUID(card_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
+
+    card = db.query(Card).filter(Card.id == card_uuid).first()
+    if not card:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
+
+    existing = (
+        db.query(SavedCard)
+        .filter(SavedCard.user_id == current_user.id, SavedCard.card_id == card_uuid)
+        .first()
+    )
+    if not existing:
+        saved_entry = SavedCard(user_id=current_user.id, card_id=card_uuid)
+        db.add(saved_entry)
+        db.commit()
+
+    return {"saved": True, "card_id": str(card_uuid)}
+
+
+@app.delete(
+    "/api/cards/{card_id}/save",
+    tags=["Cards"],
+    summary="Remove a saved / bookmarked action card",
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+        404: {"description": "Card not found"},
+    },
+)
+def unsave_card(
+    card_id: str,
+    current_user: UserProfile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Removes a saved bookmark for the authenticated user (idempotent)."""
+    try:
+        card_uuid = uuid.UUID(card_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
+
+    existing = (
+        db.query(SavedCard)
+        .filter(SavedCard.user_id == current_user.id, SavedCard.card_id == card_uuid)
+        .first()
+    )
+    if existing:
+        db.delete(existing)
+        db.commit()
+
+    return {"saved": False, "card_id": str(card_uuid)}
+
+
+@app.get(
+    "/api/saved",
+    tags=["Cards"],
+    summary="Get paginated list of saved action cards for authenticated user",
+    response_model=SavedCardsResponse,
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+    },
+)
+def get_saved_cards(
+    page: int = Query(default=1, ge=1, description="Page number starting at 1"),
+    limit: int = Query(default=10, ge=1, le=50, description="Items per page"),
+    current_user: UserProfile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Returns a paginated list of cards saved by the authenticated user in reverse chronological order."""
+    from app.feed_service import _db_card_to_briefing_card
+
+    query = (
+        db.query(SavedCard)
+        .filter(SavedCard.user_id == current_user.id)
+        .order_by(SavedCard.created_at.desc())
+    )
+    total = query.count()
+    offset_val = (page - 1) * limit
+    saved_items = query.offset(offset_val).limit(limit).all()
+
+    # Pre-fetch feedback for these cards
+    card_uuids = [sc.card_id for sc in saved_items if sc.card]
+    fb_map: dict[uuid.UUID, str] = {}
+    if card_uuids:
+        fb_rows = (
+            db.query(CardFeedback.card_id, CardFeedback.value)
+            .filter(CardFeedback.user_id == current_user.id, CardFeedback.card_id.in_(card_uuids))
+            .all()
+        )
+        fb_map = {cid: ("useful" if val == 1 else "not_useful") for cid, val in fb_rows}
+
+    items: list[BriefingCard] = []
+    for rank_idx, sc in enumerate(saved_items, 1):
+        if not sc.card:
+            continue
+        dto = _db_card_to_briefing_card(
+            db=db,
+            card=sc.card,
+            rank=rank_idx,
+            user_role=current_user.role or "Professional",
+            allow_variant_generation=False,
+            user_key=str(current_user.id),
+        )
+        dto.is_saved = True
+        dto.my_feedback = fb_map.get(sc.card_id)  # type: ignore[assignment]
+        items.append(dto)
+
+    has_more = (offset_val + limit) < total
+    return SavedCardsResponse(
+        items=items,
+        total=total,
+        page=page,
+        limit=limit,
+        has_more=has_more,
+    )
+
+
+@app.post(
+    "/api/cards/{card_id}/feedback",
+    tags=["Cards"],
+    summary="Submit or toggle useful / not_useful feedback on an action card",
+    responses={
+        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
+        404: {"description": "Card not found"},
+    },
+)
+def submit_card_feedback(
+    card_id: str,
+    payload: CardFeedbackRequest,
+    current_user: UserProfile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upserts or toggles user feedback (+1 / -1) on an action card."""
+    try:
+        card_uuid = uuid.UUID(card_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
+
+    card = db.query(Card).filter(Card.id == card_uuid).first()
+    if not card:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
+
+    val_int = 1 if payload.value == "useful" else -1
+
+    existing = (
+        db.query(CardFeedback)
+        .filter(CardFeedback.user_id == current_user.id, CardFeedback.card_id == card_uuid)
+        .first()
+    )
+
+    if existing:
+        if existing.value == val_int:
+            # Toggle off
+            db.delete(existing)
+            db.commit()
+            return {"feedback": None, "card_id": str(card_uuid)}
+        else:
+            existing.value = val_int
+            existing.updated_at = datetime.now(UTC)
+            db.commit()
+            return {"feedback": payload.value, "card_id": str(card_uuid)}
+    else:
+        new_feedback = CardFeedback(
+            user_id=current_user.id,
+            card_id=card_uuid,
+            value=val_int,
+        )
+        db.add(new_feedback)
+        db.commit()
+        return {"feedback": payload.value, "card_id": str(card_uuid)}
+
+
+@app.post(
+    "/api/cards/{card_id}/report",
+    tags=["Cards"],
+    summary="Report a factual error or issue with an action card",
+    responses={
+        404: {"description": "Card not found"},
+        429: {"description": "Too many reports - rate limit exceeded"},
+    },
+)
+def report_card_error(
+    card_id: str,
+    payload: CardReportRequest,
+    request: Request,
+    current_user: UserProfile | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """Submits a factual error report for human editorial review.
+
+    Includes rate-limiting (10/min) and automatic deduplication of repeat submissions.
+    """
+    try:
+        card_uuid = uuid.UUID(card_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
+
+    card = db.query(Card).filter(Card.id == card_uuid).first()
+    if not card:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
+
+    user_identifier = str(current_user.id) if (current_user and current_user.id) else get_client_ip(request)
+    # Rate limit: 10 reports per minute
+    rate_limiter.check_sliding_window(f"report:{user_identifier}", limit=10, window_seconds=60)
+
+    # Deduplicate repeated reports from same user on same card with same reason
+    user_id_val = current_user.id if (current_user and current_user.id) else None
+    reason_prefix = f"[{payload.reason}]"
+
+    dedupe_query = db.query(ErrorReport).filter(
+        ErrorReport.card_id == card_uuid,
+        ErrorReport.message.like(f"{reason_prefix}%"),
+    )
+    if user_id_val is not None:
+        dedupe_query = dedupe_query.filter(ErrorReport.user_id == user_id_val)
+    existing_report = dedupe_query.first()
+
+    if existing_report:
+        return {"status": "deduplicated", "card_id": str(card_uuid)}
+
+    note_text = payload.note.strip() if payload.note else ""
+    msg = f"[{payload.reason}] {note_text}" if note_text else f"[{payload.reason}]"
+    report = ErrorReport(
+        id=uuid.uuid4(),
+        user_id=user_id_val,
+        card_id=card_uuid,
+        message=msg[:2000],
+        status="open",
+    )
+    db.add(report)
+    db.commit()
+    return {"status": "submitted", "card_id": str(card_uuid)}
+

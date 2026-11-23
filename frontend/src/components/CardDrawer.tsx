@@ -1,9 +1,23 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { X, ExternalLink, Calendar, Copy, Check, Terminal, Layers } from "lucide-react";
+import {
+  X,
+  ExternalLink,
+  Calendar,
+  Copy,
+  Check,
+  Terminal,
+  Layers,
+  Bookmark,
+  ThumbsUp,
+  ThumbsDown,
+  Flag,
+} from "lucide-react";
 import { BriefingCard } from "@/types/card";
 import { ActionBadge } from "./cards/ActionBadge";
+import { ReportModal } from "./ReportModal";
+import { apiFetch } from "@/lib/api";
 
 interface CardDrawerProps {
   card: BriefingCard | null;
@@ -26,6 +40,49 @@ export function CardDrawer({ card, isOpen, onClose }: CardDrawerProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const lastActiveElementRef = useRef<HTMLElement | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isSaved, setIsSaved] = useState<boolean>(Boolean(card?.is_saved));
+  const [feedback, setFeedback] = useState<"useful" | "not_useful" | null>(card?.my_feedback || null);
+  const [showReportModal, setShowReportModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (card) {
+      queueMicrotask(() => {
+        setIsSaved(Boolean(card.is_saved));
+        setFeedback(card.my_feedback || null);
+      });
+    }
+  }, [card]);
+
+  const handleToggleSave = async () => {
+    if (!card) return;
+    const nextSaved = !isSaved;
+    setIsSaved(nextSaved);
+    try {
+      await apiFetch(`/api/cards/${card.id}/save`, {
+        method: nextSaved ? "POST" : "DELETE",
+      });
+    } catch (err) {
+      console.error("Save error:", err);
+      setIsSaved(!nextSaved);
+    }
+  };
+
+  const handleToggleFeedback = async (val: "useful" | "not_useful") => {
+    if (!card) return;
+    const nextFeedback = feedback === val ? null : val;
+    const prevFeedback = feedback;
+    setFeedback(nextFeedback);
+    try {
+      await apiFetch(`/api/cards/${card.id}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: val }),
+      });
+    } catch (err) {
+      console.error("Feedback error:", err);
+      setFeedback(prevFeedback);
+    }
+  };
 
   // 1. Accessibility: Focus management & Escape key handling
   useEffect(() => {
@@ -180,6 +237,65 @@ export function CardDrawer({ card, isOpen, onClose }: CardDrawerProps) {
                 <span>{card.match_reason}</span>
               </div>
             )}
+
+            {/* Action Bar: Save, Useful, Not Useful, Report */}
+            <div className="flex flex-wrap items-center gap-2 pt-3 mt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                data-testid="drawer-save-button"
+                onClick={handleToggleSave}
+                aria-label={isSaved ? "Remove from saved cards" : "Save card"}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-bold border transition-all cursor-pointer ${
+                  isSaved
+                    ? "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 shadow-xs"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400"
+                }`}
+              >
+                <Bookmark className={`w-3.5 h-3.5 ${isSaved ? "fill-amber-500 text-amber-500" : ""}`} />
+                <span>{isSaved ? "Saved" : "Save"}</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="drawer-useful-button"
+                onClick={() => handleToggleFeedback("useful")}
+                aria-label="Mark card useful"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-bold border transition-all cursor-pointer ${
+                  feedback === "useful"
+                    ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 shadow-xs"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400"
+                }`}
+              >
+                <ThumbsUp className={`w-3.5 h-3.5 ${feedback === "useful" ? "fill-emerald-500 text-emerald-500" : ""}`} />
+                <span>Useful</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="drawer-not-useful-button"
+                onClick={() => handleToggleFeedback("not_useful")}
+                aria-label="Mark card not useful"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-bold border transition-all cursor-pointer ${
+                  feedback === "not_useful"
+                    ? "bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-700 shadow-xs"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400"
+                }`}
+              >
+                <ThumbsDown className={`w-3.5 h-3.5 ${feedback === "not_useful" ? "fill-rose-500 text-rose-500" : ""}`} />
+                <span>Not useful</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="drawer-report-button"
+                onClick={() => setShowReportModal(true)}
+                aria-label="Report issue with this card"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-bold border bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 border-slate-200 dark:border-slate-700 transition-colors ml-auto cursor-pointer"
+              >
+                <Flag className="w-3.5 h-3.5" />
+                <span>Report</span>
+              </button>
+            </div>
           </div>
 
           {/* 1. WHAT HAPPENED */}
@@ -308,6 +424,13 @@ export function CardDrawer({ card, isOpen, onClose }: CardDrawerProps) {
           </a>
         </div>
       </div>
+
+      <ReportModal
+        cardId={card.id}
+        cardTitle={card.title}
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+      />
     </div>
   );
 }

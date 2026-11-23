@@ -2,6 +2,7 @@ import React from "react";
 import { Calendar, ExternalLink, Info } from "lucide-react";
 import { BriefingCard } from "@/types/card";
 import { ActionCardBody } from "./ActionCardBody";
+import { SaveButton } from "./SaveButton";
 
 interface BriefCardProps {
   card: BriefingCard;
@@ -39,16 +40,19 @@ export function BriefCard({
               </span>
             )}
           </div>
-          <a
-            href={card.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-800 dark:text-slate-200 font-mono transition-all border border-slate-200 dark:border-slate-700 shrink-0"
-            title="Read source"
-          >
-            <span>Read source</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
+          <div className="flex items-center gap-1 shrink-0">
+            <SaveButton cardId={card.id} initialSaved={card.is_saved} size="sm" />
+            <a
+              href={card.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-950 dark:hover:bg-slate-700 hover:text-amber-300 text-slate-800 dark:text-slate-200 font-mono transition-all border border-slate-200 dark:border-slate-700 shrink-0"
+              title="Read source"
+            >
+              <span>Read source</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
 
         {card.match_reason && (

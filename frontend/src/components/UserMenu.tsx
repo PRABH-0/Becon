@@ -2,11 +2,11 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { BookOpen, ChevronDown, LogOut, User, UserPlus } from "lucide-react";
+import { Bookmark, BookOpen, ChevronDown, LogOut, User, UserPlus } from "lucide-react";
 import { UserAvatar, UserChip } from "@/components/UserAvatar";
 import type { ResolvedUserIdentity } from "@/lib/identity";
 
-export type UserMenuPage = "home" | "profile" | "about";
+export type UserMenuPage = "home" | "profile" | "about" | "saved";
 
 export interface UserMenuProps {
   identity: ResolvedUserIdentity;
@@ -215,6 +215,27 @@ export function UserMenu({
 
           {/* Navigation Items */}
           <div className="space-y-0.5">
+            <Link
+              href="/saved"
+              role="menuitem"
+              tabIndex={-1}
+              aria-current={currentPage === "saved" ? "page" : undefined}
+              onClick={() => closeMenu(false)}
+              className={`${itemBaseClass} ${
+                currentPage === "saved" ? activeItemClass : inactiveItemClass
+              }`}
+            >
+              <Bookmark
+                aria-hidden="true"
+                className={`w-4 h-4 shrink-0 transition-colors ${
+                  currentPage === "saved"
+                    ? "text-amber-500 dark:text-amber-400"
+                    : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200"
+                }`}
+              />
+              <span>Saved Cards</span>
+            </Link>
+
             <Link
               href="/profile"
               role="menuitem"

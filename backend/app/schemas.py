@@ -41,6 +41,8 @@ class BriefingCard(BaseModel):
     is_lead: bool = Field(default=False, description="True for the designated lead story")
     reading_time_minutes: int | None = Field(default=None, description="Estimated reading time in minutes")
     match_reason: str | None = Field(default=None, description="Human-readable editorial relevance reason")
+    is_saved: bool = Field(default=False, description="Whether the card is bookmarked by the authenticated user")
+    my_feedback: Literal["useful", "not_useful"] | None = Field(default=None, description="User feedback (+1 / -1)")
 
 
 class UserProfileBase(BaseModel):
@@ -418,3 +420,21 @@ class SourceHealthResponse(BaseModel):
 
     summary: SourceHealthSummary
     sources: List[SourceHealthItem]
+
+
+class CardFeedbackRequest(BaseModel):
+    value: Literal["useful", "not_useful"]
+
+
+class CardReportRequest(BaseModel):
+    reason: str = Field(..., min_length=2, max_length=100)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class SavedCardsResponse(BaseModel):
+    items: list[BriefingCard]
+    total: int
+    page: int
+    limit: int
+    has_more: bool
+

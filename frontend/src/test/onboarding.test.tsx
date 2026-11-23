@@ -102,25 +102,25 @@ describe("F5 Frontend Split & Line Count Contract", () => {
 
 describe("Card Components render match_reason and reading_time_minutes", () => {
   it("renders match_reason on LeadCard", () => {
-    render(<LeadCard card={sampleCardWithMatchReason} onSelect={vi.fn()} />);
+    render(<LeadCard card={sampleCardWithMatchReason} onOpenDrawer={vi.fn()} />);
     const matchEl = screen.getByTestId("card-match-reason");
     expect(matchEl).toHaveTextContent("Matches: Kubernetes, high severity");
   });
 
   it("renders match_reason on BriefCard", () => {
-    render(<BriefCard card={sampleCardWithMatchReason} onSelect={vi.fn()} />);
+    render(<BriefCard card={sampleCardWithMatchReason} onOpenDrawer={vi.fn()} />);
     const matchEl = screen.getByTestId("card-match-reason");
     expect(matchEl).toHaveTextContent("Matches: Kubernetes, high severity");
   });
 
   it("renders match_reason on RectangleCard", () => {
-    render(<RectangleCard card={sampleCardWithMatchReason} onSelect={vi.fn()} />);
+    render(<RectangleCard card={sampleCardWithMatchReason} onOpenDrawer={vi.fn()} />);
     const matchEl = screen.getByTestId("card-match-reason");
     expect(matchEl).toHaveTextContent("Matches: Kubernetes, high severity");
   });
 
   it("renders match_reason on SquareCard", () => {
-    render(<SquareCard card={sampleCardWithMatchReason} onSelect={vi.fn()} />);
+    render(<SquareCard card={sampleCardWithMatchReason} onOpenDrawer={vi.fn()} />);
     const matchEl = screen.getByTestId("card-match-reason");
     expect(matchEl).toHaveTextContent("Matches: Kubernetes, high severity");
   });
@@ -133,11 +133,11 @@ describe("Card Components render match_reason and reading_time_minutes", () => {
 });
 
 describe("DB-Driven Onboarding Wizard (F5)", () => {
-  let apiFetchSpy: ReturnType<typeof vi.spyOn>;
+  let apiFetchSpy: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    apiFetchSpy = vi.spyOn(apiModule, "apiFetch").mockImplementation(async (url: string) => {
+    apiFetchSpy = vi.spyOn(apiModule, "apiFetch").mockImplementation((async (url: string) => {
       if (url === "/api/professions") {
         return sampleProfessions as any;
       }
@@ -148,7 +148,7 @@ describe("DB-Driven Onboarding Wizard (F5)", () => {
         return { success: true } as any;
       }
       return {} as any;
-    });
+    }) as any);
   });
 
   it("loads professions from /api/professions and executes 4-step wizard", async () => {

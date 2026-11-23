@@ -3,6 +3,7 @@ import logging
 import re
 import socket
 import time
+import uuid
 from datetime import UTC, datetime
 from typing import Dict, List, Tuple
 
@@ -420,7 +421,46 @@ def get_live_briefings(
         user_key=user_key,
     )
 
-    # 4. Apply scope / pagination
+    # 4. Populate user card actions state (is_saved, my_feedback) if authenticated
+    if user and getattr(user, "id", None) and all_cards:
+        try:
+            from app.models import CardFeedback, SavedCard
+
+            u_card_uuids = []
+            for c in all_cards:
+                try:
+                    if c.id:
+                        u_card_uuids.append(uuid.UUID(str(c.id)))
+                except (ValueError, TypeError):
+                    pass
+            if u_card_uuids:
+                saved_set = set(
+                    row[0]
+                    for row in db.query(SavedCard.card_id)
+                    .filter(SavedCard.user_id == user.id, SavedCard.card_id.in_(u_card_uuids))
+                    .all()
+                )
+                fb_rows = (
+                    db.query(CardFeedback.card_id, CardFeedback.value)
+                    .filter(CardFeedback.user_id == user.id, CardFeedback.card_id.in_(u_card_uuids))
+                    .all()
+                )
+                fb_map = {
+                    cid: ("useful" if val == 1 else "not_useful")
+                    for cid, val in fb_rows
+                }
+                for c in all_cards:
+                    try:
+                        cu = uuid.UUID(str(c.id)) if c.id else None
+                        if cu:
+                            c.is_saved = cu in saved_set
+                            c.my_feedback = fb_map.get(cu)
+                    except (ValueError, TypeError):
+                        pass
+        except Exception as e:
+            logger.warning("Could not decorate cards with user save/feedback state: %s", e)
+
+    # 5. Apply scope / pagination
     if scope == "top":
         return all_cards[:5]
     elif scope == "remaining":

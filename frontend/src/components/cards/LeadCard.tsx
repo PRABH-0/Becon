@@ -2,6 +2,7 @@ import React from "react";
 import { Calendar, ExternalLink, Info } from "lucide-react";
 import { BriefingCard } from "@/types/card";
 import { ActionCardBody } from "./ActionCardBody";
+import { SaveButton } from "./SaveButton";
 
 interface LeadCardProps {
   card: BriefingCard;
@@ -105,6 +106,7 @@ export function LeadCard({
           Role: <strong className="text-slate-900 dark:text-slate-200 font-semibold">{card.target_role}</strong>
         </span>
         <div className="flex items-center gap-2 shrink-0">
+          <SaveButton cardId={card.id} initialSaved={card.is_saved} size="md" />
           <button
             type="button"
             onClick={() => onOpenDrawer?.(card)}
