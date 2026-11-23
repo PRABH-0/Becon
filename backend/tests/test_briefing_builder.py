@@ -1,14 +1,12 @@
 """Unit and integration tests for F4 Relevance ranking & Daily Briefing Builder."""
 
-from datetime import UTC, datetime, timedelta
 import uuid
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
-import pytest
 
 import app.database as app_db
 from app.briefing_service import (
     build_daily_briefing,
-    calculate_card_relevance,
     invalidate_daily_briefing_cache,
 )
 from app.models import (
@@ -21,7 +19,6 @@ from app.models import (
     RawItem,
     Source,
     SourceProfession,
-    SourceTopic,
     UserFocusTopic,
     UserProfile,
 )

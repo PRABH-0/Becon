@@ -27,9 +27,11 @@ import app.ai_service as ai_service
 from app.ai_service import MODEL_NAME, PROMPT_VERSION, generate_action_card
 from app.classification import (
     calculate_severity_score,
-    classify_event_category as classification_classify_category,
     normalize_event_title,
     populate_event_topics,
+)
+from app.classification import (
+    classify_event_category as classification_classify_category,
 )
 from app.config import settings
 from app.models import (
@@ -613,6 +615,14 @@ def backfill_synthesize_cards(
         query = query.limit(max_calls)
 
     candidates = query.all()
+    summary = {
+        "candidates": len(candidates),
+        "synthesized": 0,
+        "flagged": 0,
+        "skipped_short": 0,
+        "errors": 0,
+    }
+
     active_client = ai_service.get_gemini_client()
     if not active_client:
         logger.error("Cannot run backfill synthesis: GEMINI_API_KEY is not configured or Gemini client is inactive.")
@@ -624,14 +634,6 @@ def backfill_synthesize_cards(
         max_calls,
         days,
     )
-
-    summary = {
-        "candidates": len(candidates),
-        "synthesized": 0,
-        "flagged": 0,
-        "skipped_short": 0,
-        "errors": 0,
-    }
 
     for card, event, raw_item in candidates:
         raw_text = ""

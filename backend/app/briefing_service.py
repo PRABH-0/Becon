@@ -21,14 +21,13 @@ Implements:
 
 from __future__ import annotations
 
-from collections import Counter
-from datetime import UTC, datetime
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
 import uuid
+from collections import Counter
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Set, Tuple
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -36,15 +35,10 @@ from app.models import (
     Card,
     DailyBriefing,
     Event,
-    FocusTopic,
-    Profession,
-    RawItem,
     Source,
-    SourceProfession,
-    UserFocusTopic,
     UserProfile,
 )
-from app.schemas import ActionGuidance, BriefingCard, BriefingCardContent
+from app.schemas import BriefingCard
 
 logger = logging.getLogger(__name__)
 

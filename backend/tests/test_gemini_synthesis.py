@@ -1,7 +1,7 @@
 """Tests for Task F3: Grounded Gemini synthesis and validation layer."""
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -14,12 +14,8 @@ from app.config import settings
 from app.main import app
 from app.models import Card, Event, RawItem, Source
 from app.rate_limit import GeminiQuotaExceededError, rate_limiter
-from app.schemas import BriefingCardContent
 from app.validation import (
     extract_entities_from_bullets,
-    is_source_text_sufficient,
-    validate_card_content,
-    verify_entities_in_source,
 )
 
 
@@ -363,7 +359,7 @@ def test_quota_error_leaves_items_pending(monkeypatch):
         db.commit()
 
         # Run process_unprocessed_raw_items
-        stats = ingestion_mod.process_unprocessed_raw_items(db=db, source_id=source.id)
+        _ = ingestion_mod.process_unprocessed_raw_items(db=db, source_id=source.id)
 
         # Both items should remain 'new' and pending
         db.refresh(item1)
@@ -478,7 +474,6 @@ def test_production_briefings_endpoint_returns_only_validated_non_fallback(clien
 def test_validator_ignores_sentence_initial_and_common_words():
     """Verify that validator ignores sentence-initial capitalized words and common English words,
     while extracting mid-sentence proper nouns, versions, and CVEs."""
-    from app.validation import extract_entities_from_bullets, verify_entities_in_source
 
     bullets = [
         "Unlike traditional SPMD models like DDP and FSDP that rely on synchronous collectives, Pathways uses asynchronous dispatch.",

@@ -1,12 +1,11 @@
 """Unit tests for Becon classification, normalization, tagging, and severity scoring."""
 
-from datetime import UTC, datetime, timedelta
 import uuid
-import pytest
+from datetime import UTC, datetime, timedelta
 
 import app.database as app_db
-from app.classification.normalizer import normalize_event_title
 from app.classification.category import classify_event_category
+from app.classification.normalizer import normalize_event_title
 from app.classification.severity import calculate_severity_score
 from app.classification.tagger import (
     build_term_regex,
@@ -14,8 +13,8 @@ from app.classification.tagger import (
     match_event_topics,
     populate_event_topics,
 )
-from app.models import Event, EventTopic, FocusTopic, RawItem, Source, SourceTopic, TopicAlias, Card
-from app.ingestion import process_raw_item, IngestionStats
+from app.ingestion import IngestionStats, process_raw_item
+from app.models import Event, FocusTopic, RawItem, Source, SourceTopic, TopicAlias
 
 
 class TestTitleNormalizer:

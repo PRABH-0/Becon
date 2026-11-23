@@ -2,9 +2,9 @@
 
 Single source of truth for where the project stands. Lives in the repo root. Maintained by the project lead (Claude chat) and updated by Antigravity after each approved task.
 
-Last updated: 2026-11-20  
+Last updated: 2026-11-23  
 Current phase: Fast-track MVP  
-Current task: F2 (Title normalization, alias-based focus tags, category, severity)  
+Current task: F5 (Frontend component split & profession/focus onboarding)  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -95,7 +95,7 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [x] **F2: Title normalization, alias-based tagging & simple severity**  
   *Goal:* Strip title noise, map raw items to `FocusTopic` via keyword/alias taxonomy, compute 0–100 severity score.  
   *Acceptance:* Normalized titles, events tagged with DB topics, severity formula scores CVE/breaking/recency accurately. Fallback cards set to unvalidated.
-- [ ] **F4: Relevance ranking & daily briefing builder**  
+- [x] **F4: Relevance ranking & daily briefing builder**  
   *Goal:* Score cards against user's profession + focus topics, select daily Lead Story, cap 5–10 cards, cache per user per UTC day.  
   *Acceptance:* Topic & alias matched cards ranked higher than generic cards, lead card designated, daily cached briefing served.
 - [ ] **F5: Frontend component split & profession/focus onboarding**  
@@ -118,7 +118,7 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [x] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories) (approved, merged `b98f9dd`)
 - [x] 2.3 Fetchers: RSS/Atom, GitHub Releases API, advisories (GHSA/NVD); conditional GET; full-text extraction; sanitization (approved, merged `85cbd62`)
 - [x] 2.4 Scheduler (APScheduler or equivalent) with retries, backoff, per-source health, health endpoint (approved, merged `29aca4e`)
-- [ ] 2.5 Remove Google News and dev.to as primary sources
+- [x] 2.5 Remove Google News and dev.to as primary sources *(completed in F1, confirmed in audit)*
 
 *Exit: scheduled run fills raw_items reliably; source health visible.*
 
@@ -127,17 +127,17 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 ## PHASE 3: Dedup and classification
 - [~] 3.1 Exact dedup (URL/hash) and normalization *(exact dedup done in 1.5; normalization edge cases pending)*
 - [ ] 3.2 Semantic dedup with embeddings into events
-- [ ] 3.3 Focus tagging via taxonomy, category (release, deprecation, security, EOL, industry)
-- [ ] 3.4 Severity score (D7) *(Note: Phase 3 should use the modified date for advisories as NVD publishes old CVEs that were recently modified; cisa-kev severity is assigned, not a CVSS value, so D7 must treat it separately)*
+- [x] 3.3 Focus tagging via taxonomy, category (release, deprecation, security, EOL, industry) *(completed in F2/F2.1)*
+- [x] 3.4 Severity score (D7) *(completed in F2/F2.1; modified date used for NVD recency, CISA KEV scored separately)*
 
 *Exit: sample evaluation shows duplicates merged and tags correct; thresholds documented.*
 
 ---
 
 ## PHASE 4: Grounded Gemini synthesis
-- [ ] 4.1 Gemini key configured; strict schema; source-only prompt *(Note: Task 4.1 must treat raw_items text as untrusted input with prompt-injection guard)*
-- [ ] 4.2 Validation layer (schema, claim-in-source check, retry once, else flag and do not publish)
-- [ ] 4.3 Rate-limit handling with backoff, caching, cost tracking
+- [~] 4.1 Gemini key configured; strict schema; source-only prompt *(partially covered by F3; pending live verification by lead)*
+- [~] 4.2 Validation layer (schema, claim-in-source check, retry once, else flag and do not publish) *(partially covered by F3; pending live verification by lead)*
+- [~] 4.3 Rate-limit handling with backoff, caching, cost tracking *(partially covered by F3; pending live verification by lead)*
 - [ ] 4.4 Evaluation set of 30+ real updates and manual review report
 
 *Exit: quality gate passed (zero unsupported claims on the evaluation set).*
@@ -248,6 +248,8 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-19 | 2.1, 2.2 | Approved, merged `b98f9dd` | Source registry & curated official sources (DATA ONLY, `task-2.1-source-registry`): migration 0004 for `source_professions` join table with PostgreSQL RLS, `Source` model synonyms (`homepage_url`, `source_type`, `poll_interval_minutes`, `is_active`), `SourceSeedItem` Pydantic v2 DTO with https enforcement, 38 live-verified official developer feeds in `sources.json`, idempotent seeder, offline test suite + marker-gated network test |
 | 2026-11-19 | 2.3 | Approved, merged `85cbd62` | Fetchers framework (RSS/Atom, GitHub Releases, advisory APIs): safe httpx client with SSRF guards, conditional GET, plain-text sanitization, raw_items metadata column (migration 0005), GHSA/CISA KEV/NVD advisory fetchers, runner and dev.ps1 fetch |
 | 2026-11-19 | 2.4 | Approved, merged `29aca4e` | Scheduler worker, retries/exponential backoff, per-source health, health endpoint (`task-2.4-scheduler`): migration 0006 for status/next_fetch_at/lease columns, asyncio scheduler worker engine (`python -m app.scheduler`, `dev.ps1 scheduler`, docker-compose service), atomic DB leasing & expired lease reclaim, 45s per-source timeout & concurrency semaphores, consecutive failure tracking & backoff with Retry-After, GET /api/sources/health endpoint with X-Ingest-Token protection & slowapi rate limiting, CLI `--status` & `--once` flags, 11 deterministic offline tests |
-| 2026-11-20 | F1 | Done | Approved by lead: Migrations 0001-0006 applied, 41 sources seeded in becon.db, Google News/dev.to removed, pipeline bridged to deduplicated events & cards, mock generators removed from page.tsx, clean empty state, live fetch executed (538 raw items, 535 events, 535 cards) |
-| 2026-11-20 | F3 | Partial | Grounded Gemini synthesis & claim validation: source-only prompt with <untrusted_source>, entity check validator, backfill CLI, rate-limit/quota handling; pending live Gemini verification by lead |
-| 2026-11-20 | F2 | Done | Normalization, alias-based focus tags, category, simple severity (0-100), fallback cards set to unvalidated, live DB backfilled (559 events, 559 fallback cards unvalidated) |
+| 2026-11-20 | F1 | Done (`a5075bd`) | Approved by lead: Migrations 0001-0006 applied, 41 sources seeded in becon.db, Google News/dev.to removed, pipeline bridged to deduplicated events & cards, mock generators removed from page.tsx, clean empty state, live fetch executed (538 raw items, 535 events, 535 cards) |
+| 2026-11-20 | F3 | Partial (`a5075bd`) | Grounded Gemini synthesis & claim validation: source-only prompt with <untrusted_source>, entity check validator, backfill CLI, rate-limit/quota handling; pending live Gemini verification by lead |
+| 2026-11-20 | F2 | Done (`a5075bd`) | Normalization, alias-based focus tags, category, simple severity (0-100), fallback cards set to unvalidated, live DB backfilled (559 events, 559 fallback cards unvalidated) |
+| 2026-11-23 | F2.1 | Done (`5374477`) | Tag precision fix: word boundary + alias token matching, decoupled version extraction, deduplicated canonical alias terms, strict body threshold, source prior boost, cap at 4 tags, is_primary flag; live DB backfilled (709 tags, 1.26 avg/event, 6.8% untagged) |
+| 2026-11-23 | F4 | Done (`6f78640`) | Relevance ranking & daily briefing builder: personalized scoring (topic, profession, severity, recency, version boost), max 2 cards per source diversity, lead story selection, reading time estimate, cold-start fallback, daily DB caching in daily_briefings (migration 0008), cache invalidation on profile update, zero Gemini calls for guests |

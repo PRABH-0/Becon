@@ -42,7 +42,7 @@ Becon removes the scrolling and delivers only what matters, in a format designed
 - Software engineers who want to stay current without doom-scrolling.
 - Tech leads and senior developers who need early awareness of breaking changes, security issues and ecosystem shifts.
 - DevOps and cloud engineers who track infrastructure, tooling and security updates.
-- Career-minded developers who want hiring and market signals alongside technical changes.
+- Career-minded developers who want hiring and market signals alongside technical changes (post-MVP per Decision D11).
 
 
 5. THE 4-PART ACTION CARD
@@ -97,9 +97,11 @@ Personalization starts with the user's role and stack and improves from their ow
 By default, Becon does not require social accounts and prioritizes privacy. However, users can optionally connect or monitor creator accounts to receive topic-matched social updates directly in their briefings.
 
 
-8. CREATOR & SOCIAL INTELLIGENCE (X / TWITTER, YOUTUBE, INSTAGRAM)
+8. CREATOR & SOCIAL INTELLIGENCE (X / TWITTER, YOUTUBE, INSTAGRAM) — POST-MVP (PHASE 9, DECISION D1)
 
-Breaking shifts and critical announcements often break on social platforms hours before official press releases. Becon allows users to attach social accounts or follow specific industry creators and company handles (e.g., Elon Musk on X, official engineering channels on YouTube, or tech leaders on Instagram).
+Creator and social platform follows are part of Becon's post-MVP roadmap (Phase 9 per Decision D1; the data model supports them from Phase 1).
+
+Breaking shifts and critical announcements often break on social platforms hours before official press releases. Becon will allow users to attach social accounts or follow specific industry creators and company handles (e.g., official engineering channels on YouTube or tech leaders on X/Twitter).
 
 How it works:
 1. Account / Handle Attachment: The user links their social profile or inputs handles they follow (e.g., `@elonmusk` on X/Twitter, `@SpaceX` on YouTube).
@@ -154,18 +156,7 @@ Planned infrastructure: PostgreSQL for users, sources, events and cards, a sched
 
 13. ROADMAP
 
-[x] Environment setup and FastAPI foundation
-[x] Pydantic schema design
-[x] FastAPI endpoints and Next.js integration
-[x] Database (Supabase PostgreSQL integration)
-[x] Continuous search pagination and Bento Grid layout
-[x] Dark and Light mode theme systems
-[ ] Social & Creator Feed Integration (X/Twitter, YouTube, Instagram topic-filtered updates)
-[ ] RSS ingestion engine
-[ ] Gemini summarization engine
-[ ] Feedback-based ranking
-[ ] Email digest and Telegram alerts
-[ ] Live deployment and user feedback
+The authoritative roadmap, fast-track MVP progress, and active tasks are tracked in [ROADMAP.md](ROADMAP.md) in the repository root. Per Decisions D11 and D12, legacy features like continuous search pagination, infinite scrolling, and hiring signals have been removed from the MVP scope in favor of a time-boxed, finite daily intelligence briefing.
 
 
 SHORT VERSIONS

@@ -3,22 +3,18 @@ import logging
 import re
 import socket
 import time
-import urllib.parse
 from datetime import UTC, datetime
 from typing import Dict, List, Tuple
 
 import feedparser
 from fastapi import BackgroundTasks
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models import (
     Card,
-    Event,
-    EventTopic,
-    FocusTopic,
     UserProfile,
 )
 from app.schemas import ActionGuidance, BriefingCard, BriefingCardContent

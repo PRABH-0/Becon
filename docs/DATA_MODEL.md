@@ -141,6 +141,9 @@ Product telemetry and interaction logs. **Rule**: Strict privacy boundary — ab
 ### `user_profiles` (Existing Table, Migrated)
 Stores user identity, authentication provider, delivery preferences, timezone, and profession link.
 
+### `daily_briefings`
+Stores personalized daily intelligence briefing card payloads cached per user per UTC day, with calculated estimated reading times.
+
 ### `saved_briefings` (Legacy Table, Retained)
 Retained for backwards compatibility; marked `DEPRECATED`. No longer created by modern pipeline and will be dropped in Phase 6.5 (after `saved_cards` UI ships).
 
@@ -161,7 +164,7 @@ All vocabularies are stored as short strings governed by database `CHECK` constr
 | **Severity Score** | `events.severity_score` | Integer $0$ to $100$ |
 | **Action Type** | `cards.action_type`, `card_variants.action_type` | `'learn'`, `'apply'`, `'avoid'`, `'prepare'` |
 | **Card Status** | `cards.status` | `'draft'`, `'published'`, `'retracted'` |
-| **Validation Status** | `cards.validation_status` | `'pending'`, `'passed'`, `'failed'`, `'flagged'` |
+| **Validation Status** | `cards.validation_status` | `'pending'`, `'passed'`, `'failed'`, `'flagged'`, `'unvalidated'` |
 | **Feedback Value** | `card_feedback.value` | `-1`, `1` |
 | **Error Report Status**| `error_reports.status` | `'open'`, `'reviewing'`, `'resolved'`, `'rejected'` |
 | **Delivery Channel** | `deliveries.channel` | `'email'`, `'telegram'` |
@@ -198,6 +201,16 @@ Alembic manages all schema lifecycle events across SQLite (local development) an
 4. `0004_source_registry`:
    - Creates `source_professions` join table linking content sources to target professions.
    - Enables Row Level Security (RLS) on `source_professions` in PostgreSQL.
+5. `0005_raw_items_raw_metadata`:
+   - Adds `raw_metadata` (`PortableJSON`) column to `raw_items` for storing upstream payload attributes (CVSS scores, CISA KEV flags, modified timestamps).
+6. `0006_source_health_and_scheduling`:
+   - Adds source health tracking and distributed leasing columns to `sources`: `status`, `next_fetch_at`, `lease_expires_at`, `fetch_started_at`.
+7. `0007_cards_validation_status_unvalidated`:
+   - Expands `ck_cards_validation_status` check constraint to include `'unvalidated'` (designating heuristic fallback cards prior to Gemini validation).
+8. `0008_daily_briefings_and_primary_tag`:
+   - Adds `is_primary` (`BOOLEAN DEFAULT FALSE`) to `event_topics` to denote primary canonical tags.
+   - Creates `daily_briefings` table for caching personalized intelligence briefings per user per UTC day (`user_id`, `briefing_date`, `cards_payload`, `reading_time_minutes`).
+   - Enables Row Level Security (RLS) on `daily_briefings` in PostgreSQL.
 
 ### Adoption of Existing Local Database (`becon.db`)
 Existing local databases containing the initial unversioned schema must be stamped with baseline `0001` before upgrading:
