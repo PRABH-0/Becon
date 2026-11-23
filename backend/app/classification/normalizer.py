@@ -60,8 +60,17 @@ TRAILING_VENDOR_SUFFIXES = [
 ]
 TRAILING_VENDOR_RE = re.compile("|".join(TRAILING_VENDOR_SUFFIXES), re.IGNORECASE)
 
+BARE_VERSION_START_RE = re.compile(
+    r"^v?\d+\.\d+(?:\.\d+)*(?:-[a-zA-Z0-9.]+)?(?:\b|$)",
+    re.IGNORECASE,
+)
 
-def normalize_event_title(raw_title: str) -> str:
+
+def normalize_event_title(
+    raw_title: str,
+    source_name: str | None = None,
+    primary_topic: str | None = None,
+) -> str:
     """Normalize raw item title into a clean, canonical event title.
 
     - Strips leading bracket tags: e.g. [ANN], [Release]
@@ -69,6 +78,7 @@ def normalize_event_title(raw_title: str) -> str:
     - Strips trailing vendor/blog branding: e.g. " - Google Developers Blog", " - TypeScript"
     - Strips boilerplate prefixes: e.g. "Announcing "
     - Preserves version numbers, CVE IDs, and essential project names.
+    - If title starts with a bare version (v?X.Y...), prefixes it with primary topic or source name.
     """
     if not raw_title:
         return ""
@@ -105,5 +115,25 @@ def normalize_event_title(raw_title: str) -> str:
     # 5. Clean whitespace and trim trailing separators
     title = re.sub(r"\s+", " ", title).strip(" -–—|:;,")
 
-    # Safe fallback if title was stripped too aggressively
-    return title if len(title) >= 3 else raw_title.strip()
+    if len(title) < 3:
+        title = raw_title.strip()
+
+    # 6. Prefix bare version titles (e.g. "v29.10.0" -> "Docker v29.10.0")
+    if BARE_VERSION_START_RE.match(title):
+        prefix = ""
+        if primary_topic and primary_topic.strip():
+            prefix = primary_topic.strip()
+        elif source_name and source_name.strip():
+            # Clean common generic descriptors like Releases, Blog, Updates, News
+            cleaned = re.sub(
+                r"\s+(?:Releases|Blog|Updates|Changelog|Advisories|Advisory|News)\b",
+                "",
+                source_name,
+                flags=re.IGNORECASE,
+            ).strip()
+            prefix = cleaned if cleaned else source_name.strip()
+
+        if prefix and not title.lower().startswith(prefix.lower()):
+            title = f"{prefix} {title}"
+
+    return title

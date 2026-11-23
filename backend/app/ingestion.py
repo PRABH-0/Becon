@@ -302,7 +302,19 @@ def process_raw_item(
     content_hash = raw_item.content_hash or compute_hash(raw_summary or raw_title)
     pub_dt = raw_item.published_at or datetime.now(UTC)
 
-    normalized_title = normalize_event_title(raw_title)
+    src = raw_item.source
+    src_primary_topic = (
+        src.source_topics[0].topic.name
+        if (src and src.source_topics and src.source_topics[0].topic)
+        else None
+    )
+    src_name = src.name if src else None
+
+    normalized_title = normalize_event_title(
+        raw_title,
+        source_name=src_name,
+        primary_topic=src_primary_topic,
+    )
 
     # 1. Exact Deduplication into Events
     # Check 1: exact normalized URL across all sources

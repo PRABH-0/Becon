@@ -44,6 +44,31 @@ class TestTitleNormalizer:
         assert normalize_event_title("CVE-2024-12345 in OpenSSL") == "CVE-2024-12345 in OpenSSL"
         assert normalize_event_title("Linux Kernel 6.10.5") == "Linux Kernel 6.10.5"
 
+    def test_prefix_bare_version_titles(self):
+        # Prefix with primary topic
+        assert (
+            normalize_event_title("v29.10.0", primary_topic="Docker")
+            == "Docker v29.10.0"
+        )
+        assert (
+            normalize_event_title("22.2.6", primary_topic="Angular")
+            == "Angular 22.2.6"
+        )
+        # Prefix with source name when primary topic absent
+        assert (
+            normalize_event_title("v29.10.0-rc.2", source_name="Docker CLI Releases")
+            == "Docker CLI v29.10.0-rc.2"
+        )
+        assert (
+            normalize_event_title("4.3.2", source_name="Terraform Releases")
+            == "Terraform 4.3.2"
+        )
+        # Does not duplicate if title already contains prefix
+        assert (
+            normalize_event_title("Docker v29.10.0", primary_topic="Docker")
+            == "Docker v29.10.0"
+        )
+
 
 class TestCategoryClassifier:
     def test_advisory_source_classified_as_security(self):

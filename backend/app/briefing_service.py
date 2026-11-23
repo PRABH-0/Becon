@@ -35,6 +35,7 @@ from app.models import (
     Card,
     DailyBriefing,
     Event,
+    Profession,
     Source,
     UserProfile,
 )
@@ -45,6 +46,43 @@ logger = logging.getLogger(__name__)
 BRIEFING_MIN_CARDS: int = 5
 BRIEFING_MAX_CARDS: int = 10
 WORDS_PER_MINUTE: int = 150
+
+PRERELEASE_RE = re.compile(
+    r"(?i)(?:[-._](?:rc|beta|alpha|preview|nightly|pre|next)[-._\d]*|\b(?:rc|beta|alpha|preview|nightly|pre|release\s+candidate)\b)",
+    re.IGNORECASE,
+)
+
+
+def is_prerelease(title: str, version: str | None = None) -> bool:
+    """Detect whether a title or version indicates a prerelease."""
+    if title and PRERELEASE_RE.search(title):
+        return True
+    if version and PRERELEASE_RE.search(version):
+        return True
+    return False
+
+
+def extract_base_version(title: str, version: str | None = None) -> str | None:
+    """Extract semantic base version (e.g. '29.10.0' from 'Docker v29.10.0-rc.2')."""
+    target = version or title
+    if not target:
+        return None
+    m = re.search(r"v?(\d+\.\d+(?:\.\d+)*)", target)
+    return m.group(1) if m else None
+
+
+def get_product_key(card: Card, event: Event | None, source: Source | None) -> str:
+    """Get canonical product key for an event to group releases."""
+    if event and event.event_topics:
+        for et in event.event_topics:
+            if et.is_primary and et.topic:
+                return f"topic:{et.topic.slug or et.topic.name.lower()}"
+    if source:
+        return f"source:{source.id}"
+    if event and event.canonical_title:
+        first_word = event.canonical_title.strip().split()[0].lower()
+        return f"title:{first_word}"
+    return f"card:{card.id}"
 
 
 def estimate_card_reading_time(
@@ -70,11 +108,11 @@ def calculate_card_relevance(
     user_topic_names_lower: Set[str],
     user_profession_id: uuid.UUID | None,
     user_profession_name: str | None = None,
-) -> Tuple[float, str]:
+) -> Tuple[float, str, bool, bool]:
     """Calculate personalized relevance score and match reason for (user, card).
 
     Returns:
-        (score, match_reason)
+        (score, match_reason, is_matched, card_is_prerelease)
     """
     score: float = 0.0
     matched_topic_name: str | None = None
@@ -171,7 +209,26 @@ def calculate_card_relevance(
     if is_breaking or category in ("eol", "security"):
         score += 10.0
 
-    # 6. Formulate human-readable match reason
+    # 6. Prerelease Detection & Score Penalty (-15 pts)
+    title_str = getattr(event, "canonical_title", "") or ""
+    card_is_prerelease = is_prerelease(title_str, version_matched)
+    if card_is_prerelease:
+        score -= 15.0
+
+    # 7. Relevance Floor: Matched Qualification
+    is_critical_security = bool(
+        event
+        and (event.severity_score or 0) >= 90
+        and getattr(event, "category", "") == "security"
+    )
+    is_matched = bool(
+        has_primary_match
+        or has_secondary_match
+        or profession_matched
+        or is_critical_security
+    )
+
+    # 8. Formulate human-readable match reason
     match_reason = ""
     if matched_topic_name:
         parts = [matched_topic_name]
@@ -208,7 +265,7 @@ def calculate_card_relevance(
         else:
             match_reason = "Industry intelligence"
 
-    return round(score, 1), match_reason
+    return round(score, 1), match_reason, is_matched, card_is_prerelease
 
 
 def invalidate_daily_briefing_cache(db: Session, user_id: int) -> int:
@@ -298,6 +355,17 @@ def build_daily_briefing(
             if cleaned:
                 user_topic_names_lower.add(cleaned)
 
+    has_user_preferences = bool(user_topic_ids or user_topic_names_lower or user_profession_id)
+    if not has_user_preferences:
+        # Cold start fallback: resolve default profession so cold start matches industry standard
+        default_profession = (
+            db.query(Profession).filter(Profession.slug == "software-development").first()
+            or db.query(Profession).first()
+        )
+        if default_profession:
+            user_profession_id = default_profession.id
+            user_profession_name = default_profession.name
+
     # 3. Query Candidate Published Cards
     query = (
         db.query(Card)
@@ -315,14 +383,42 @@ def build_daily_briefing(
     if not candidate_cards:
         return []
 
+    # 3b. Prerelease Handling: Exclude prereleases when a final release of the same product+version exists
+    final_releases: Set[Tuple[str, str]] = set()
+    for card in candidate_cards:
+        ev = card.event
+        raw = ev.raw_items[0] if ev and ev.raw_items else None
+        src = raw.source if raw else None
+        t_title = (ev.canonical_title if ev else "") or ""
+        if not is_prerelease(t_title):
+            b_ver = extract_base_version(t_title)
+            if b_ver:
+                pkey = get_product_key(card, ev, src)
+                final_releases.add((pkey, b_ver))
+
+    filtered_candidate_cards: List[Card] = []
+    for card in candidate_cards:
+        ev = card.event
+        raw = ev.raw_items[0] if ev and ev.raw_items else None
+        src = raw.source if raw else None
+        t_title = (ev.canonical_title if ev else "") or ""
+        if is_prerelease(t_title):
+            b_ver = extract_base_version(t_title)
+            if b_ver:
+                pkey = get_product_key(card, ev, src)
+                if (pkey, b_ver) in final_releases:
+                    # Suppress prerelease because final release exists
+                    continue
+        filtered_candidate_cards.append(card)
+
     # 4. Score Candidate Cards
     scored_candidates: List[Dict[str, Any]] = []
-    for card in candidate_cards:
+    for card in filtered_candidate_cards:
         event = card.event
         raw = event.raw_items[0] if event and event.raw_items else None
         source = raw.source if raw else None
 
-        score, match_reason = calculate_card_relevance(
+        score, match_reason, is_matched, card_is_pre = calculate_card_relevance(
             user=user,
             card=card,
             event=event,
@@ -345,34 +441,72 @@ def build_daily_briefing(
             "source": source,
             "score": score,
             "match_reason": match_reason,
+            "is_matched": is_matched,
+            "is_prerelease": card_is_pre,
             "pub_time": pub_time or datetime.min.replace(tzinfo=UTC),
         })
 
     # Sort primarily by relevance score descending, then by publication recency
     scored_candidates.sort(key=lambda x: (x["score"], x["pub_time"]), reverse=True)
 
-    # 5. Apply Source Diversity Rule (max 2 cards per source)
+    # 5. Apply Relevance Floor & Source Diversity Rule
+    # - A card needs user topic match, profession match, or (severity >= 90 & security) to qualify as matched
+    # - Cap generic/no-match cards at 2 per briefing (for users with preferences)
+    # - Max 2 cards per source
+    # - Return fewer than 5 cards rather than pad with noise
     selected_items: List[Dict[str, Any]] = []
     source_counts: Counter[uuid.UUID | str] = Counter()
-    effective_min = min(min_cards, max_cards)
+    generic_count = 0
 
     for item in scored_candidates:
         src_id = item["source"].id if item["source"] else "unknown"
-        if source_counts[src_id] < 2:
+        card_matched = item["is_matched"]
+
+        # Relevance floor: cap generic/no-match cards at 2
+        if not card_matched and has_user_preferences:
+            if generic_count >= 2:
+                continue
+
+        # Diversity rule: max 2 cards per source
+        if source_counts[src_id] >= 2:
+            continue
+
+        selected_items.append(item)
+        source_counts[src_id] += 1
+        if not card_matched:
+            generic_count += 1
+
+        if len(selected_items) >= max_cards:
+            break
+
+    # Cold start fallback: never return an empty briefing if events exist
+    if not selected_items and scored_candidates:
+        for item in scored_candidates[:min(min_cards, max_cards)]:
             selected_items.append(item)
-            source_counts[src_id] += 1
-            if len(selected_items) >= max_cards:
+
+    # 5b. Lead Story Selection:
+    # - Demote prereleases and never allow one as Lead
+    # - No generic card as Lead when a matched card exists in selected_items
+    lead_idx: int | None = None
+    has_matched = any(it["is_matched"] for it in selected_items)
+
+    if has_matched:
+        for idx, it in enumerate(selected_items):
+            if it["is_matched"] and not it["is_prerelease"]:
+                lead_idx = idx
                 break
 
-    # If diversity cap left fewer than effective_min, relax cap to reach effective_min
-    if len(selected_items) < effective_min and len(selected_items) < len(scored_candidates):
-        selected_ids = {it["card"].id for it in selected_items}
-        for item in scored_candidates:
-            if item["card"].id not in selected_ids:
-                selected_items.append(item)
-                selected_ids.add(item["card"].id)
-                if len(selected_items) >= effective_min or len(selected_items) >= max_cards:
-                    break
+    if lead_idx is None:
+        for idx, it in enumerate(selected_items):
+            if not it["is_prerelease"]:
+                lead_idx = idx
+                break
+
+    if lead_idx is not None and lead_idx > 0:
+        chosen_lead = selected_items.pop(lead_idx)
+        selected_items.insert(0, chosen_lead)
+
+    allow_lead_at_top = bool(selected_items and not selected_items[0]["is_prerelease"])
 
     # 6. Build BriefingCard DTOs with Lead Story and Reading Time
     from app.feed_service import _db_card_to_briefing_card
@@ -383,7 +517,7 @@ def build_daily_briefing(
     for rank_idx, item in enumerate(selected_items, 1):
         card = item["card"]
         event = item["event"]
-        is_lead = (rank_idx == 1)
+        is_lead = (rank_idx == 1 and allow_lead_at_top)
 
         dto = _db_card_to_briefing_card(
             db=db,

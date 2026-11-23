@@ -49,10 +49,20 @@ def run_backfill():
             source = raw_item.source if raw_item else None
             src_type = source.type if source else ""
             src_slug = source.slug if source else ""
+            src_name = source.name if source else None
+            src_primary_topic = (
+                source.source_topics[0].topic.name
+                if (source and source.source_topics and source.source_topics[0].topic)
+                else None
+            )
 
             # Normalize title
-            old_title = event.canonical_title
-            new_title = normalize_event_title(old_title)
+            old_title = (raw_item.title if raw_item and raw_item.title else event.canonical_title)
+            new_title = normalize_event_title(
+                old_title,
+                source_name=src_name,
+                primary_topic=src_primary_topic,
+            )
             event.canonical_title = new_title
 
             # Category & breaking

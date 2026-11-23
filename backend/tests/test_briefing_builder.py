@@ -435,7 +435,7 @@ class TestProfileDivergence:
             k8s_src = _create_source(db, "Kubernetes Blog", "k8s-blog", profession_id=devops_prof.id)
 
             # 4. Create distinct cards
-            _, card_dotnet_1 = _create_event_and_card(db, dotnet_src, ".NET 10 Preview Released", severity=50, topic=dotnet_topic)
+            _, card_dotnet_1 = _create_event_and_card(db, dotnet_src, ".NET 10 Official Release", severity=50, topic=dotnet_topic)
             _, card_dotnet_2 = _create_event_and_card(db, dotnet_src, "ASP.NET Core Performance", severity=40, topic=dotnet_topic)
             _, card_k8s_1 = _create_event_and_card(db, k8s_src, "Kubernetes 1.32 Security Hardening", severity=50, topic=k8s_topic)
             _, card_k8s_2 = _create_event_and_card(db, k8s_src, "Horizontal Pod Autoscaler Updates", severity=40, topic=k8s_topic)
@@ -481,3 +481,183 @@ class TestProfileDivergence:
             assert briefing_se[0].id != briefing_devops[0].id
         finally:
             db.close()
+
+
+class TestBriefingQualityRules:
+    def test_briefing_smaller_than_5_is_valid(self):
+        """Briefing returns fewer than 5 cards rather than padding with noise."""
+        db = app_db.SessionLocal()
+        try:
+            user = UserProfile(id=401, name="Focused User", is_anonymous=False)
+            db.add(user)
+            topic = FocusTopic(
+                id=uuid.uuid4(),
+                name="Rust",
+                slug=f"rust-{uuid.uuid4().hex[:6]}",
+                kind="language",
+                is_active=True,
+            )
+            db.add(topic)
+            db.flush()
+            db.add(UserFocusTopic(user_id=user.id, topic_id=topic.id))
+
+            src = _create_source(db, "Rust Source", "rust-src")
+            # Only 2 relevant cards exist
+            _, c1 = _create_event_and_card(db, src, "Rust 1.82 Released", severity=60, topic=topic)
+            _, c2 = _create_event_and_card(db, src, "Rust Borrow Checker Improvements", severity=40, topic=topic)
+            db.commit()
+
+            briefing = build_daily_briefing(db=db, user=user, max_cards=10, min_cards=5)
+
+            # Briefing has fewer than 5 cards (< 5) due to relevance floor (max 2 generic + 2 matched)
+            assert len(briefing) < 5
+            card_ids = [b.id for b in briefing]
+            assert str(c1.id) in card_ids
+            assert str(c2.id) in card_ids
+        finally:
+            db.close()
+
+    def test_rc_suppressed_when_final_exists(self):
+        """Prerelease (rc) is excluded when a final release of the same product+version exists."""
+        db = app_db.SessionLocal()
+        try:
+            user = UserProfile(id=402, name="Docker Fan", is_anonymous=False)
+            db.add(user)
+            topic = FocusTopic(
+                id=uuid.uuid4(),
+                name="Docker",
+                slug=f"docker-{uuid.uuid4().hex[:6]}",
+                kind="technology",
+                is_active=True,
+            )
+            db.add(topic)
+            db.flush()
+            db.add(UserFocusTopic(user_id=user.id, topic_id=topic.id))
+
+            src = _create_source(db, "Docker CLI Releases", "docker-cli")
+            # Final release and RC for the same version
+            _, card_final = _create_event_and_card(
+                db, src, "Docker v29.10.0", severity=60, topic=topic
+            )
+            _, card_rc = _create_event_and_card(
+                db, src, "Docker v29.10.0-rc.2", severity=65, topic=topic
+            )
+            db.commit()
+
+            briefing = build_daily_briefing(db=db, user=user, max_cards=5)
+
+            card_ids = [b.id for b in briefing]
+            assert str(card_final.id) in card_ids
+            # Prerelease must be completely suppressed
+            assert str(card_rc.id) not in card_ids
+        finally:
+            db.close()
+
+    def test_no_generic_card_as_lead_when_matched_card_exists(self):
+        """Matched card is selected as Lead Story over generic cards."""
+        db = app_db.SessionLocal()
+        try:
+            user = UserProfile(id=403, name="TypeScript Dev", is_anonymous=False)
+            db.add(user)
+            topic = FocusTopic(
+                id=uuid.uuid4(),
+                name="TypeScript",
+                slug=f"ts-{uuid.uuid4().hex[:6]}",
+                kind="language",
+                is_active=True,
+            )
+            db.add(topic)
+            db.flush()
+            db.add(UserFocusTopic(user_id=user.id, topic_id=topic.id))
+
+            ts_src = _create_source(db, "TS Source", "ts-src")
+            generic_src = _create_source(db, "Generic Source", "gen-src")
+
+            # TS card has moderate severity (30)
+            _, card_ts = _create_event_and_card(
+                db, ts_src, "TypeScript 5.6 Released", severity=30, topic=topic
+            )
+            # Generic card has higher severity (75), but no topic/profession match
+            _, card_gen = _create_event_and_card(
+                db, generic_src, "Apache Axis Vulnerability", severity=75, category="security"
+            )
+            db.commit()
+
+            briefing = build_daily_briefing(db=db, user=user, max_cards=5)
+
+            # TS card must be Lead, NOT generic
+            assert briefing[0].id == str(card_ts.id)
+            assert briefing[0].is_lead is True
+            assert "TypeScript" in briefing[0].match_reason
+        finally:
+            db.close()
+
+    def test_prerelease_never_lead(self):
+        """Prereleases receive score penalty and can never be assigned is_lead=True."""
+        db = app_db.SessionLocal()
+        try:
+            user = UserProfile(id=404, name="Angular Tester", is_anonymous=False)
+            db.add(user)
+            topic = FocusTopic(
+                id=uuid.uuid4(),
+                name="Angular",
+                slug=f"ng-{uuid.uuid4().hex[:6]}",
+                kind="technology",
+                is_active=True,
+            )
+            db.add(topic)
+            db.flush()
+            db.add(UserFocusTopic(user_id=user.id, topic_id=topic.id))
+
+            src = _create_source(db, "Angular Feed", "ng-feed")
+            # Only an RC exists
+            _, card_rc = _create_event_and_card(
+                db, src, "Angular 22.4.0-rc.1", severity=80, topic=topic
+            )
+            db.commit()
+
+            briefing = build_daily_briefing(db=db, user=user, max_cards=5)
+
+            rc_card = next(b for b in briefing if b.id == str(card_rc.id))
+            # Prerelease cannot be Lead
+            assert rc_card.is_lead is False
+            assert rc_card.priority != "lead"
+        finally:
+            db.close()
+
+    def test_generic_cards_capped_at_2(self):
+        """A user with preferences receives at most 2 generic/unmatched cards."""
+        db = app_db.SessionLocal()
+        try:
+            user = UserProfile(id=405, name="Vue Fan", is_anonymous=False)
+            db.add(user)
+            topic = FocusTopic(
+                id=uuid.uuid4(),
+                name="Vue",
+                slug=f"vue-{uuid.uuid4().hex[:6]}",
+                kind="technology",
+                is_active=True,
+            )
+            db.add(topic)
+            db.flush()
+            db.add(UserFocusTopic(user_id=user.id, topic_id=topic.id))
+
+            src_vue = _create_source(db, "Vue Source", "vue-src")
+            src_gen = _create_source(db, "Generic Source", "gen-src-multi")
+
+            # 1 matched card
+            _create_event_and_card(db, src_vue, "Vue 3.5 Released", severity=50, topic=topic)
+            # 5 generic cards (severity < 90, so not critical security)
+            for i in range(5):
+                _create_event_and_card(
+                    db, src_gen, f"Generic Signal {i}", severity=40 + i, category="release"
+                )
+            db.commit()
+
+            briefing = build_daily_briefing(db=db, user=user, max_cards=10)
+
+            # Total = 1 matched + at most 2 generic = 3 cards
+            assert len(briefing) == 3
+        finally:
+            db.close()
+
