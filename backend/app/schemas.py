@@ -38,6 +38,9 @@ class BriefingCard(BaseModel):
     )
     published_at: str | None = Field(default=None, description="Original publication date or human-readable timestamp")
     card_content: BriefingCardContent
+    is_lead: bool = Field(default=False, description="True for the designated lead story")
+    reading_time_minutes: int | None = Field(default=None, description="Estimated reading time in minutes")
+    match_reason: str | None = Field(default=None, description="Human-readable editorial relevance reason")
 
 
 class UserProfileBase(BaseModel):

@@ -53,6 +53,9 @@ interface BriefingCard {
   priority?: "lead" | "major" | "brief" | "watch" | "spotlight";
   card_content: BriefingCardContent;
   deep_detail?: DeepDetail;
+  is_lead?: boolean;
+  reading_time_minutes?: number;
+  match_reason?: string;
 }
 
 function computeBentoSpans(total: number): number[] {

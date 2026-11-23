@@ -21,6 +21,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.ai_service import ai_match_topics
+from app.briefing_service import invalidate_daily_briefing_cache
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user, sanitize_https_avatar_url
@@ -456,6 +457,7 @@ def get_briefings(
         allow_ingestion=is_authenticated_non_guest,
         allow_variant_generation=is_authenticated_non_guest,
         user_key=str(current_user.id) if current_user else None,
+        user=current_user,
     )
 
 
@@ -735,6 +737,7 @@ def update_profile(
         if key != "id":
             setattr(current_user, key, value)
     db.commit()
+    invalidate_daily_briefing_cache(db, current_user.id)
     db.refresh(current_user)
     return current_user
 
@@ -779,5 +782,6 @@ def onboarding_chat_endpoint(
         if response.extracted_data.interests:
             current_user.interests = response.extracted_data.interests
         db.commit()
+        invalidate_daily_briefing_cache(db, current_user.id)
 
     return response

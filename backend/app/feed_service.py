@@ -19,6 +19,7 @@ from app.models import (
     Event,
     EventTopic,
     FocusTopic,
+    UserProfile,
 )
 from app.schemas import ActionGuidance, BriefingCard, BriefingCardContent
 
@@ -280,6 +281,10 @@ def _db_card_to_briefing_card(
         else datetime.now().strftime("%b %d, %Y")
     )
 
+    wh_text = " ".join(card.what_happened) if isinstance(card.what_happened, list) else str(card.what_happened)
+    calc_text = f"{wh_text} {card.why_it_matters} {how_it_affects_you} {action_guidance}"
+    reading_time = max(1, round(len(re.findall(r"\w+", calc_text)) / 150))
+
     return BriefingCard(
         id=str(card.id),
         rank=rank,
@@ -291,6 +296,8 @@ def _db_card_to_briefing_card(
         image_url=image_url,
         is_real_image=is_real_image,
         published_at=pub_at,
+        is_lead=(rank == 1),
+        reading_time_minutes=reading_time,
         card_content=BriefingCardContent(
             what_happened=card.what_happened if isinstance(card.what_happened, list) else [str(card.what_happened)],
             why_it_matters=card.why_it_matters,
@@ -327,11 +334,14 @@ def get_live_briefings(
     allow_ingestion: bool = False,
     allow_variant_generation: bool = False,
     user_key: str | None = None,
+    user: UserProfile | None = None,
 ) -> List[BriefingCard]:
     """Retrieve personalized Action Cards from the database.
 
     Features:
     - Zero in-memory cache: All cards, variants, and events persist in the database.
+    - Relevance ranking and daily briefing builder via `app.briefing_service`.
+    - DB caching per user per UTC day in `daily_briefings` (invalidated on profile update).
     - Unauthenticated / guest callers read persisted cards only (allow_ingestion=False,
       allow_variant_generation=False) and never trigger ingestion or Gemini calls.
     - Stale-while-revalidate: Triggers background refresh for authenticated non-guests
@@ -354,6 +364,7 @@ def get_live_briefings(
                 allow_ingestion=allow_ingestion,
                 allow_variant_generation=allow_variant_generation,
                 user_key=user_key,
+                user=user,
             )
 
     from app.ingestion import run_ingestion_pipeline
@@ -390,71 +401,38 @@ def get_live_briefings(
                     logger.info("Scheduling background re-ingestion (card age: %.1fs > TTL %ds)...", age, settings.FEED_CACHE_TTL_SECONDS)
                     background_tasks.add_task(_trigger_background_ingest_safely, user_interests)
 
-    # 3. Build query filtered by user focus topics if provided
-    base_query = (
-        db.query(Card)
-        .join(Event, Card.event_id == Event.id)
-        .filter(Card.status == "published")
-    )
-    if settings.ENVIRONMENT == "production":
-        base_query = base_query.filter(
-            Card.model_name != "fallback-heuristic",
-            Card.validation_status == "passed",
-        )
+    # 3. Build relevance-ranked daily briefing
+    from app.briefing_service import build_daily_briefing
 
-    topics_list = [t.strip() for t in user_interests.split(",") if t.strip()]
-    if topics_list:
-        topic_clauses = []
-        for t in topics_list:
-            clean_t = t.lower()
-            topic_clauses.append(Event.canonical_title.ilike(f"%{clean_t}%"))
-            topic_clauses.append(Card.why_it_matters.ilike(f"%{clean_t}%"))
-            topic_clauses.append(
-                Event.event_topics.any(
-                    EventTopic.topic.has(
-                        or_(
-                            func.lower(FocusTopic.name).contains(clean_t),
-                            func.lower(FocusTopic.slug).contains(clean_t),
-                        )
-                    )
-                )
-            )
-        matched_query = base_query.filter(or_(*topic_clauses))
-        if matched_query.count() > 0:
-            query = matched_query
-        else:
-            query = base_query
+    if scope == "top":
+        max_c = 5
+    elif scope == "remaining":
+        max_c = 5 + (limit if limit else 12)
+    elif offset is not None:
+        max_c = offset + limit
     else:
-        query = base_query
+        max_c = page * limit
 
-    query = query.order_by(Event.published_at.desc(), Card.created_at.desc())
+    all_cards = build_daily_briefing(
+        db=db,
+        user=user,
+        user_interests=user_interests,
+        user_role=user_role,
+        force_refresh=force_refresh,
+        max_cards=max_c,
+        allow_variant_generation=allow_variant_generation,
+        user_key=user_key,
+    )
 
     # 4. Apply scope / pagination
     if scope == "top":
-        target_cards = query.limit(5).all()
-        start_rank = 1
+        return all_cards[:5]
     elif scope == "remaining":
-        target_cards = query.offset(5).limit(limit if limit else 12).all()
-        start_rank = 6
+        rem_limit = limit if limit else 12
+        return all_cards[5:5 + rem_limit]
     elif offset is not None:
-        target_cards = query.offset(offset).limit(limit).all()
-        start_rank = offset + 1
+        return all_cards[offset:offset + limit]
     else:
         req_offset = (page - 1) * limit
-        target_cards = query.offset(req_offset).limit(limit).all()
-        start_rank = req_offset + 1
-
-    results: List[BriefingCard] = []
-    for idx, c in enumerate(target_cards):
-        card_dto = _db_card_to_briefing_card(
-            db=db,
-            card=c,
-            rank=start_rank + idx,
-            user_role=user_role,
-            allow_variant_generation=allow_variant_generation,
-            user_key=user_key,
-        )
-        results.append(card_dto)
-
-    return results
+        return all_cards[req_offset:req_offset + limit]
 
