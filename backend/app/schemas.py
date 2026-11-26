@@ -452,3 +452,17 @@ class SynthesisStatusResponse(BaseModel):
     quota_remaining: int
 
 
+class MetricsEventCreate(BaseModel):
+    name: Literal["briefing_viewed", "card_opened", "card_saved", "feedback_given", "source_clicked"] = Field(
+        ..., description="Telemetry event name"
+    )
+    properties: dict[str, Any] = Field(default_factory=dict, description="Metadata properties (no PII)")
+    session_id: str | None = Field(default=None, max_length=100, description="Optional anonymous session identifier")
+
+
+class MetricsEventResponse(BaseModel):
+    status: str = "recorded"
+    event_id: str
+
+
+

@@ -18,6 +18,7 @@ import { BriefingCard } from "@/types/card";
 import { ActionBadge } from "./cards/ActionBadge";
 import { ReportModal } from "./ReportModal";
 import { apiFetch } from "@/lib/api";
+import { recordMetric } from "@/lib/metrics";
 
 interface CardDrawerProps {
   card: BriefingCard | null;
@@ -132,16 +133,19 @@ export function CardDrawer({ card, isOpen, onClose }: CardDrawerProps) {
     }
   }, [isOpen, onClose]);
 
-  // 2. Lock body scroll while open
+  // 2. Lock body scroll while open & record telemetry
   useEffect(() => {
     if (isOpen) {
+      if (card) {
+        recordMetric("card_opened", { card_id: card.id, title: card.title });
+      }
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = originalOverflow;
       };
     }
-  }, [isOpen]);
+  }, [isOpen, card]);
 
   if (!isOpen || !card) return null;
 
@@ -417,6 +421,9 @@ export function CardDrawer({ card, isOpen, onClose }: CardDrawerProps) {
             href={card.source_url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => {
+              recordMetric("source_clicked", { card_id: card.id, source_url: card.source_url });
+            }}
             className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-950 dark:bg-emerald-600 hover:bg-slate-800 dark:hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
           >
             <span>Read original source</span>

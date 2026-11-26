@@ -4,6 +4,7 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import (
     BackgroundTasks,
@@ -34,6 +35,7 @@ from app.models import (
     Delivery,
     ErrorReport,
     FocusTopic,
+    MetricsEvent,
     Profession,
     SavedCard,
     Source,
@@ -59,6 +61,8 @@ from app.schemas import (
     IngestCounts,
     IngestResponse,
     MatchTopicsRequest,
+    MetricsEventCreate,
+    MetricsEventResponse,
     ProfessionResponse,
     SavedCardsResponse,
     SourceHealthItem,
@@ -80,6 +84,23 @@ from app.supabase_auth import (
 setup_logging(environment=settings.ENVIRONMENT, log_level=settings.LOG_LEVEL)
 log_verification_modes()
 logger = logging.getLogger("becon.api")
+
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.ENVIRONMENT,
+            integrations=[FastApiIntegration()],
+            traces_sample_rate=0.1 if settings.ENVIRONMENT == "production" else 1.0,
+        )
+        logger.info("Sentry monitoring initialized successfully")
+    except ImportError:
+        logger.warning("SENTRY_DSN configured but sentry-sdk package is not installed; skipping Sentry initialization")
+    except Exception as sentry_err:
+        logger.warning("Failed to initialize Sentry: %s", sentry_err)
 
 REQUEST_ID_REGEX = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_BRIEFING_INTEREST_TOPICS = 10
@@ -108,6 +129,7 @@ def validate_interests_param(interests: str) -> str:
                 detail=f"Each interest topic must be at most {MAX_BRIEFING_INTEREST_TOPIC_LEN} characters.",
             )
     return ", ".join(topics)
+
 
 AVAILABLE_TOPICS = [
     "AI & Generative Models",
@@ -411,24 +433,9 @@ def get_synthesis_status(
         .scalar()
         or 0
     )
-    flagged_total = (
-        db.query(func.count(Card.id))
-        .filter(Card.validation_status == "flagged")
-        .scalar()
-        or 0
-    )
-    unvalidated_total = (
-        db.query(func.count(Card.id))
-        .filter(Card.validation_status == "unvalidated")
-        .scalar()
-        or 0
-    )
-    synthesized_total = (
-        db.query(func.count(Card.id))
-        .filter(Card.model_name != "fallback-heuristic")
-        .scalar()
-        or 0
-    )
+    flagged_total = db.query(func.count(Card.id)).filter(Card.validation_status == "flagged").scalar() or 0
+    unvalidated_total = db.query(func.count(Card.id)).filter(Card.validation_status == "unvalidated").scalar() or 0
+    synthesized_total = db.query(func.count(Card.id)).filter(Card.model_name != "fallback-heuristic").scalar() or 0
     quota_remaining = rate_limiter.get_global_gemini_remaining()
 
     return SynthesisStatusResponse(
@@ -439,7 +446,6 @@ def get_synthesis_status(
         unvalidated_total=unvalidated_total,
         quota_remaining=quota_remaining,
     )
-
 
 
 @app.get(
@@ -972,14 +978,17 @@ def save_card(
     if not card:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
 
-    existing = (
-        db.query(SavedCard)
-        .filter(SavedCard.user_id == current_user.id, SavedCard.card_id == card_uuid)
-        .first()
-    )
+    existing = db.query(SavedCard).filter(SavedCard.user_id == current_user.id, SavedCard.card_id == card_uuid).first()
     if not existing:
         saved_entry = SavedCard(user_id=current_user.id, card_id=card_uuid)
         db.add(saved_entry)
+        db.add(
+            MetricsEvent(
+                user_id=current_user.id,
+                name="card_saved",
+                properties={"card_id": str(card_uuid)},
+            )
+        )
         db.commit()
 
     return {"saved": True, "card_id": str(card_uuid)}
@@ -1005,11 +1014,7 @@ def unsave_card(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
 
-    existing = (
-        db.query(SavedCard)
-        .filter(SavedCard.user_id == current_user.id, SavedCard.card_id == card_uuid)
-        .first()
-    )
+    existing = db.query(SavedCard).filter(SavedCard.user_id == current_user.id, SavedCard.card_id == card_uuid).first()
     if existing:
         db.delete(existing)
         db.commit()
@@ -1035,11 +1040,7 @@ def get_saved_cards(
     """Returns a paginated list of cards saved by the authenticated user in reverse chronological order."""
     from app.feed_service import _db_card_to_briefing_card
 
-    query = (
-        db.query(SavedCard)
-        .filter(SavedCard.user_id == current_user.id)
-        .order_by(SavedCard.created_at.desc())
-    )
+    query = db.query(SavedCard).filter(SavedCard.user_id == current_user.id).order_by(SavedCard.created_at.desc())
     total = query.count()
     offset_val = (page - 1) * limit
     saved_items = query.offset(offset_val).limit(limit).all()
@@ -1123,6 +1124,13 @@ def submit_card_feedback(
         else:
             existing.value = val_int
             existing.updated_at = datetime.now(UTC)
+            db.add(
+                MetricsEvent(
+                    user_id=current_user.id,
+                    name="feedback_given",
+                    properties={"card_id": str(card_uuid), "value": payload.value},
+                )
+            )
             db.commit()
             return {"feedback": payload.value, "card_id": str(card_uuid)}
     else:
@@ -1132,8 +1140,52 @@ def submit_card_feedback(
             value=val_int,
         )
         db.add(new_feedback)
+        db.add(
+            MetricsEvent(
+                user_id=current_user.id,
+                name="feedback_given",
+                properties={"card_id": str(card_uuid), "value": payload.value},
+            )
+        )
         db.commit()
         return {"feedback": payload.value, "card_id": str(card_uuid)}
+
+
+@app.post(
+    "/api/metrics/event",
+    tags=["Telemetry"],
+    summary="Record product telemetry event",
+    response_model=MetricsEventResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_metrics_event(
+    payload: MetricsEventCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_optional_user),
+    _: None = Depends(enforce_public_rate_limit),
+):
+    """
+    Records an anonymous or authenticated product telemetry event (write-only).
+    Sanitizes properties and rejects personal data.
+    """
+    sanitized_props: dict[str, Any] = {}
+    for k, v in payload.properties.items():
+        clean_k = str(k)[:64]
+        if isinstance(v, (str, int, float, bool)):
+            sanitized_props[clean_k] = str(v)[:500] if isinstance(v, str) else v
+        elif v is None:
+            sanitized_props[clean_k] = None
+
+    metric = MetricsEvent(
+        user_id=current_user.id if current_user else None,
+        session_id=payload.session_id,
+        name=payload.name,
+        properties=sanitized_props,
+    )
+    db.add(metric)
+    db.commit()
+    return MetricsEventResponse(status="recorded", event_id=str(metric.id))
 
 
 @app.post(
@@ -1404,5 +1456,3 @@ def preview_digest(
     from fastapi.responses import Response
 
     return Response(content=html_content, media_type="text/html")
-
-

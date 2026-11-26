@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS: int = Field(default=200, ge=32, le=2048)
     # Comma-separated trusted reverse proxy IPs allowed to supply X-Forwarded-For (empty = ignore XFF)
     TRUSTED_PROXIES: str = Field(default="")
+    # Optional Sentry DSN for production error monitoring (Task S5)
+    SENTRY_DSN: str | None = Field(default=None)
 
     # --- Email Digest & Resend Delivery (Task F7) ---
     RESEND_API_KEY: str | None = Field(default=None)

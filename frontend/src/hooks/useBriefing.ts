@@ -6,6 +6,7 @@ import { BriefingCard } from "@/types/card";
 import { useAuth } from "@/context/AuthContext";
 import { useLoader } from "@/context/LoadingContext";
 import { apiFetch } from "@/lib/api";
+import { recordMetric } from "@/lib/metrics";
 import { syncIdentityCache } from "@/lib/cache";
 import { resolveUserIdentity } from "@/lib/identity";
 
@@ -162,6 +163,7 @@ export function useBriefing() {
             rank: c.rank ?? index + 1,
           }));
           setBriefings(mappedTop);
+          recordMetric("briefing_viewed", { count: mappedTop.length, scope: "top" });
           try {
             localStorage.setItem(getBriefingsCacheKey(user?.id), JSON.stringify(mappedTop));
           } catch {}
