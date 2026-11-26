@@ -360,4 +360,27 @@ describe("AuthCallbackPage (/auth/callback)", () => {
       expect(mockReplace).toHaveBeenCalledWith("/");
     });
   });
+
+  it("API failure: when /api/me fails, shows error card with Retry and Back to login instead of redirecting", async () => {
+    mockSearchParams = new URLSearchParams("");
+    window.location.hash = "#";
+
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: createMockSession("existing-token", "u-error") },
+      error: null,
+    });
+    vi.spyOn(apiModule, "getMe").mockReset();
+    vi.spyOn(apiModule, "getMe").mockRejectedValue(new Error("Network Error"));
+
+    render(<AuthCallbackPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Authentication Error")).toBeInTheDocument();
+      expect(screen.getByText(/Failed to load user profile/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /back to login/i })).toBeInTheDocument();
+    });
+
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
 });

@@ -106,7 +106,7 @@ export default function ProfilePage() {
   const [timezone, setTimezone] = useState("UTC");
   const router = useRouter();
   const { showLoader, hideLoader } = useLoader();
-  const { isAnonymous, signOut, user, me } = useAuth();
+  const { isAnonymous, signOut, user, me, refreshMe } = useAuth();
   const authSnapshotRef = useRef({ isAnonymous, user, me });
   useEffect(() => {
     authSnapshotRef.current = { isAnonymous, user, me };
@@ -383,6 +383,9 @@ export default function ProfilePage() {
         body: JSON.stringify(profileData),
       });
       syncIdentityCache(isAnonymous ? null : finalName, headerIdentity.avatarUrl);
+      if (refreshMe) {
+        await refreshMe();
+      }
       // Pre-warm and regenerate personalized briefing cards with the new focus areas
       const params = new URLSearchParams({
         role: finalRole,
@@ -392,6 +395,7 @@ export default function ProfilePage() {
       });
       apiFetch(`/api/briefings?${params.toString()}`).catch(() => {});
 
+      setSaveSuccess(true);
       // Launch home page so AI delivers the customized content!
       setTimeout(() => {
         hideLoader();
@@ -400,10 +404,7 @@ export default function ProfilePage() {
     } catch (err) {
       console.error("Failed to save profile to backend", err);
       hideLoader();
-      setSaveSuccess(true);
-      setTimeout(() => {
-        setSaveSuccess(false);
-      }, 4000);
+      setValidationError("Failed to save profile. Please check your connection and try again.");
     }
   };
 

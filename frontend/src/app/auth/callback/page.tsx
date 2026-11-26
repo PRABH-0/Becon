@@ -117,7 +117,10 @@ function CallbackHandler() {
             if (!mounted) return;
             if (timer) clearTimeout(timer);
             console.error("Failed to fetch /api/me in callback:", err);
-            router.replace("/profile?setup=true");
+            setStatus("error");
+            setErrorMessage(
+              "Failed to load user profile. Please check your connection and try again."
+            );
             return;
           }
         }
@@ -201,7 +204,10 @@ function CallbackHandler() {
           if (!mounted) return;
           if (timer) clearTimeout(timer);
           console.error("Failed to fetch /api/me in callback:", err);
-          router.replace("/profile?setup=true");
+          setStatus("error");
+          setErrorMessage(
+            "Failed to load user profile. Please check your connection and try again."
+          );
           return;
         }
       }

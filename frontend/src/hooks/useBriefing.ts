@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { BriefingCard } from "@/types/card";
 import { useAuth } from "@/context/AuthContext";
 import { useLoader } from "@/context/LoadingContext";
@@ -61,7 +60,6 @@ export function getDailyBeconHeading(interests?: string[], role?: string): strin
 export function useBriefing() {
   const { user, me, isAnonymous, signOut } = useAuth();
   const { hideLoader } = useLoader();
-  const router = useRouter();
 
   const [dailyHeading, setDailyHeading] = useState<string>(() => getDailyBeconHeading());
   const [briefings, setBriefings] = useState<BriefingCard[]>([]);
@@ -226,12 +224,6 @@ export function useBriefing() {
   useEffect(() => {
     if (!user) return;
 
-    if (me && !me.has_completed_setup) {
-      hideLoader();
-      router.push("/profile?setup=true");
-      return;
-    }
-
     const fetchProfileAndBriefings = async () => {
       hideLoader();
       try {
@@ -276,15 +268,7 @@ export function useBriefing() {
             setCustomPrompt(profile.customPrompt);
           }
 
-          if (
-            (!profile.interests || profile.interests.trim().length === 0) &&
-            (!profile.role || profile.role.trim().length === 0)
-          ) {
-            hideLoader();
-            router.push("/profile?setup=true");
-            return;
-          }
-
+          // Incomplete profile: fetch default cold-start briefings without bouncing to setup
           fetchAllBriefings(false, profile);
         }
       } catch (err) {
@@ -294,7 +278,7 @@ export function useBriefing() {
     };
 
     fetchProfileAndBriefings();
-  }, [user, me, isAnonymous, router, hideLoader, fetchAllBriefings]);
+  }, [user, me, isAnonymous, hideLoader, fetchAllBriefings]);
 
   const todayDate = useMemo(() => {
     return new Date().toLocaleDateString("en-US", {
