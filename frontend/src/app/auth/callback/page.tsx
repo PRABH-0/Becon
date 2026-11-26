@@ -1,48 +1,119 @@
 "use client";
 
-import React, { Suspense, useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowRight, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMe } from "@/lib/api";
 import { getSafeRedirectUrl } from "@/lib/redirect";
 
+export const CALLBACK_TIMEOUT_MS = 10000;
+export const API_TIMEOUT_MS = 5000;
+
+// Track in-flight PKCE code exchanges across React Strict Mode mount/remount
+let pendingCodeExchange: {
+  code: string;
+  promise: Promise<{ error: Error | null }>;
+} | null = null;
+
+export function resetCodeExchangeLock(): void {
+  pendingCodeExchange = null;
+}
+
+export function extractUrlError(searchParams: URLSearchParams): { code: string; message: string } | null {
+  const errorParam = searchParams.get("error");
+  const errorDesc = searchParams.get("error_description");
+  if (errorParam || errorDesc) {
+    return {
+      code: errorParam || "auth_error",
+      message: errorDesc
+        ? decodeURIComponent(errorDesc)
+        : "The authentication link is invalid or has expired.",
+    };
+  }
+
+  if (typeof window !== "undefined" && window.location.hash) {
+    const rawHash = window.location.hash.startsWith("#")
+      ? window.location.hash.slice(1)
+      : window.location.hash;
+    try {
+      const hashParams = new URLSearchParams(rawHash);
+      const hError = hashParams.get("error");
+      const hDesc = hashParams.get("error_description");
+      if (hError || hDesc) {
+        return {
+          code: hError || "auth_error",
+          message: hDesc
+            ? decodeURIComponent(hDesc)
+            : "The authentication link is invalid or has expired.",
+        };
+      }
+    } catch {
+      // Ignore hash parse errors
+    }
+  }
+
+  return null;
+}
+
 function CallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const hasRunRef = useRef(false);
 
   const [status, setStatus] = useState<"processing" | "error">("processing");
   const [errorMessage, setErrorMessage] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
+
+  const handleRetry = useCallback(() => {
+    pendingCodeExchange = null;
+    setStatus("processing");
+    setErrorMessage("");
+    setRetryKey((k) => k + 1);
+  }, []);
 
   useEffect(() => {
-    if (hasRunRef.current) return;
-    hasRunRef.current = true;
+    let mounted = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    // Hard 10-second safety timeout: abort endless spinner and show error state
+    timer = setTimeout(() => {
+      if (!mounted) return;
+      setStatus("error");
+      setErrorMessage(
+        "Authentication verification timed out after 10 seconds. We were unable to confirm your session in time. Please try again or return to sign in."
+      );
+    }, CALLBACK_TIMEOUT_MS);
 
     const handleCallback = async () => {
-      // 1. Check for errors returned in query params
-      const errorParam = searchParams.get("error");
-      const errorDesc = searchParams.get("error_description");
-      if (errorParam || errorDesc) {
+      // 1. Check for errors returned in query params or URL hash fragments
+      const urlError = extractUrlError(searchParams);
+      if (urlError) {
+        if (!mounted) return;
+        if (timer) clearTimeout(timer);
         setStatus("error");
-        setErrorMessage(
-          errorDesc
-            ? decodeURIComponent(errorDesc)
-            : "The authentication link is invalid or has expired."
-        );
+        setErrorMessage(urlError.message);
         return;
       }
 
-      // 2. PKCE code exchange if ?code= is present
+      // 2. PKCE code exchange if ?code= is present (deduplicated across Strict Mode mounts)
       const code = searchParams.get("code");
       if (code) {
         try {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!pendingCodeExchange || pendingCodeExchange.code !== code) {
+            pendingCodeExchange = {
+              code,
+              promise: supabase.auth.exchangeCodeForSession(code).then(({ error }) => ({ error })),
+            };
+          }
+
+          const { error } = await pendingCodeExchange.promise;
           if (error) {
-            // Check if user actually already has an active session (e.g. React StrictMode double run)
+            // Check if user already has an active session (e.g. concurrent or prior exchange)
             const { data: sessionData } = await supabase.auth.getSession();
             if (!sessionData.session) {
+              if (!mounted) return;
+              if (timer) clearTimeout(timer);
               setStatus("error");
               setErrorMessage(
                 error.message.toLowerCase().includes("pkce") ||
@@ -54,6 +125,8 @@ function CallbackHandler() {
             }
           }
         } catch (err) {
+          if (!mounted) return;
+          if (timer) clearTimeout(timer);
           setStatus("error");
           setErrorMessage(err instanceof Error ? err.message : "Authentication failed.");
           return;
@@ -70,21 +143,30 @@ function CallbackHandler() {
       }
 
       if (!activeSession) {
-        // Wait briefly for potential auth state change (e.g. hash fragments)
+        // Wait briefly for potential auth state change / hash fragment detection (e.g. 500ms)
         await new Promise((resolve) => setTimeout(resolve, 500));
-        const { data } = await supabase.auth.getSession();
-        activeSession = data.session;
+        if (!mounted) return;
+        try {
+          const { data } = await supabase.auth.getSession();
+          activeSession = data.session;
+        } catch {
+          activeSession = null;
+        }
       }
 
       if (!activeSession) {
+        if (!mounted) return;
+        if (timer) clearTimeout(timer);
         setStatus("error");
         setErrorMessage("Unable to establish an authenticated session. Please try signing in again.");
         return;
       }
 
-      // 4. Fetch profile setup status via GET /api/me
+      // 4. Fetch profile setup status via GET /api/me with timeout
       try {
-        const me = await getMe();
+        const me = await getMe({ timeoutMs: API_TIMEOUT_MS });
+        if (!mounted) return;
+        if (timer) clearTimeout(timer);
         const nextParam = searchParams.get("next");
         if (!me.has_completed_setup) {
           router.replace("/profile?setup=true");
@@ -93,14 +175,21 @@ function CallbackHandler() {
           router.replace(destination);
         }
       } catch (err) {
-        // If /api/me fails, still navigate forward to setup
+        // If /api/me fails or times out, safely navigate forward to setup
+        if (!mounted) return;
+        if (timer) clearTimeout(timer);
         console.error("Failed to fetch /api/me in callback:", err);
         router.replace("/profile?setup=true");
       }
     };
 
     handleCallback();
-  }, [searchParams, router]);
+
+    return () => {
+      mounted = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [searchParams, router, retryKey]);
 
   if (status === "error") {
     return (
@@ -117,12 +206,20 @@ function CallbackHandler() {
               {errorMessage}
             </p>
           </div>
-          <div className="pt-2">
+          <div className="flex flex-col sm:flex-row gap-2 pt-2 w-full">
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="inline-flex items-center justify-center gap-2 flex-1 py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-100 font-semibold text-xs transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Try again</span>
+            </button>
             <Link
               href="/login"
-              className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-slate-950 dark:bg-emerald-600 hover:bg-slate-800 dark:hover:bg-emerald-500 text-white font-semibold text-xs transition-colors"
+              className="inline-flex items-center justify-center gap-2 flex-1 py-2.5 px-4 rounded-xl bg-slate-950 dark:bg-emerald-600 hover:bg-slate-800 dark:hover:bg-emerald-500 text-white font-semibold text-xs transition-colors"
             >
-              <span>Return to Sign In</span>
+              <span>Back to login</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>

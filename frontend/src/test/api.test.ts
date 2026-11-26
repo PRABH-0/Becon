@@ -187,4 +187,24 @@ describe("apiFetch", () => {
     expect(mockFetch.mock.calls[0][0]).toContain("/api/account");
     expect(mockFetch.mock.calls[0][1]?.method).toBe("DELETE");
   });
+
+  it("aborts and throws when request exceeds timeoutMs", async () => {
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    const mockFetch = vi.fn().mockImplementation((_url, options) => {
+      return new Promise((_resolve, reject) => {
+        if (options?.signal) {
+          options.signal.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        }
+      });
+    });
+    global.fetch = mockFetch;
+
+    await expect(apiFetch("/api/slow", { timeoutMs: 50 })).rejects.toThrow();
+  });
 });

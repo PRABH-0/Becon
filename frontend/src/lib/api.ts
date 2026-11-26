@@ -28,105 +28,135 @@ export class ApiError extends Error {
   }
 }
 
+export interface ApiFetchOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
 /**
  * Core API fetch wrapper.
  * Automatically resolves the latest access token from the active Supabase session.
+ * Supports configurable client-side fetch timeouts via AbortController.
  * Handles 401 with a single session refresh retry; if still 401, signs out locally and redirects to /login.
  */
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit = {}
+  options: ApiFetchOptions = {}
 ): Promise<T> {
+  const { timeoutMs, signal: userSignal, ...fetchOptions } = options;
   const url = path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+
+  const controller = new AbortController();
+  let timerId: ReturnType<typeof setTimeout> | null = null;
+  if (timeoutMs && timeoutMs > 0) {
+    timerId = setTimeout(() => {
+      controller.abort(new Error(`Request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  }
+
+  if (userSignal) {
+    if (userSignal.aborted) {
+      controller.abort(userSignal.reason);
+    } else {
+      userSignal.addEventListener("abort", () => controller.abort(userSignal.reason), { once: true });
+    }
+  }
 
   // Helper to execute fetch with an optional bearer token
   const execute = async (token?: string | null): Promise<Response> => {
-    const headers = new Headers(options.headers || {});
+    const headers = new Headers(fetchOptions.headers || {});
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }
     return fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers,
+      signal: controller.signal,
     });
   };
 
-  // 1. Get current session token
-  let token: string | null = null;
   try {
-    const { data } = await supabase.auth.getSession();
-    token = data.session?.access_token || null;
-  } catch {
-    token = null;
-  }
-
-  // 2. Perform initial request
-  let res = await execute(token);
-
-  // 3. Handle 401 with session refresh & single retry if a token was used
-  if (res.status === 401 && token) {
+    // 1. Get current session token
+    let token: string | null = null;
     try {
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      if (!refreshError && refreshData.session?.access_token) {
-        token = refreshData.session.access_token;
-        res = await execute(token);
-      }
+      const { data } = await supabase.auth.getSession();
+      token = data.session?.access_token || null;
     } catch {
-      // Refresh failed
+      token = null;
     }
 
-    // If still 401 after retry, perform local sign-out and redirect
-    if (res.status === 401) {
+    // 2. Perform initial request
+    let res = await execute(token);
+
+    // 3. Handle 401 with session refresh & single retry if a token was used
+    if (res.status === 401 && token) {
       try {
-        await supabase.auth.signOut({ scope: "local" });
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (!refreshError && refreshData.session?.access_token) {
+          token = refreshData.session.access_token;
+          res = await execute(token);
+        }
       } catch {
-        // Ignore sign-out errors
+        // Refresh failed
       }
-      clearBeconCaches();
-      if (typeof window !== "undefined") {
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/login";
+
+      // If still 401 after retry, perform local sign-out and redirect
+      if (res.status === 401) {
+        try {
+          await supabase.auth.signOut({ scope: "local" });
+        } catch {
+          // Ignore sign-out errors
+        }
+        clearBeconCaches();
+        if (typeof window !== "undefined") {
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+          window.location.href = "/login";
+        }
+        throw new ApiError(401, "Session expired. Please log in again.");
       }
-      throw new ApiError(401, "Session expired. Please log in again.");
+    }
+
+    // Handle 204 No Content
+    if (res.status === 204) {
+      return undefined as unknown as T;
+    }
+
+    // Handle non-OK responses
+    if (!res.ok) {
+      let errorDetail = `Request failed with status ${res.status}`;
+      let errorData: unknown = null;
+      try {
+        errorData = await res.json();
+        if (errorData && typeof errorData === "object" && "detail" in errorData) {
+          errorDetail = String((errorData as { detail: unknown }).detail);
+        }
+      } catch {
+        // Response not JSON
+      }
+      throw new ApiError(res.status, errorDetail, errorData);
+    }
+
+    // Parse JSON response
+    return res.json() as Promise<T>;
+  } finally {
+    if (timerId) {
+      clearTimeout(timerId);
     }
   }
-
-  // Handle 204 No Content
-  if (res.status === 204) {
-    return undefined as unknown as T;
-  }
-
-  // Handle non-OK responses
-  if (!res.ok) {
-    let errorDetail = `Request failed with status ${res.status}`;
-    let errorData: unknown = null;
-    try {
-      errorData = await res.json();
-      if (errorData && typeof errorData === "object" && "detail" in errorData) {
-        errorDetail = String((errorData as { detail: unknown }).detail);
-      }
-    } catch {
-      // Response not JSON
-    }
-    throw new ApiError(res.status, errorDetail, errorData);
-  }
-
-  // Parse JSON response
-  return res.json() as Promise<T>;
 }
 
 /**
  * Fetch the authenticated user's profile metadata and setup status from the backend.
  */
-export async function getMe(): Promise<UserMe> {
-  return apiFetch<UserMe>("/api/me");
+export async function getMe(options?: ApiFetchOptions): Promise<UserMe> {
+  return apiFetch<UserMe>("/api/me", options);
 }
 
 /**
  * Permanently delete the user account and all cascaded data.
  */
-export async function deleteAccount(): Promise<void> {
+export async function deleteAccount(options?: ApiFetchOptions): Promise<void> {
   return apiFetch<void>("/api/account", {
     method: "DELETE",
+    ...options,
   });
 }
