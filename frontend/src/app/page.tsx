@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { ArrowUp, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowUp, ArrowRight, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { GuestBanner } from "@/components/GuestBanner";
 import { CardDrawer } from "@/components/CardDrawer";
@@ -56,6 +56,8 @@ function BriefingHome() {
     setDrawerCard,
     todayDate,
     signOut,
+    error,
+    fetchAllBriefings,
   } = useBriefing();
 
   // Smart Auto-Hide Header (Hide on scroll down, reveal on scroll up)
@@ -141,6 +143,7 @@ function BriefingHome() {
           userIdentity={userIdentity}
           userEmail={userEmail}
           onSignOut={signOut}
+          loading={loading}
         />
 
         {/* GUEST BANNER */}
@@ -152,7 +155,29 @@ function BriefingHome() {
         {/* MAIN CONTENT AREA */}
         <div className="relative z-10 min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-16 transition-colors duration-200">
           <main className="max-w-[1600px] w-full mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
-            {!loading && briefings.length === 0 ? (
+            {error && !loading ? (
+              <section data-testid="briefing-error-state" className="py-20 text-center max-w-xl mx-auto space-y-4">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 mb-2">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <h2 className="font-serif text-2xl font-bold text-slate-900 dark:text-slate-100">
+                  Unable to load today&apos;s Gazette
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 font-sans leading-relaxed">
+                  {error}
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => fetchAllBriefings(true)}
+                    className="inline-flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-white bg-slate-950 dark:bg-emerald-600 hover:bg-slate-800 dark:hover:bg-emerald-500 px-4 py-2.5 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Try Again</span>
+                  </button>
+                </div>
+              </section>
+            ) : !loading && briefings.length === 0 ? (
               <section data-testid="empty-briefing-state" className="py-20 text-center max-w-xl mx-auto space-y-4">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 mb-2">
                   <CheckCircle2 className="w-6 h-6 text-emerald-500" />
@@ -175,7 +200,7 @@ function BriefingHome() {
             ) : (
               <>
                 <div className="space-y-6 sm:space-y-8">
-                  {briefings.some((b) => b.status_note === "limited_today") && (
+                  {(briefings.length < 3 || briefings.some((b) => b.status_note === "limited_today")) && (
                     <div
                       data-testid="limited-briefing-banner"
                       className="px-4 py-2.5 rounded-lg border border-amber-200/80 bg-amber-50/70 dark:bg-amber-950/20 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-sans flex items-center gap-2"
@@ -210,11 +235,13 @@ function BriefingHome() {
                 </div>
 
                 {/* FINITE BRIEFING END STATE */}
-                <BriefingEndState
-                  totalUpdates={briefings.length}
-                  readingTimeMinutes={readingTimeMinutes}
-                  todayDate={todayDate}
-                />
+                {!loading && briefings.length > 0 && (
+                  <BriefingEndState
+                    totalUpdates={briefings.length}
+                    readingTimeMinutes={readingTimeMinutes}
+                    todayDate={todayDate}
+                  />
+                )}
               </>
             )}
 

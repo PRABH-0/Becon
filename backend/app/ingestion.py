@@ -865,6 +865,21 @@ def run_ingestion_pipeline(
     return stats
 
 
+PROFESSION_SLUG_ALIASES: dict[str, str] = {
+    "software-developer": "software-development",
+    "software-engineer": "software-development",
+    "developer": "software-development",
+    "engineer": "software-development",
+    "full-stack-developer": "software-development",
+    "frontend-developer": "software-development",
+    "backend-developer": "software-development",
+    "accountant": "accounting",
+    "finance": "accounting",
+    "finance-accounting": "accounting",
+    "financial-analyst": "accounting",
+}
+
+
 def resolve_existing_profession(db: Session, user_role: str) -> Profession | None:
     """Resolve a requested role string to an existing active Profession row.
 
@@ -880,14 +895,15 @@ def resolve_existing_profession(db: Session, user_role: str) -> Profession | Non
     if not role_slug:
         return None
 
-    return (
-        db.query(Profession)
-        .filter(
-            Profession.is_active.is_(True),
-            (Profession.slug == role_slug) | (func.lower(Profession.name) == role_lower),
-        )
-        .first()
-    )
+    alias_slug = PROFESSION_SLUG_ALIASES.get(role_slug)
+
+    query = db.query(Profession).filter(Profession.is_active.is_(True))
+    conditions = [(Profession.slug == role_slug), (func.lower(Profession.name) == role_lower)]
+    if alias_slug:
+        conditions.append(Profession.slug == alias_slug)
+
+    from sqlalchemy import or_
+    return query.filter(or_(*conditions)).first()
 
 
 def get_or_create_card_variant(

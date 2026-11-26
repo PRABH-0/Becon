@@ -49,7 +49,7 @@ export function BentoDeck({
               {dailyHeading}
             </span>
             <span className="text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 shrink-0 hidden md:inline">
-              {updateCount} updates • ~{readingTimeMinutes} min read
+              {loading ? "SYNTHESIZING..." : `${updateCount} updates • ~${readingTimeMinutes} min read`}
             </span>
           </div>
 

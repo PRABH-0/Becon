@@ -386,14 +386,13 @@ export default function ProfilePage() {
       if (refreshMe) {
         await refreshMe();
       }
-      // Pre-warm and regenerate personalized briefing cards with the new focus areas
+      // Pre-warm personalized briefing cards with the new focus areas
       const params = new URLSearchParams({
         role: finalRole,
         interests: interests.join(", "),
         custom_prompt: customPrompt,
-        refresh: "true",
       });
-      apiFetch(`/api/briefings?${params.toString()}`).catch(() => {});
+      apiFetch(`/api/briefings?${params.toString()}`, { timeoutMs: 5000 }).catch(() => {});
 
       setSaveSuccess(true);
       // Launch home page so AI delivers the customized content!

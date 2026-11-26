@@ -10,6 +10,7 @@ import { syncIdentityCache } from "@/lib/cache";
 import { resolveUserIdentity } from "@/lib/identity";
 
 const BRIEFING_MAX_CARDS = 10;
+export const BRIEFING_TIMEOUT_MS = 15000;
 
 function getBriefingsCacheKey(userId?: string | number): string {
   return `becon_briefings_${userId || "guest"}`;
@@ -66,6 +67,7 @@ export function useBriefing() {
   const [drawerCard, setDrawerCard] = useState<BriefingCard | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingRemaining, setLoadingRemaining] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("Professional");
@@ -136,6 +138,7 @@ export function useBriefing() {
   const fetchAllBriefings = useCallback(
     async (forceRefresh = false, profile: { role?: string; interests?: string; customPrompt?: string } | null = null) => {
       setLoading(true);
+      setError(null);
       setLoadingRemaining(false);
       hideLoader();
       const activeRole = profile?.role ?? userRole;
@@ -148,19 +151,38 @@ export function useBriefing() {
         if (activeInterests) baseParams.set("interests", activeInterests);
         if (activePrompt) baseParams.set("custom_prompt", activePrompt);
 
-        // STEP 1: FAST FETCH TOP 5 CARDS FIRST (<2s)
+        // STEP 1: FAST FETCH TOP 5 CARDS FIRST (<2s) with 15s hard timeout
         const topParams = new URLSearchParams(baseParams);
         topParams.set("scope", "top");
         topParams.set("limit", "5");
         if (forceRefresh) topParams.set("refresh", "true");
 
-        const topData = await apiFetch<BriefingCard[]>(`/api/briefings?${topParams.toString()}`);
+        let topData = await apiFetch<BriefingCard[]>(`/api/briefings?${topParams.toString()}`, {
+          timeoutMs: BRIEFING_TIMEOUT_MS,
+        });
+
+        // If personalized query yielded 0 cards, fallback to cold-start default briefing
+        if ((!Array.isArray(topData) || topData.length === 0) && (activeRole || activeInterests)) {
+          try {
+            const fallbackParams = new URLSearchParams({ scope: "top", limit: "5" });
+            const fallbackData = await apiFetch<BriefingCard[]>(`/api/briefings?${fallbackParams.toString()}`, {
+              timeoutMs: BRIEFING_TIMEOUT_MS,
+            });
+            if (Array.isArray(fallbackData) && fallbackData.length > 0) {
+              topData = fallbackData.map((c) => ({ ...c, status_note: "limited_today" }));
+            }
+          } catch {
+            // Fallback request failure falls through
+          }
+        }
+
         if (Array.isArray(topData) && topData.length > 0) {
           const mappedTop = topData.slice(0, 5).map((c, index) => ({
             ...c,
             rank: c.rank ?? index + 1,
           }));
           setBriefings(mappedTop);
+          setError(null);
           recordMetric("briefing_viewed", { count: mappedTop.length, scope: "top" });
           try {
             localStorage.setItem(getBriefingsCacheKey(user?.id), JSON.stringify(mappedTop));
@@ -175,7 +197,9 @@ export function useBriefing() {
           remParams.set("limit", "5");
 
           try {
-            const remData = await apiFetch<BriefingCard[]>(`/api/briefings?${remParams.toString()}`);
+            const remData = await apiFetch<BriefingCard[]>(`/api/briefings?${remParams.toString()}`, {
+              timeoutMs: BRIEFING_TIMEOUT_MS,
+            });
             if (Array.isArray(remData) && remData.length > 0) {
               setBriefings((prev) => {
                 const existingIds = new Set(prev.map((c) => c.id));
@@ -203,12 +227,18 @@ export function useBriefing() {
 
         // Clear briefings when API returns empty array
         setBriefings([]);
+        setError(null);
         try {
           localStorage.removeItem(getBriefingsCacheKey(user?.id));
         } catch {}
       } catch (err) {
         console.error("Error fetching briefings:", err);
         setBriefings([]);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load your Daily Intelligence Gazette. Please check your connection and try again."
+        );
         try {
           localStorage.removeItem(getBriefingsCacheKey(user?.id));
         } catch {}
@@ -305,6 +335,7 @@ export function useBriefing() {
     setDrawerCard,
     todayDate,
     signOut,
+    error,
     fetchAllBriefings,
   };
 }

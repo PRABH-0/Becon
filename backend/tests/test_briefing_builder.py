@@ -704,3 +704,49 @@ class TestBriefingQualityRules:
         finally:
             db.close()
 
+    def test_profile_with_no_topic_matches_returns_default_validated_cards(self):
+        """A profile with topics that match zero events still returns default validated cards."""
+        db = app_db.SessionLocal()
+        try:
+            user = UserProfile(
+                id=406,
+                name="Specialty Reader",
+                role="Software Developer",
+                interests="Underwater Robotics, Martian Agriculture",
+                is_anonymous=False,
+            )
+            db.add(user)
+
+            src_gen = _create_source(db, "General Tech Source", f"gen-src-{uuid.uuid4().hex[:6]}")
+            # Add validated cards (not matching those niche topics)
+            for i in range(5):
+                _create_event_and_card(
+                    db,
+                    src_gen,
+                    f"General Tech Advisory {i}",
+                    severity=60 + i * 5,
+                    category="security",
+                    validation_status="passed",
+                    model_name="gemini-2.0-flash",
+                )
+            db.commit()
+
+            # In production mode with zero topic matches
+            briefing = build_daily_briefing(
+                db=db,
+                user=user,
+                user_role="Software Developer",
+                user_interests="Underwater Robotics, Martian Agriculture",
+                max_cards=5,
+                is_production=True,
+            )
+
+            # Must NOT be empty; must backfill with default validated cards
+            assert len(briefing) >= 3
+            for card in briefing:
+                assert card.id is not None
+                assert card.title is not None
+                assert card.card_content is not None
+        finally:
+            db.close()
+

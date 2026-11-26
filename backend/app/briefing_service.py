@@ -352,6 +352,15 @@ def build_daily_briefing(
                 if cleaned:
                     user_topic_names_lower.add(cleaned)
 
+    # If profession is not yet linked on user model, resolve from user_role
+    if user_profession_id is None and user_role:
+        from app.ingestion import resolve_existing_profession
+
+        resolved_prof = resolve_existing_profession(db, user_role)
+        if resolved_prof:
+            user_profession_id = resolved_prof.id
+            user_profession_name = resolved_prof.name
+
     # Add interest topics from query param
     if user_interests:
         for item in user_interests.split(","):
@@ -483,6 +492,53 @@ def build_daily_briefing(
         if len(selected_items) >= max_cards:
             break
 
+    # When topic/preference matches are too few (< 3 cards), fill with the highest-severity validated
+    # cards from the user's profession (or general candidate cards) so the briefing is never empty/stalled.
+    target_min = min(3, max_cards)
+    had_backfill = False
+    if len(selected_items) < target_min and scored_candidates:
+        selected_card_ids = {it["card"].id for it in selected_items}
+        # First pass: fill with profession-matched cards
+        for item in scored_candidates:
+            if item["card"].id in selected_card_ids:
+                continue
+            src_id = item["source"].id if item["source"] else "unknown"
+            if source_counts[src_id] >= 2:
+                continue
+            if item["is_matched"]:
+                selected_items.append(item)
+                selected_card_ids.add(item["card"].id)
+                source_counts[src_id] += 1
+                had_backfill = True
+                if len(selected_items) >= target_min:
+                    break
+
+        # Second pass: fill with highest-severity candidate cards (relevance floor relaxed for fallback)
+        if len(selected_items) < target_min:
+            for item in scored_candidates:
+                if item["card"].id in selected_card_ids:
+                    continue
+                src_id = item["source"].id if item["source"] else "unknown"
+                if source_counts[src_id] >= 2:
+                    continue
+                selected_items.append(item)
+                selected_card_ids.add(item["card"].id)
+                source_counts[src_id] += 1
+                had_backfill = True
+                if len(selected_items) >= target_min:
+                    break
+
+        # Third pass: if diversity capped out and still < target_min, allow extra cards from existing sources
+        if len(selected_items) < target_min:
+            for item in scored_candidates:
+                if item["card"].id in selected_card_ids:
+                    continue
+                selected_items.append(item)
+                selected_card_ids.add(item["card"].id)
+                had_backfill = True
+                if len(selected_items) >= target_min:
+                    break
+
     # Cold start fallback: never return an empty briefing if events exist
     if not selected_items and scored_candidates:
         for item in scored_candidates[:min(min_cards, max_cards)]:
@@ -555,8 +611,8 @@ def build_daily_briefing(
         dto.match_reason = item["match_reason"]
         briefing_cards.append(dto)
 
-    # Production briefing fallback: if fewer than 3 validated cards exist, flag status_note
-    if prod_mode and len(briefing_cards) < 3:
+    # Production briefing fallback: if fewer than 3 validated cards exist or backfilled from sparse matches, flag status_note
+    if len(briefing_cards) < 3 or (had_backfill and len(briefing_cards) <= 3):
         for dto in briefing_cards:
             dto.status_note = "limited_today"
 

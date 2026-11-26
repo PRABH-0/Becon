@@ -35,16 +35,16 @@ export function TopShowcase({
           </span>
         </div>
         <div className="flex flex-col">
-          {loading || !leadStory ? (
+          {loading ? (
             <LeadSkeleton />
-          ) : (
+          ) : leadStory ? (
             <LeadCard
               card={leadStory}
               leadImageUrl={leadImageUrl}
               onOpenDrawer={onOpenDrawer}
               renderStackTag={renderStackTag}
             />
-          )}
+          ) : null}
         </div>
       </div>
 

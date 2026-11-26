@@ -14,6 +14,7 @@ interface BriefingHeaderProps {
   userIdentity: ResolvedUserIdentity;
   userEmail?: string;
   onSignOut: () => Promise<void>;
+  loading?: boolean;
 }
 
 export function BriefingHeader({
@@ -24,6 +25,7 @@ export function BriefingHeader({
   userIdentity,
   userEmail,
   onSignOut,
+  loading = false,
 }: BriefingHeaderProps) {
   const router = useRouter();
 
@@ -50,7 +52,7 @@ export function BriefingHeader({
             {todayDate}
           </span>
           <span className="text-amber-300 dark:text-amber-400 font-bold hidden md:inline border-l border-slate-700 pl-3 tracking-wider uppercase text-[11px]">
-            {updateCount} updates, ~{readingTimeMinutes} min read
+            {loading ? "SYNTHESIZING DISPATCH..." : `${updateCount} updates, ~${readingTimeMinutes} min read`}
           </span>
 
           <HeaderActions
