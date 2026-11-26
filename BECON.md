@@ -77,7 +77,7 @@ Update: Get your .NET MAUI app ready for Xcode 27
 
 1. Profile setup. The user selects a role and stack.
 2. Ingestion. Becon continuously fetches from official engineering blogs, release notes, security advisories and curated RSS and Atom feeds.
-3. Deduplication. When multiple sources cover the same event, they are grouped into one high-signal item using semantic matching.
+3. Deduplication. When multiple sources cover the same event, they are grouped into one high-signal item using exact URL/title normalization (semantic embedding-based dedup is post-MVP per Task 3.2).
 4. Relevance ranking. Items are scored against the user's role and stack, so a Kubernetes change ranks high for a DevOps engineer and low for a frontend developer.
 5. AI synthesis. Google Gemini reads the source material and generates the structured Action Card, constrained by a strict schema so the output is always valid and consistent.
 6. Distraction-free delivery. The user opens a clean, newspaper-style web app, scans their cards, and leaves.
@@ -120,9 +120,9 @@ Some updates should not wait for the morning briefing. Becon can flag high-sever
 
 A severity score decides what qualifies. To avoid noise, alerts have a daily cap and quiet hours. Delivery channels:
 
-- Email digest for the daily briefing.
-- Telegram bot for instant alerts.
-- WhatsApp as a future option through the official business platform, where message templates and per-message costs apply.
+- Email digest for the daily briefing (MVP, Task F7).
+- Telegram bot for instant alerts (post-MVP per Decision D4).
+- WhatsApp as a future option through the official business platform, where message templates and per-message costs apply (post-MVP per Decision D4).
 
 
 10. DESIGN PRINCIPLES
@@ -141,7 +141,7 @@ Frontend: Next.js (React, TypeScript, App Router), Tailwind CSS, responsive card
 
 Backend: FastAPI (Python), Pydantic v2 schemas (BriefingCard, BriefingCardContent, ActionGuidance), Uvicorn, and CORS-secured communication with the client.
 
-AI and data pipeline: Google Gemini for structured summarization with schema-enforced JSON output, feedparser for RSS and Atom ingestion, YouTube Data API / RSS syndication, X/Twitter developer & syndication APIs, httpx for async fetching, and embedding-based deduplication.
+AI and data pipeline: Google Gemini for structured summarization with schema-enforced JSON output, feedparser for RSS and Atom ingestion, httpx for async fetching, with YouTube Data API / RSS syndication, X/Twitter developer & syndication APIs, and embedding-based deduplication planned post-MVP.
 
 Planned infrastructure: PostgreSQL for users, sources, events and cards, a scheduler for recurring ingestion, caching to control AI costs, containerized deployment, and automated tests with CI.
 

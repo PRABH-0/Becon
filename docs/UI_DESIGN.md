@@ -21,13 +21,13 @@ Describes the current Next.js App Router frontend architecture, visual design to
 
 | Route | Purpose | Auth Gating | Source File |
 | :--- | :--- | :--- | :--- |
-| `/` | Daily Intelligence Gazette — Top Showcase (Lead + Quick Wire) + Bento Grid + topic search + finite end state | Protected (`<RequireAuth>`) | [`frontend/src/app/page.tsx`](../frontend/src/app/page.tsx) |
+| `/` | Daily Intelligence Gazette — Top Showcase (Lead + Quick Wire) + Bento Grid + finite end state (Task 6.9 removed home-page topic search) | Protected (`<RequireAuth>`) | [`frontend/src/app/page.tsx`](../frontend/src/app/page.tsx) |
 | `/login` | Unified editorial sign-in (email/password, Google OAuth, anonymous Guest) inside `<AuthShell>` | Public | [`frontend/src/app/login/page.tsx`](../frontend/src/app/login/page.tsx) |
 | `/register` | Account creation & guest upgrade (`/register?upgrade=1`) inside `<AuthShell>` | Public | [`frontend/src/app/register/page.tsx`](../frontend/src/app/register/page.tsx) |
 | `/forgot-password` | Password reset email request inside `<AuthShell>` | Public | [`frontend/src/app/forgot-password/page.tsx`](../frontend/src/app/forgot-password/page.tsx) |
 | `/auth/reset-password` | New password submission from Supabase recovery link inside `<AuthShell>` | Public (recovery session) | [`frontend/src/app/auth/reset-password/page.tsx`](../frontend/src/app/auth/reset-password/page.tsx) |
 | `/auth/callback` | PKCE OAuth / email verification callback handler | Public | [`frontend/src/app/auth/callback/page.tsx`](../frontend/src/app/auth/callback/page.tsx) |
-| `/onboarding` | Conversational AI onboarding chat extracting role and interests | Protected (`<RequireAuth>`) | [`frontend/src/app/onboarding/page.tsx`](../frontend/src/app/onboarding/page.tsx) |
+| `/onboarding` | 4-step DB-driven onboarding wizard connecting to `/api/professions` & `/api/topics/search` (Task F5) | Protected (`<RequireAuth>`) | [`frontend/src/app/onboarding/page.tsx`](../frontend/src/app/onboarding/page.tsx) |
 | `/profile` | User identity prefill, role & topic catalog selection, custom prompt, tone, Danger Zone deletion | Protected (`<RequireAuth>`) | [`frontend/src/app/profile/page.tsx`](../frontend/src/app/profile/page.tsx) |
 | `/about` | Product manifesto and interactive 4-part Action Card demonstration | Public | [`frontend/src/app/about/page.tsx`](../frontend/src/app/about/page.tsx) |
 
@@ -107,8 +107,8 @@ All authenticated calls go through [`apiFetch`](../frontend/src/lib/api.ts) (Bea
 | `/api/account` | `DELETE` | `/profile` Danger Zone | Permanent Supabase Admin + cascading DB account deletion |
 | `/api/profile` | `GET` / `POST` | `/`, `/profile` | Load and save profile preferences (with non-overwriting identity prefill on `/profile`) |
 | `/api/briefings` | `GET` | `/` | Two-phase briefing load (`scope=top&limit=5`, then `scope=remaining`) |
-| `/api/topics/search` | `GET` | `/profile` topic autocomplete | Canonical topic + alias prefix autocomplete backed by `focus_topics` & `topic_aliases` |
-| `/api/onboarding/chat` | `POST` | `/onboarding` | Conversational profile extraction |
+| `/api/topics/search` | `GET` | `/profile`, `/onboarding` | Canonical topic + alias prefix autocomplete backed by `focus_topics` & `topic_aliases` |
+| `/api/professions` | `GET` | `/onboarding` | Active professions list for onboarding role selection (Task F5) |
 
 ---
 
@@ -117,11 +117,13 @@ All authenticated calls go through [`apiFetch`](../frontend/src/lib/api.ts) (Bea
 - **Implemented a11y:** `ThemeToggle` (`role="switch"`, `aria-checked`), `UserMenu` (ARIA menu semantics, Escape refocus, arrow/Home/End/Tab nav, click-outside), `CardDrawer` (`aria-modal`, Escape, focus handling), responsive back-link `aria-label`, back-to-top `sr-only` label, React-state avatar error fallback (no DOM mutation), `/profile` Tone selector `role="radiogroup"` / `role="radio"` with keyboard arrow navigation, and live 500-char prompt validation counter (Task 6.8).
 - **Open UI work is tracked exclusively in [ROADMAP.md](../ROADMAP.md):**
   - `6.1` / `6.1b` — Compact cards 4-part rendering *(resolved under Task `6.8`)*.
-  - `6.3` — Remove remaining mock fallback generators from `frontend/src/app/page.tsx` and split page modules.
-  - `6.4` — Rebuild onboarding around dynamic `professions` + `focus_topics` instead of static suggestion lists.
-  - `6.5` — Add save/bookmark (`saved_cards`), useful/not-useful feedback, error reporting, clickable coverage pills, and archive UI.
+  - `6.3` — Remove remaining mock fallback generators from `frontend/src/app/page.tsx` *(resolved under Task `F5`)*.
+  - `6.4` — Rebuild onboarding around dynamic `professions` + `focus_topics` *(resolved under Task `F5`)*.
+  - `6.5a` — Save cards (`saved_cards`), useful/not-useful feedback, report error modal, and `/saved` page *(resolved under Task `F6`)*.
+  - `6.5b` — Clickable topic filters, archive search over stored cards (DB-only, no Gemini), drop deprecated legacy `saved_briefings` table.
   - `6.6` — Remaining dark-mode color contrast polish, canvas background token alignment (`#090d16` vs `#070b12`), and interactive card keyboard focusability.
-  - `1.8` — Resolve remaining pre-existing frontend ESLint errors so CI `continue-on-error` can be removed.
+  - `6.7` — Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow.
+  - `1.8` — Frontend ESLint cleanup *(resolved in sprint-launch with 0 errors/warnings and strict CI)*.
 
 ---
 
