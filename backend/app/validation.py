@@ -21,13 +21,58 @@ logger = logging.getLogger(__name__)
 
 MIN_SOURCE_TEXT_LENGTH = 200
 
-# Regex patterns for entity extraction
+# Regex patterns for entity extraction and commit-log / filler detection
 VERSION_RE = re.compile(r"\bv?(\d+\.\d+(?:\.\d+)*(?:-[a-zA-Z0-9.]+)?)\b", re.IGNORECASE)
 CVE_RE = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
 DATE_RE = re.compile(
     r"\b(?:(?:19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:,\s*(?:19|20)\d{2})?|(?:19|20)\d{2})\b",
     re.IGNORECASE,
 )
+
+COMMIT_LINE_RE = re.compile(
+    r"(?i)(?:^\s*[-*•]\s+|^)(?:fix|feat|chore|refactor|test|docs|perf|ci|style|build|revert|merge\s+pull\s+request|pr)\b"
+    r"|#\d+\b"
+    r"|\b[0-9a-f]{7,40}\b"
+)
+
+GENERIC_FILLER_RE = re.compile(
+    r"(?i)(?:optimize\s+existing\s+pipelines"
+    r"|reduce\s+architectural\s+friction"
+    r"|apply\s+modern\s+best\s+practices"
+    r"|tracking\s+updates\s+in\s+.*?\s+enables\s+you\s+to"
+    r"|stay\s+ahead\s+of\s+potential\s+issues"
+    r"|maintain\s+optimal\s+performance\s+and\s+reliability"
+    r"|ensure\s+smooth\s+development\s+workflows"
+    r"|stay\s+informed\s+about\s+latest\s+developments)"
+)
+
+
+def is_commit_log_only(source_text: str | None) -> bool:
+    """Detect whether source text is merely a git commit/PR changelog with no explanatory prose."""
+    if not source_text:
+        return False
+    text = source_text.strip()
+    if len(text) < 50:
+        return False
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return False
+
+    pr_matches = re.findall(r"#\d+\b", text)
+    commit_lines = sum(1 for ln in lines if COMMIT_LINE_RE.search(ln))
+
+    line_ratio = commit_lines / max(1, len(lines))
+    avg_line_len = len(text) / max(1, len(lines))
+
+    if (line_ratio >= 0.35 and len(pr_matches) >= 3) or (len(pr_matches) >= 5 and avg_line_len < 120):
+        prose_paragraphs = [
+            p for p in text.split("\n\n") if len(p.strip()) > 150 and not re.search(r"#\d+", p)
+        ]
+        if not prose_paragraphs:
+            return True
+
+    return False
 
 # Common words, sentence starters, and non-product nouns to ignore when extracting capitalized product names
 STOP_WORDS: set[str] = {
@@ -294,7 +339,34 @@ def validate_card_content(card_content: BriefingCardContent, source_text: str) -
             notes={"reason": "invalid_schema", "error": "what_to_do_next guidance must be at least 10 characters"},
         )
 
-    # 2. Entity grounding checks on what_happened
+    # 2. Filler detection on how_it_affects_you and why_it_matters (Task 3)
+    if GENERIC_FILLER_RE.search(card_content.how_it_affects_you) or GENERIC_FILLER_RE.search(card_content.why_it_matters):
+        logger.warning(
+            "Card validation flagged generic boilerplate filler: %s",
+            card_content.how_it_affects_you[:60],
+        )
+        return ValidationResult(
+            is_valid=False,
+            status="flagged",
+            notes={
+                "reason": "generic_filler",
+                "error": "how_it_affects_you or why_it_matters contains generic boilerplate filler not grounded in source text",
+            },
+        )
+
+    # 3. Source commit-log-only check (Task 3)
+    if is_commit_log_only(source_text):
+        logger.warning("Card source text is commit-log-only with no prose; marking unvalidated")
+        return ValidationResult(
+            is_valid=False,
+            status="unvalidated",
+            notes={
+                "reason": "commit_log_only",
+                "error": "Source text is commit-log-only without explanatory prose",
+            },
+        )
+
+    # 4. Entity grounding checks on what_happened
     entities = extract_entities_from_bullets(card_content.what_happened)
     is_grounded, unsupported = verify_entities_in_source(entities, source_text)
 

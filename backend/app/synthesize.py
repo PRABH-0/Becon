@@ -30,7 +30,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import Card, Event, EventTopic, RawItem
 from app.rate_limit import GeminiQuotaExceededError, rate_limiter
-from app.validation import is_source_text_sufficient, validate_card_content
+from app.validation import is_commit_log_only, is_source_text_sufficient, validate_card_content
 
 logger = logging.getLogger("becon.synthesize")
 
@@ -143,6 +143,11 @@ def synthesize_event_card(
     is_sufficient, short_reason = is_source_text_sufficient(raw_summary)
     if not is_sufficient:
         logger.info("Source too short for event %s: %s", event.canonical_title[:40], short_reason)
+        return None, "skipped"
+
+    # Check commit-log-only without prose (Task 3)
+    if is_commit_log_only(raw_summary):
+        logger.info("Source text is commit-log-only with no prose for event %s; skipping card generation", event.canonical_title[:40])
         return None, "skipped"
 
     # Effective topic tag
