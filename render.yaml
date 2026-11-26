@@ -7,7 +7,7 @@
 # 3. Predictable single-worker concurrency control ($PORT, --workers 1) satisfies in-process rate limiting.
 
 services:
-  # 1. Web Service: FastAPI Backend
+  # 1. Web Service: FastAPI Backend (Single Uvicorn worker)
   - type: web
     name: becon-backend
     runtime: python
@@ -27,10 +27,14 @@ services:
         value: "3.12.0"
       - key: DATABASE_URL
         sync: false
+      - key: DIRECT_URL
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_JWT_AUDIENCE
         value: authenticated
+      - key: SUPABASE_JWT_SECRET
+        sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: INGEST_API_TOKEN
@@ -39,6 +43,12 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: "gemini-2.5-flash"
+      - key: GEMINI_DAILY_CAP_GLOBAL
+        value: "200"
+      - key: INGEST_MAX_GEMINI_CALLS_PER_RUN
+        value: "25"
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
@@ -50,6 +60,8 @@ services:
       - key: RESEND_WEBHOOK_SECRET
         sync: false
       - key: TRUSTED_PROXIES
+        value: "10.0.0.0/8"
+      - key: SENTRY_DSN
         sync: false
 
   # 2. Background Worker: Source Fetcher & Digest Scheduler
@@ -69,7 +81,11 @@ services:
         value: "3.12.0"
       - key: DATABASE_URL
         sync: false
+      - key: DIRECT_URL
+        sync: false
       - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: SCHEDULER_ENABLED
         value: "true"
@@ -83,6 +99,12 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: "gemini-2.5-flash"
+      - key: GEMINI_DAILY_CAP_GLOBAL
+        value: "200"
+      - key: INGEST_MAX_GEMINI_CALLS_PER_RUN
+        value: "25"
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
@@ -90,4 +112,8 @@ services:
       - key: APP_BASE_URL
         sync: false
       - key: UNSUBSCRIBE_SECRET
+        sync: false
+      - key: DIGEST_SCHEDULER_ENABLED
+        value: "true"
+      - key: SENTRY_DSN
         sync: false

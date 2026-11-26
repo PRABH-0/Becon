@@ -48,6 +48,8 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: Literal["development", "production", "test"] = "development"
     DATABASE_URL: str = Field(default="sqlite:///./becon.db")
+    # Optional unpooled direct connection URL for Alembic migrations (critical for Supabase / PgBouncer transaction mode)
+    DIRECT_URL: str | None = Field(default=None)
     ALLOWED_ORIGINS: str = Field(default="http://localhost:3000,http://127.0.0.1:3000")
     ENABLE_DOCS: bool = Field(default=True)
     GEMINI_API_KEY: str | None = Field(default=None)
