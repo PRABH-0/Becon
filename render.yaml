@@ -1,0 +1,93 @@
+# Render Blueprint Specification for Becon (FastAPI + Background Scheduler)
+#
+# Justification (Render vs Railway):
+# 1. Native Render Blueprint (render.yaml) supports co-locating the Web Service and Background Worker
+#    sharing identical runtime and environment groups.
+# 2. Built-in zero-downtime health checking (/health) ensures no traffic shifts before migrations succeed.
+# 3. Predictable single-worker concurrency control ($PORT, --workers 1) satisfies in-process rate limiting.
+
+services:
+  # 1. Web Service: FastAPI Backend
+  - type: web
+    name: becon-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.lock
+    startCommand: sh /app/start.sh || (alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1)
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENABLE_DOCS
+        value: "false"
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_AUDIENCE
+        value: authenticated
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: INGEST_API_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "Becon Daily <briefing@becon.dev>"
+      - key: APP_BASE_URL
+        sync: false
+      - key: UNSUBSCRIBE_SECRET
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: TRUSTED_PROXIES
+        sync: false
+
+  # 2. Background Worker: Source Fetcher & Digest Scheduler
+  - type: worker
+    name: becon-scheduler
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.lock
+    startCommand: python -m app.scheduler
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SCHEDULER_ENABLED
+        value: "true"
+      - key: SCHEDULER_TICK_SECONDS
+        value: "10"
+      - key: FETCH_GLOBAL_CONCURRENCY
+        value: "4"
+      - key: FETCH_SOURCE_TIMEOUT_SECONDS
+        value: "45"
+      - key: INGEST_API_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "Becon Daily <briefing@becon.dev>"
+      - key: APP_BASE_URL
+        sync: false
+      - key: UNSUBSCRIBE_SECRET
+        sync: false
