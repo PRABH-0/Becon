@@ -94,6 +94,9 @@ class UserProfile(Base):
     )
     error_reports: Mapped[List["ErrorReport"]] = relationship("ErrorReport", back_populates="user")
     deliveries: Mapped[List["Delivery"]] = relationship("Delivery", back_populates="user", cascade="all, delete-orphan")
+    daily_briefings: Mapped[List["DailyBriefing"]] = relationship(
+        "DailyBriefing", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     @validates("email")
     def validate_email(self, key, address):
@@ -802,5 +805,5 @@ class DailyBriefing(Base):
     )
 
     # Relationships
-    user: Mapped["UserProfile"] = relationship("UserProfile", backref="daily_briefings")
+    user: Mapped["UserProfile"] = relationship("UserProfile", back_populates="daily_briefings", passive_deletes=True)
 

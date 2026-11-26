@@ -21,7 +21,7 @@ from sqlalchemy import create_engine, text
 from alembic import command
 from app.config import settings
 from app.main import app
-from app.models import Card, CardFeedback, Event, SavedCard, Source, UserFollow, UserProfile
+from app.models import Card, CardFeedback, DailyBriefing, Event, SavedCard, Source, UserFollow, UserProfile
 from app.supabase_auth import (
     verify_supabase_token,
 )
@@ -574,10 +574,18 @@ def test_delete_account_success_and_cascades(auth_client, monkeypatch):
     db.add(card)
     db.commit()
 
-    # Add related bookmarks, follows, feedback
+    # Add related bookmarks, follows, feedback, and cached daily briefing
     db.add(SavedCard(user_id=user.id, card_id=card.id))
     db.add(UserFollow(user_id=user.id, source_id=source.id))
     db.add(CardFeedback(user_id=user.id, card_id=card.id, value=1))
+    db.add(
+        DailyBriefing(
+            user_id=user.id,
+            briefing_date="2026-11-26",
+            cards_payload={"cards": []},
+            reading_time_minutes=3,
+        )
+    )
     db.commit()
     user_id = user.id
     db.close()
@@ -599,6 +607,42 @@ def test_delete_account_success_and_cascades(auth_client, monkeypatch):
     assert db.query(SavedCard).filter(SavedCard.user_id == user_id).count() == 0
     assert db.query(UserFollow).filter(UserFollow.user_id == user_id).count() == 0
     assert db.query(CardFeedback).filter(CardFeedback.user_id == user_id).count() == 0
+    assert db.query(DailyBriefing).filter(DailyBriefing.user_id == user_id).count() == 0
+    db.close()
+
+
+def test_delete_account_with_cached_daily_briefing(auth_client, monkeypatch):
+    """Verify DELETE /api/account cleanly cascades when user has a cached daily briefing."""
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    test_sub = str(uuid.uuid4())
+    user = UserProfile(name="Briefing User", email="briefing_user@example.com", external_auth_id=test_sub)
+    db.add(user)
+    db.commit()
+
+    briefing = DailyBriefing(
+        user_id=user.id,
+        briefing_date="2026-11-26",
+        cards_payload={"cards": []},
+        reading_time_minutes=4,
+    )
+    db.add(briefing)
+    db.commit()
+    user_id = user.id
+    briefing_id = briefing.id
+    db.close()
+
+    mock_delete = AsyncMock(return_value=None)
+    monkeypatch.setattr("app.main.delete_supabase_user_admin", mock_delete)
+
+    tok = make_es256_token(sub=test_sub, email="briefing_user@example.com")
+    res = auth_client.delete("/api/account", headers={"Authorization": f"Bearer {tok}"})
+    assert res.status_code == 204
+
+    db = SessionLocal()
+    assert db.query(UserProfile).filter(UserProfile.id == user_id).first() is None
+    assert db.query(DailyBriefing).filter(DailyBriefing.id == briefing_id).first() is None
     db.close()
 
 

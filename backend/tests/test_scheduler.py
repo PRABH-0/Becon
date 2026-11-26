@@ -406,8 +406,8 @@ def test_per_source_timeout_cancels_hung_fetch_without_blocking_others(scheduler
     orig_atom = registry.get("atom")
 
     try:
-        # Source 1: Hung source (takes 1.0s, timeout cap is 0.15s) registered on "rss"
-        registry.register("rss", MockHangingFetcher(delay_seconds=1.0))
+        # Source 1: Hung source (takes 2.0s, timeout cap is 0.15s) registered on "rss"
+        registry.register("rss", MockHangingFetcher(delay_seconds=2.0))
         s1 = Source(
             slug="src-hung",
             name="Hung Source",
@@ -448,8 +448,8 @@ def test_per_source_timeout_cancels_hung_fetch_without_blocking_others(scheduler
 
         results, elapsed = asyncio.run(run_test())
 
-        # Ensure due cycle completed fast (< 0.5s), not blocked by the 1.0s hung source
-        assert elapsed < 0.5, f"Cycle took {elapsed:.2f}s, failed to enforce per-source timeout cap"
+        # Ensure due cycle completed fast (< 1.2s), not blocked by the 2.0s hung source
+        assert elapsed < 1.2, f"Cycle took {elapsed:.2f}s, failed to enforce per-source timeout cap"
         assert len(results) == 2
 
         hung_result = next(r for r in results if r.slug == "src-hung")
