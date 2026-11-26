@@ -45,20 +45,27 @@ export async function apiFetch<T = unknown>(
   const { timeoutMs, signal: userSignal, ...fetchOptions } = options;
   const url = path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
-  const controller = new AbortController();
+  let signal: AbortSignal | undefined = userSignal ?? undefined;
   let timerId: ReturnType<typeof setTimeout> | null = null;
+
   if (timeoutMs && timeoutMs > 0) {
+    const ControllerClass =
+      typeof window !== "undefined" && window.AbortController
+        ? window.AbortController
+        : AbortController;
+    const controller = new ControllerClass();
     timerId = setTimeout(() => {
       controller.abort(new Error(`Request timed out after ${timeoutMs}ms`));
     }, timeoutMs);
-  }
 
-  if (userSignal) {
-    if (userSignal.aborted) {
-      controller.abort(userSignal.reason);
-    } else {
-      userSignal.addEventListener("abort", () => controller.abort(userSignal.reason), { once: true });
+    if (userSignal) {
+      if (userSignal.aborted) {
+        controller.abort(userSignal.reason);
+      } else {
+        userSignal.addEventListener("abort", () => controller.abort(userSignal.reason), { once: true });
+      }
     }
+    signal = controller.signal;
   }
 
   // Helper to execute fetch with an optional bearer token
@@ -70,7 +77,7 @@ export async function apiFetch<T = unknown>(
     return fetch(url, {
       ...fetchOptions,
       headers,
-      signal: controller.signal,
+      ...(signal ? { signal } : {}),
     });
   };
 

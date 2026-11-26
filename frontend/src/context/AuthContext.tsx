@@ -67,41 +67,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
+    // Safety fallback: ensure isLoading always flips to false even in worst-case storage/network hangs
+    const safetyTimer = setTimeout(() => {
+      if (mounted) {
+        setIsLoading(false);
+      }
+    }, 5000);
+
     // 1. Initial session check
     supabase.auth
       .getSession()
-      .then(async ({ data: { session: initialSession } }) => {
+      .then(({ data: { session: initialSession } }) => {
         if (!mounted) return;
         setSession(initialSession);
         setUser(initialSession?.user || null);
         syncUserCache(initialSession?.user?.id || null);
 
-        if (initialSession?.user) {
-          const meData = await loadMe();
-          const resolved = resolveUserIdentity({
-            me: meData,
-            user: initialSession.user,
-            isAnonymous: Boolean(initialSession.user.is_anonymous || meData?.is_anonymous),
-          });
-          syncIdentityCache(resolved.isGuest ? null : resolved.displayName, resolved.avatarUrl);
-        } else {
-          setMe(null);
-          syncIdentityCache(null, null);
-        }
+        // Defer loadMe to macrotask tick to prevent Supabase auth lock contention
+        setTimeout(async () => {
+          if (!mounted) return;
+          try {
+            if (initialSession?.user) {
+              const meData = await loadMe();
+              const resolved = resolveUserIdentity({
+                me: meData,
+                user: initialSession.user,
+                isAnonymous: Boolean(initialSession.user.is_anonymous || meData?.is_anonymous),
+              });
+              syncIdentityCache(resolved.isGuest ? null : resolved.displayName, resolved.avatarUrl);
+            } else {
+              setMe(null);
+              syncIdentityCache(null, null);
+            }
+          } catch (err) {
+            console.error("Failed to load user identity on init:", err);
+          } finally {
+            if (mounted) {
+              setIsLoading(false);
+            }
+          }
+        }, 0);
       })
       .catch((err) => {
         console.error("Failed to retrieve Supabase session:", err);
-      })
-      .finally(() => {
         if (mounted) {
           setIsLoading(false);
         }
       });
 
-    // 2. Auth state subscription
+    // 2. Auth state subscription (MUST BE SYNCHRONOUS to avoid GoTrueClient deadlock)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return;
 
       const newUser = newSession?.user || null;
@@ -116,23 +133,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (newUser) {
-        const meData = await loadMe();
-        const resolved = resolveUserIdentity({
-          me: meData,
-          user: newUser,
-          isAnonymous: Boolean(newUser.is_anonymous || meData?.is_anonymous),
-        });
-        syncIdentityCache(resolved.isGuest ? null : resolved.displayName, resolved.avatarUrl);
-      } else {
-        setMe(null);
-        syncIdentityCache(null, null);
-      }
-      setIsLoading(false);
+      // Defer all async Supabase / API work to next event loop tick to prevent GoTrueClient deadlock
+      setTimeout(async () => {
+        if (!mounted) return;
+        try {
+          if (newUser) {
+            const meData = await loadMe();
+            const resolved = resolveUserIdentity({
+              me: meData,
+              user: newUser,
+              isAnonymous: Boolean(newUser.is_anonymous || meData?.is_anonymous),
+            });
+            syncIdentityCache(resolved.isGuest ? null : resolved.displayName, resolved.avatarUrl);
+          } else {
+            setMe(null);
+            syncIdentityCache(null, null);
+          }
+        } catch (err) {
+          console.error("Failed to load user identity on auth change:", err);
+        } finally {
+          if (mounted) {
+            setIsLoading(false);
+          }
+        }
+      }, 0);
     });
 
     return () => {
       mounted = false;
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
   }, [loadMe]);

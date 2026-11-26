@@ -76,7 +76,7 @@ function CallbackHandler() {
     let mounted = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    // Hard 10-second safety timeout: abort endless spinner and show error state
+    // Hard 10-second safety timeout that always runs across all code paths
     timer = setTimeout(() => {
       if (!mounted) return;
       setStatus("error");
@@ -86,7 +86,7 @@ function CallbackHandler() {
     }, CALLBACK_TIMEOUT_MS);
 
     const handleCallback = async () => {
-      // 1. Check for errors returned in query params or URL hash fragments
+      // 1. Check for errors returned in query params or URL hash fragments first
       const urlError = extractUrlError(searchParams);
       if (urlError) {
         if (!mounted) return;
@@ -96,7 +96,36 @@ function CallbackHandler() {
         return;
       }
 
-      // 2. PKCE code exchange if ?code= is present (deduplicated across Strict Mode mounts)
+      // 2. Immediate session check: if session exists (e.g. detectSessionInUrl already consumed URL or existing session),
+      // go straight to getMe and redirect immediately without waiting for events.
+      try {
+        const { data: immediateData } = await supabase.auth.getSession();
+        if (immediateData?.session) {
+          try {
+            const me = await getMe({ timeoutMs: API_TIMEOUT_MS });
+            if (!mounted) return;
+            if (timer) clearTimeout(timer);
+            const nextParam = searchParams.get("next");
+            if (!me.has_completed_setup) {
+              router.replace("/profile?setup=true");
+            } else {
+              const destination = getSafeRedirectUrl(nextParam, "/");
+              router.replace(destination);
+            }
+            return;
+          } catch (err) {
+            if (!mounted) return;
+            if (timer) clearTimeout(timer);
+            console.error("Failed to fetch /api/me in callback:", err);
+            router.replace("/profile?setup=true");
+            return;
+          }
+        }
+      } catch {
+        // Fall through to code exchange handling
+      }
+
+      // 3. PKCE code exchange if ?code= is present (deduplicated across Strict Mode mounts)
       const code = searchParams.get("code");
       if (code) {
         try {
@@ -111,7 +140,7 @@ function CallbackHandler() {
           if (error) {
             // Check if user already has an active session (e.g. concurrent or prior exchange)
             const { data: sessionData } = await supabase.auth.getSession();
-            if (!sessionData.session) {
+            if (!sessionData?.session) {
               if (!mounted) return;
               if (timer) clearTimeout(timer);
               setStatus("error");
@@ -133,54 +162,52 @@ function CallbackHandler() {
         }
       }
 
-      // 3. Confirm session presence
+      // 4. Confirm session presence after code exchange
       let activeSession = null;
       try {
         const { data } = await supabase.auth.getSession();
-        activeSession = data.session;
+        activeSession = data?.session ?? null;
       } catch {
         activeSession = null;
       }
 
       if (!activeSession) {
-        // Wait briefly for potential auth state change / hash fragment detection (e.g. 500ms)
+        // Wait briefly for background processing / hash fragment detection (e.g. 500ms)
         await new Promise((resolve) => setTimeout(resolve, 500));
         if (!mounted) return;
         try {
           const { data } = await supabase.auth.getSession();
-          activeSession = data.session;
+          activeSession = data?.session ?? null;
         } catch {
           activeSession = null;
         }
       }
 
-      if (!activeSession) {
-        if (!mounted) return;
-        if (timer) clearTimeout(timer);
-        setStatus("error");
-        setErrorMessage("Unable to establish an authenticated session. Please try signing in again.");
-        return;
+      if (activeSession) {
+        // 5. Fetch profile setup status via GET /api/me with timeout
+        try {
+          const me = await getMe({ timeoutMs: API_TIMEOUT_MS });
+          if (!mounted) return;
+          if (timer) clearTimeout(timer);
+          const nextParam = searchParams.get("next");
+          if (!me.has_completed_setup) {
+            router.replace("/profile?setup=true");
+          } else {
+            const destination = getSafeRedirectUrl(nextParam, "/");
+            router.replace(destination);
+          }
+          return;
+        } catch (err) {
+          if (!mounted) return;
+          if (timer) clearTimeout(timer);
+          console.error("Failed to fetch /api/me in callback:", err);
+          router.replace("/profile?setup=true");
+          return;
+        }
       }
 
-      // 4. Fetch profile setup status via GET /api/me with timeout
-      try {
-        const me = await getMe({ timeoutMs: API_TIMEOUT_MS });
-        if (!mounted) return;
-        if (timer) clearTimeout(timer);
-        const nextParam = searchParams.get("next");
-        if (!me.has_completed_setup) {
-          router.replace("/profile?setup=true");
-        } else {
-          const destination = getSafeRedirectUrl(nextParam, "/");
-          router.replace(destination);
-        }
-      } catch (err) {
-        // If /api/me fails or times out, safely navigate forward to setup
-        if (!mounted) return;
-        if (timer) clearTimeout(timer);
-        console.error("Failed to fetch /api/me in callback:", err);
-        router.replace("/profile?setup=true");
-      }
+      // If activeSession is still null, do NOT clear timer:
+      // The 10s timer is running and will trigger the error screen if no session arrives.
     };
 
     handleCallback();

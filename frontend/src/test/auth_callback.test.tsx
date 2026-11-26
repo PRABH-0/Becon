@@ -66,8 +66,73 @@ describe("AuthCallbackPage (/auth/callback)", () => {
     vi.useRealTimers();
   });
 
+  it("URL '/auth/callback#' with an existing session redirects immediately", async () => {
+    // Simulates detectSessionInUrl having already consumed URL parameters to '#'
+    mockSearchParams = new URLSearchParams("");
+    window.location.hash = "#";
+
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: createMockSession("existing-token", "u-existing") },
+      error: null,
+    });
+    vi.spyOn(apiModule, "getMe").mockResolvedValueOnce({
+      id: 10,
+      email: "oauth@example.com",
+      name: "OAuth User",
+      picture_url: null,
+      is_anonymous: false,
+      profession: "Software Engineer",
+      timezone: "UTC",
+      delivery_time: "08:00",
+      email_digest_enabled: true,
+      has_completed_setup: true,
+    });
+
+    render(<AuthCallbackPage />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/");
+    });
+
+    // Code exchange was not needed because session was already established
+    expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("URL '/auth/callback#' with no session shows the error card after the timeout", async () => {
+    vi.useFakeTimers();
+    mockSearchParams = new URLSearchParams("");
+    window.location.hash = "#";
+
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    render(<AuthCallbackPage />);
+
+    expect(screen.getByText("Confirming Authentication")).toBeInTheDocument();
+
+    // Fast-forward 10 seconds past safety timeout
+    act(() => {
+      vi.advanceTimersByTime(10000);
+    });
+
+    expect(screen.getByText("Authentication Error")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Authentication verification timed out after 10 seconds/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to login/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+  });
+
   it("success path: exchanges PKCE code, fetches profile setup, and redirects to home", async () => {
     mockSearchParams = new URLSearchParams("code=valid-pkce-code");
+
+    // Initial immediate getSession returns null before exchange
+    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
+      data: { session: null },
+      error: null,
+    });
 
     vi.mocked(supabase.auth.exchangeCodeForSession).mockResolvedValueOnce({
       data: { session: createMockSession("mock-token", "u1"), user: createMockUser("u1") },
@@ -103,6 +168,10 @@ describe("AuthCallbackPage (/auth/callback)", () => {
   it("success path: redirects to /profile?setup=true when user has completed setup false", async () => {
     mockSearchParams = new URLSearchParams("code=new-user-code");
 
+    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
+      data: { session: null },
+      error: null,
+    });
     vi.mocked(supabase.auth.exchangeCodeForSession).mockResolvedValueOnce({
       data: { session: createMockSession("mock-token", "u2"), user: createMockUser("u2") },
       error: null,
@@ -169,7 +238,14 @@ describe("AuthCallbackPage (/auth/callback)", () => {
     mockSearchParams = new URLSearchParams("code=hanging-code");
 
     // Mock exchange that hangs indefinitely
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
     vi.mocked(supabase.auth.exchangeCodeForSession).mockImplementation(
+      () => new Promise(() => {})
+    );
+    vi.spyOn(apiModule, "getMe").mockImplementation(
       () => new Promise(() => {})
     );
 
@@ -194,16 +270,16 @@ describe("AuthCallbackPage (/auth/callback)", () => {
     mockSearchParams = new URLSearchParams("code=strict-mode-code");
 
     let exchangeCallCount = 0;
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
     vi.mocked(supabase.auth.exchangeCodeForSession).mockImplementation(async () => {
       exchangeCallCount++;
       return {
         data: { session: createMockSession("token-strict", "u3"), user: createMockUser("u3") },
         error: null,
       };
-    });
-    vi.mocked(supabase.auth.getSession).mockResolvedValue({
-      data: { session: createMockSession("token-strict", "u3") },
-      error: null,
     });
     vi.spyOn(apiModule, "getMe").mockResolvedValue({
       id: 3,
@@ -225,6 +301,12 @@ describe("AuthCallbackPage (/auth/callback)", () => {
     unmount();
 
     // Mount 2 (the active one)
+    // On Mount 2, getSession now returns the established session
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: createMockSession("token-strict", "u3") },
+      error: null,
+    });
+
     render(<AuthCallbackPage />);
 
     await waitFor(() => {
@@ -246,6 +328,10 @@ describe("AuthCallbackPage (/auth/callback)", () => {
 
     // Now clear the error param to simulate retry recovery
     mockSearchParams = new URLSearchParams("code=retry-code");
+    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
+      data: { session: null },
+      error: null,
+    });
     vi.mocked(supabase.auth.exchangeCodeForSession).mockResolvedValueOnce({
       data: { session: createMockSession("retry-token", "u4"), user: createMockUser("u4") },
       error: null,
