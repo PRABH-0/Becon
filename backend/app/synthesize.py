@@ -1,10 +1,9 @@
-"""Production synthesis queue runner and CLI for Becon (Task F3.1).
+"""Production synthesis queue runner and CLI for Becon (Task F3.1, S2).
 
-Selects events eligible for a briefing published in the last 7 days:
-- Tagged with focus topics
-- OR (category == 'security' AND severity_score >= 70)
-- OR matches an active profession's default topics
-Ordered by (severity_score DESC, published_at DESC, topic_count DESC).
+Selects events eligible for a briefing published in the last 14 days:
+- Must have at least one focus topic tag
+- Ordered by (severity_score DESC, published_at DESC, topic_count DESC)
+- Older events or untagged events stay as fallback cards and are not queued or shown in production.
 
 Synthesizes highest priority events first using Google Gemini with structured outputs,
 validating source grounding and claim fidelity.
@@ -28,7 +27,7 @@ from sqlalchemy.orm import Session
 from app import ai_service
 from app.config import settings
 from app.database import SessionLocal
-from app.models import Card, Event, EventTopic, Profession, ProfessionTopic, RawItem
+from app.models import Card, Event, EventTopic, RawItem
 from app.rate_limit import GeminiQuotaExceededError, rate_limiter
 from app.validation import is_source_text_sufficient, validate_card_content
 
@@ -48,18 +47,15 @@ class SynthesisResult:
 def get_synthesis_queue(
     db: Session,
     now: datetime | None = None,
-    days: int = 7,
+    days: int = 14,
 ) -> List[Event]:
-    """Query eligible events for synthesis ordered by (severity DESC, published_at DESC, topic_count DESC)."""
+    """Query eligible events for synthesis ordered by (severity DESC, published_at DESC, topic_count DESC).
+
+    Restricted to events from the last 14 days that have at least one focus tag.
+    Older events or untagged events stay as fallback cards and are not queued.
+    """
     current_time = now or datetime.now(UTC)
     cutoff = current_time - timedelta(days=days)
-
-    active_prof_topic_ids = (
-        select(ProfessionTopic.topic_id)
-        .join(Profession, ProfessionTopic.profession_id == Profession.id)
-        .where(Profession.is_active.is_(True))
-        .scalar_subquery()
-    )
 
     validated_gemini_events = (
         select(Card.event_id)
@@ -81,22 +77,14 @@ def get_synthesis_queue(
         and_(Event.published_at.is_(None), Event.first_seen_at >= cutoff),
     )
 
-    eligible_cond = or_(
-        select(EventTopic.id).where(EventTopic.event_id == Event.id).exists(),
-        and_(Event.category == "security", Event.severity_score >= 70),
-        select(EventTopic.id)
-        .where(
-            EventTopic.event_id == Event.id,
-            EventTopic.topic_id.in_(active_prof_topic_ids),
-        )
-        .exists(),
-    )
+    # Must have at least one focus tag
+    has_focus_tag = select(EventTopic.id).where(EventTopic.event_id == Event.id).exists()
 
     query = (
         db.query(Event)
         .filter(
             time_cond,
-            eligible_cond,
+            has_focus_tag,
             Event.id.not_in(validated_gemini_events),
         )
         .order_by(

@@ -157,22 +157,31 @@ class TestSynthesisQueue:
             # Low severity event (30), 2 days ago
             ev_low, _ = _create_event(db, src, "Low Severity Event", severity=30, published_days_ago=2, topic=topic1)
 
-            # Old event outside 7-day window (severity 100, 10 days ago) - must be excluded
-            ev_old, _ = _create_event(db, src, "Old Expired Event", severity=100, published_days_ago=10, topic=topic1)
+            # Event within 14-day window (severity 50, 10 days ago) - included
+            ev_10d, _ = _create_event(db, src, "10-Day Event", severity=50, published_days_ago=10, topic=topic1)
+
+            # Untagged event (severity 95, 1 day ago) - must be excluded (no focus tag)
+            ev_untagged, _ = _create_event(db, src, "Untagged Event", severity=95, published_days_ago=1, topic=None)
+
+            # Old event outside 14-day window (severity 100, 16 days ago) - must be excluded
+            ev_old, _ = _create_event(db, src, "Old Expired Event", severity=100, published_days_ago=16, topic=topic1)
 
             queue = get_synthesis_queue(db)
             queue_ids = [e.id for e in queue]
 
-            # High should outrank med, med should outrank low
+            # High should outrank med, med should outrank ev_10d, ev_10d should outrank low
             assert ev_high.id in queue_ids
             assert ev_med.id in queue_ids
+            assert ev_10d.id in queue_ids
             assert ev_low.id in queue_ids
+            assert ev_untagged.id not in queue_ids
             assert ev_old.id not in queue_ids
 
             idx_high = queue_ids.index(ev_high.id)
             idx_med = queue_ids.index(ev_med.id)
+            idx_10d = queue_ids.index(ev_10d.id)
             idx_low = queue_ids.index(ev_low.id)
-            assert idx_high < idx_med < idx_low
+            assert idx_high < idx_med < idx_10d < idx_low
         finally:
             db.close()
 
