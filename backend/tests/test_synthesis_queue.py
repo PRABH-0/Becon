@@ -396,3 +396,48 @@ class TestSynthesisQueue:
                 assert briefing[0].status_note == "limited_today"
         finally:
             db.close()
+
+    def test_prerelease_excluded_when_stable_exists(self):
+        """Prereleases (canary, beta, rc, alpha, etc.) are excluded from queue if source has stable items."""
+        db = app_db.SessionLocal()
+        try:
+            src = _create_source(db, "Prerelease Source", f"pre-src-{uuid.uuid4().hex[:6]}")
+            topic = FocusTopic(id=uuid.uuid4(), slug=f"tpre-{uuid.uuid4().hex[:6]}", name="Topic", kind="technology")
+            db.add(topic)
+            db.commit()
+
+            # 1. Stable release from src
+            ev_stable, _ = _create_event(db, src, "Framework v15.0.0", severity=60, published_days_ago=1, topic=topic)
+
+            # 2. Canary prerelease from src
+            ev_canary, _ = _create_event(db, src, "Framework v16.0.0-canary.12", severity=70, published_days_ago=0, topic=topic)
+
+            queue = get_synthesis_queue(db)
+            queue_ids = [e.id for e in queue]
+
+            # Stable must be in queue
+            assert ev_stable.id in queue_ids
+            # Prerelease must be excluded because stable exists for this source
+            assert ev_canary.id not in queue_ids
+        finally:
+            db.close()
+
+    def test_prerelease_included_when_no_stable_exists(self):
+        """Prerelease is retained in queue as fallback if that source has NO stable items."""
+        db = app_db.SessionLocal()
+        try:
+            src_only_pre = _create_source(db, "Alpha Only Source", f"alpha-src-{uuid.uuid4().hex[:6]}")
+            topic = FocusTopic(id=uuid.uuid4(), slug=f"talpha-{uuid.uuid4().hex[:6]}", name="Topic", kind="technology")
+            db.add(topic)
+            db.commit()
+
+            # Only a beta/alpha release from this source
+            ev_beta, _ = _create_event(db, src_only_pre, "NewTool v0.1.0-beta.1", severity=65, published_days_ago=1, topic=topic)
+
+            queue = get_synthesis_queue(db)
+            queue_ids = [e.id for e in queue]
+
+            # Must be in queue since no stable alternative exists for src_only_pre
+            assert ev_beta.id in queue_ids
+        finally:
+            db.close()

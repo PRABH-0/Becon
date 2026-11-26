@@ -22,9 +22,10 @@ from datetime import UTC, datetime, timedelta
 from typing import List, Tuple
 
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import ai_service
+from app.briefing_service import is_prerelease
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Card, Event, EventTopic, RawItem
@@ -82,6 +83,7 @@ def get_synthesis_queue(
 
     query = (
         db.query(Event)
+        .options(selectinload(Event.raw_items))
         .filter(
             time_cond,
             has_focus_tag,
@@ -94,7 +96,27 @@ def get_synthesis_queue(
         )
     )
 
-    return query.all()
+    candidates = query.all()
+
+    # Determine which sources have at least one stable (non-prerelease) candidate
+    sources_with_stable: set[uuid.UUID] = set()
+    for ev in candidates:
+        if not is_prerelease(ev.canonical_title):
+            for raw in ev.raw_items:
+                if raw.source_id:
+                    sources_with_stable.add(raw.source_id)
+
+    # Exclude prereleases from the queue if a stable candidate exists for that source
+    filtered_queue: list[Event] = []
+    for ev in candidates:
+        if is_prerelease(ev.canonical_title):
+            ev_sources = {raw.source_id for raw in ev.raw_items if raw.source_id}
+            # If any source for this prerelease has a stable candidate, skip it
+            if ev_sources and any(s_id in sources_with_stable for s_id in ev_sources):
+                continue
+        filtered_queue.append(ev)
+
+    return filtered_queue
 
 
 def synthesize_event_card(
