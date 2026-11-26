@@ -28,10 +28,14 @@ def get_url() -> str:
     custom_url = config.get_main_option("sqlalchemy.url")
     if custom_url and custom_url != "driver://user:pass@localhost/dbname":
         return normalize_database_url(custom_url)
-    # 2. CI or test database URL
+    # 2. Direct unpooled database URL (critical for Supabase / PgBouncer transaction mode safety)
+    direct_url = os.environ.get("DIRECT_URL") or settings.DIRECT_URL
+    if direct_url and direct_url.strip():
+        return normalize_database_url(direct_url.strip())
+    # 3. CI or test database URL
     if "TEST_DATABASE_URL" in os.environ and os.environ["TEST_DATABASE_URL"]:
         return normalize_database_url(os.environ["TEST_DATABASE_URL"])
-    # 3. Default app settings database URL
+    # 4. Default app settings database URL
     return normalize_database_url(settings.DATABASE_URL)
 
 
