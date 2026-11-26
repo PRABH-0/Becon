@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.main import app
 from app.models import Card, Event, MetricsEvent, RawItem, Source, UserProfile
+from app.rate_limit import rate_limiter
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
@@ -17,6 +18,13 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    rate_limiter.reset()
+    yield
+    rate_limiter.reset()
 
 
 @pytest.fixture(scope="function")
@@ -147,27 +155,65 @@ def test_record_metrics_event_invalid_name(client: TestClient):
     assert response.status_code == 422
 
 
-def test_record_metrics_event_properties_sanitized(client: TestClient, db_session: Session):
-    long_string = "x" * 1000
-    long_key = "k" * 100
+def test_record_metrics_event_payload_size_cap(client: TestClient):
+    # More than 20 keys rejected
+    too_many_keys = {f"key_{i}": i for i in range(25)}
+    response = client.post(
+        "/api/metrics/event",
+        json={"name": "card_opened", "properties": too_many_keys},
+    )
+    assert response.status_code == 422
+
+    # Key > 64 chars rejected
+    long_key = "k" * 70
+    response = client.post(
+        "/api/metrics/event",
+        json={"name": "card_opened", "properties": {long_key: "value"}},
+    )
+    assert response.status_code == 422
+
+    # String value > 500 chars rejected
+    long_val = "v" * 505
+    response = client.post(
+        "/api/metrics/event",
+        json={"name": "card_opened", "properties": {"valid_key": long_val}},
+    )
+    assert response.status_code == 422
+
+
+def test_cannot_write_metrics_for_another_user(client: TestClient, db_session: Session, test_user: UserProfile):
+    # Attempting to supply a user_id or spoof another user id in anonymous post
     response = client.post(
         "/api/metrics/event",
         json={
             "name": "card_opened",
-            "properties": {
-                long_key: long_string,
-                "numeric": 42,
-                "boolean": True,
-            },
+            "properties": {"card_id": str(uuid.uuid4())},
+            "user_id": 99999,
         },
     )
     assert response.status_code == 201
     data = response.json()
     metric = db_session.query(MetricsEvent).filter(MetricsEvent.id == uuid.UUID(data["event_id"])).first()
     assert metric is not None
-    assert len(list(metric.properties.keys())[0]) <= 64
-    first_val = list(metric.properties.values())[0]
-    assert len(first_val) <= 500
+    # Must be None because request was unauthenticated (caller cannot forge user_id)
+    assert metric.user_id is None
+
+
+def test_metrics_event_rate_limited(client: TestClient):
+    # Public rate limit caps at RATE_LIMIT_PUBLIC_PER_MIN (30/min)
+    for _ in range(30):
+        res = client.post(
+            "/api/metrics/event",
+            json={"name": "card_opened", "properties": {"idx": 1}},
+        )
+        assert res.status_code == 201
+
+    # 31st request triggers 429
+    res_blocked = client.post(
+        "/api/metrics/event",
+        json={"name": "card_opened", "properties": {"idx": 2}},
+    )
+    assert res_blocked.status_code == 429
 
 
 def test_save_card_records_metric(client: TestClient, db_session: Session, sample_card: Card, test_user: UserProfile):

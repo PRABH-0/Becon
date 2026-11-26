@@ -1169,6 +1169,9 @@ def record_metrics_event(
     Records an anonymous or authenticated product telemetry event (write-only).
     Sanitizes properties and rejects personal data.
     """
+    client_id = str(current_user.id) if (current_user and current_user.id) else get_client_ip(request)
+    rate_limiter.check_sliding_window(f"metrics:{client_id}", limit=60, window_seconds=60)
+
     sanitized_props: dict[str, Any] = {}
     for k, v in payload.properties.items():
         clean_k = str(k)[:64]

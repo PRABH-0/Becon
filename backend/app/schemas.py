@@ -459,6 +459,20 @@ class MetricsEventCreate(BaseModel):
     properties: dict[str, Any] = Field(default_factory=dict, description="Metadata properties (no PII)")
     session_id: str | None = Field(default=None, max_length=100, description="Optional anonymous session identifier")
 
+    @field_validator("properties")
+    @classmethod
+    def validate_properties_size(cls, v: dict[str, Any]) -> dict[str, Any]:
+        if len(v) > 20:
+            raise ValueError("properties dictionary cannot exceed 20 keys")
+        for k, val in v.items():
+            if len(str(k)) > 64:
+                raise ValueError("property keys cannot exceed 64 characters")
+            if isinstance(val, str) and len(val) > 500:
+                raise ValueError("property string values cannot exceed 500 characters")
+            if not isinstance(val, (str, int, float, bool, type(None))):
+                raise ValueError("property values must be primitive types (str, int, float, bool, null)")
+        return v
+
 
 class MetricsEventResponse(BaseModel):
     status: str = "recorded"
