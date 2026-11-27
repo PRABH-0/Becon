@@ -115,6 +115,12 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 transition-colors duration-200">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:px-4 focus:py-2 focus:bg-emerald-600 focus:text-white focus:rounded-lg focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono text-xs font-bold"
+        >
+          Skip to content
+        </a>
         <ThemeProvider>
           <AuthProvider>
             <LoadingProvider>{children}</LoadingProvider>

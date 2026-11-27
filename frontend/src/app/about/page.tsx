@@ -163,6 +163,7 @@ export default function AboutPage() {
       </header>
 
       {/* 2. HERO SECTION */}
+      <main id="main-content" className="flex-1">
       <section className="bg-slate-950 text-white pt-14 pb-18 px-4 sm:px-6 border-b border-slate-800 relative overflow-hidden">
         {/* Subtle broadsheet watermark grid */}
         <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
@@ -654,6 +655,7 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
+      </main>
 
       {/* 8. CALL TO ACTION FOOTER */}
       <footer className="bg-slate-950 text-slate-400 py-12 px-4 sm:px-6 border-t border-slate-800 mt-auto font-mono text-xs">

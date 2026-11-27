@@ -37,7 +37,7 @@ export default function TermsPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-[860px] w-full mx-auto px-4 sm:px-6 py-10 sm:py-16 flex-1">
+      <main id="main-content" className="max-w-[860px] w-full mx-auto px-4 sm:px-6 py-10 sm:py-16 flex-1">
         {/* Draft Notice Banner */}
         <div className="mb-8 p-4 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />

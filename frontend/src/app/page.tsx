@@ -154,7 +154,7 @@ function BriefingHome() {
 
         {/* MAIN CONTENT AREA */}
         <div className="relative z-10 min-h-screen bg-[#FAF8F5] dark:bg-[#070b12] text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white pb-16 transition-colors duration-200">
-          <main className="max-w-[1600px] w-full mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
+          <main id="main-content" className="max-w-[1600px] w-full mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
             {error && !loading ? (
               <section data-testid="briefing-error-state" className="py-20 text-center max-w-xl mx-auto space-y-4">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 mb-2">

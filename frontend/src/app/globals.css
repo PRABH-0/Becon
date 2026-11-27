@@ -8,7 +8,7 @@
 }
 
 .dark {
-  --background: #090d16;
+  --background: #070b12;
   --foreground: #f1f5f9;
 }
 
@@ -66,4 +66,27 @@ h1, h2, h3, h4, h5, h6 {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Accessible visible focus rings on interactive elements */
+:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 2px;
+}
+.dark :focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 2px;
+}
+
+/* Prefers-reduced-motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 

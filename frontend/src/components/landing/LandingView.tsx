@@ -177,6 +177,7 @@ export function LandingView() {
       </header>
 
       {/* 2. HERO SECTION */}
+      <main id="main-content" className="flex-1">
       <section className="relative border-b border-slate-200 dark:border-slate-800/80 pt-12 pb-16 sm:pt-20 sm:pb-24 px-4 sm:px-6">
         <div className="max-w-[1000px] mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 dark:bg-slate-800 text-slate-300 text-xs font-mono font-semibold uppercase tracking-wider shadow-2xs">
@@ -421,6 +422,7 @@ export function LandingView() {
           </Link>
         </div>
       </section>
+      </main>
 
       {/* 6. EDITORIAL FOOTER */}
       <footer className="border-t border-slate-800 bg-slate-950 text-slate-400 py-8 px-4 sm:px-6 text-xs font-mono">

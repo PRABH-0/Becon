@@ -474,7 +474,7 @@ export default function ProfilePage() {
       )}
 
       {/* 3. PROFILE & AI TUNING FORM CONTAINER */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 mt-10">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 mt-10">
         {/* NEW ACCOUNT SETUP ONBOARDING BANNER */}
         {isSetupMode && (
           <div className="mb-8 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-900 dark:to-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200">

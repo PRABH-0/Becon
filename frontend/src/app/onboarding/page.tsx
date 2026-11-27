@@ -307,7 +307,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Main Content Step Card */}
-      <main className="flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-center">
+      <main id="main-content" className="flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-center">
         <div className="bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-md">
           {/* STEP 1: CHOOSE PROFESSION */}
           {step === 1 && (

@@ -137,7 +137,7 @@ export default function SavedPage() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8">
+        <main id="main-content" className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200 dark:border-slate-800">
             <div>
               <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-mono text-xs uppercase tracking-wider font-bold mb-1">
