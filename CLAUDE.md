@@ -15,7 +15,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 - **V1 Scope Boundary:** **NON-GOAL: No payments or paywalls in V1**. Quality > low cost > speed.
 
 ## 3. Architecture Overview
-- **Backend ([backend/app](backend/app)):** FastAPI service exposing REST endpoints for briefings, topic autocomplete, user profiles, authentication, onboarding chat, and ingestion triggers.
+- **Backend ([backend/app](backend/app)):** FastAPI service exposing REST endpoints for briefings, topic autocomplete, user profiles, authentication, and ingestion triggers.
   - `main.py`: App routing, explicit CORS middleware, request ID tracking, `/health`, `/api/me`, `/api/account`, `/api/briefings`, `/api/topics/search`, `/api/ingest`.
   - `config.py`: Centralized Pydantic settings and Supabase URL root validation.
   - `rate_limit.py`: In-process sliding-window rate limiter, `TRUSTED_PROXIES` IP resolution, and UTC-day Gemini quotas.
@@ -32,7 +32,7 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 - **Frontend ([frontend/src](frontend/src)):** Next.js App Router broadsheet web app using Tailwind CSS v4, Lucide icons, and self-hosted local fonts (full design spec in [docs/UI_DESIGN.md](docs/UI_DESIGN.md)).
   - `app/page.tsx`: Broadsheet layout containing Top Showcase (Lead + Quick Wire), Bento Grid deck, and finite briefing end state.
   - `app/profile/page.tsx`: Profile form (identity prefill, role, focus topics autocomplete, custom prompt, tone, Danger Zone deletion).
-  - `app/onboarding/page.tsx`: Interactive chat wizard extracting profile attributes via Becon AI.
+  - `app/onboarding/page.tsx`: 4-step DB-driven onboarding wizard for profession, topics, experience, and delivery preferences.
   - `app/about/page.tsx`: Manifesto and interactive 4-part Action Card role demonstration.
   - `app/login/page.tsx`, `app/register/page.tsx`, `app/forgot-password/page.tsx`, `app/auth/callback/page.tsx`, `app/auth/reset-password/page.tsx`: Auth flows inside `AuthShell` / `AuthForm`.
   - `app/fonts/`: Self-hosted Latin `.woff2` fonts + SIL OFL 1.1 licenses (`Space Grotesk`, `Plus Jakarta Sans`, `Source Serif 4`).
@@ -66,7 +66,9 @@ Run the test and migration commands below to check current test and table counts
   - `ENVIRONMENT`: Runtime environment mode (`development`, `production`, `test`).
   - `LOG_LEVEL`: Logging verbosity level (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
   - `GEMINI_API_KEY`: Google Gemini API key used for structured 4-part Action Card synthesis.
+  - `GEMINI_MODEL`: Google Gemini model name for card synthesis (default: `gemini-2.5-flash`).
   - `DATABASE_URL`: SQLAlchemy connection string (`sqlite:///./becon.db` or PostgreSQL URL).
+  - `DIRECT_URL`: Optional direct unpooled connection URL for Alembic migrations (critical for Supabase / PgBouncer transaction mode).
   - `SUPABASE_URL`: Bare Supabase project root URL (e.g. `https://<ref>.supabase.co`, no trailing path; required in production).
   - `SUPABASE_JWT_AUDIENCE`: Expected token audience (default: `authenticated`).
   - `SUPABASE_JWT_SECRET`: Optional legacy secret for HS256 token verification.
@@ -93,9 +95,8 @@ Run the test and migration commands below to check current test and table counts
   - `GEMINI_DAILY_CAP_GLOBAL`: Hard daily (UTC) Gemini call cap globally per process (default: `200`).
   - `INGEST_MAX_GEMINI_CALLS_PER_RUN`: Maximum Gemini card-synthesis calls per ingestion run; excess items remain as `raw_items` for the next run (default: `25`).
   - `GEMINI_MAX_OUTPUT_TOKENS_CARD`: `max_output_tokens` cap for card generation calls (default: `650`).
-  - `GEMINI_MAX_OUTPUT_TOKENS_CHAT`: `max_output_tokens` cap for onboarding chat calls (default: `400`).
-  - `GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS`: `max_output_tokens` cap for topic matching calls (default: `200`).
   - `TRUSTED_PROXIES`: Comma-separated reverse proxy IPs allowed to supply `X-Forwarded-For` (default: empty = ignore `X-Forwarded-For`).
+  - `SENTRY_DSN`: Optional Sentry DSN for production error monitoring.
   - `RESEND_API_KEY`: API key for Resend email delivery (if unset or empty, operates in log-only dry-run mode).
   - `EMAIL_FROM`: Sender email address with display name for email digests (default: `Becon Daily <briefing@becon.dev>`).
   - `APP_BASE_URL`: Base application URL for unsubscribe and email action links (default: `http://localhost:3000`).

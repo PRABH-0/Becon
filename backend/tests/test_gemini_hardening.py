@@ -15,7 +15,7 @@ from app.config import settings
 from app.deps import get_current_user, get_optional_user
 from app.main import app
 from app.models import Card, CardVariant, Event, FocusTopic, Profession, RawItem, Source, UserProfile
-from app.rate_limit import rate_limiter
+from app.rate_limit import GeminiQuotaExceededError, rate_limiter
 
 
 class FakeGeminiClient:
@@ -178,50 +178,26 @@ def test_oversize_inputs_return_422_and_max_output_tokens_set_on_all_gemini_call
     }
     assert client.post("/api/profile", json=oversize_profile).status_code == 422
 
-    # 2. POST /api/onboarding/chat caps
-    app.dependency_overrides[get_current_user] = lambda: fake_user
-
-    too_many_msgs = {"messages": [{"role": "user", "content": f"msg {i}"} for i in range(21)]}
-    assert client.post("/api/onboarding/chat", json=too_many_msgs).status_code == 422
-
-    msg_too_long = {"messages": [{"role": "user", "content": "x" * 1001}]}
-    assert client.post("/api/onboarding/chat", json=msg_too_long).status_code == 422
-
-    # 3. Verify max_output_tokens is explicitly set from config on ALL 3 Gemini functions
+    # 2. Verify max_output_tokens is explicitly set from config on generate_action_card
     def handler(call_idx, kwargs):
-        cfg = kwargs["config"]
-        if cfg.response_schema is ai_service.BriefingCardContent:
-            return SimpleNamespace(
-                text=json.dumps(
-                    {
-                        "what_happened": ["Card bullet"],
-                        "why_it_matters": "Matters",
-                        "how_it_affects_you": "Affects",
-                        "what_to_do_next": {"action_type": "apply", "guidance": "Do it"},
-                    }
-                )
+        return SimpleNamespace(
+            text=json.dumps(
+                {
+                    "what_happened": ["Card bullet"],
+                    "why_it_matters": "Matters",
+                    "how_it_affects_you": "Affects",
+                    "what_to_do_next": {"action_type": "apply", "guidance": "Do it"},
+                }
             )
-        if cfg.response_schema is ai_service.ChatResponse:
-            return SimpleNamespace(
-                text=json.dumps({"reply_text": "Hi!", "onboarding_complete": False, "extracted_data": None})
-            )
-        return SimpleNamespace(text=json.dumps(["Rust Systems", "WebAssembly"]))
+        )
 
     fake_gemini = FakeGeminiClient(handler=handler)
     monkeypatch.setattr(ai_service, "client", fake_gemini)
 
     ai_service.generate_action_card("Title", "https://example.com", "Summary", "Rust", user_key="8801")
-    ai_service.ai_match_topics("obscure_quantum_compiler", available_topics=[], user_key="8801")
-    ai_service.ai_onboarding_chat(
-        [ai_service.ChatMessage(role="user", content="Hello")],
-        available_topics=["Rust"],
-        user_key="8801",
-    )
 
-    assert len(fake_gemini.calls) == 3
+    assert len(fake_gemini.calls) == 1
     assert fake_gemini.calls[0]["config"].max_output_tokens == settings.GEMINI_MAX_OUTPUT_TOKENS_CARD
-    assert fake_gemini.calls[1]["config"].max_output_tokens == settings.GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS
-    assert fake_gemini.calls[2]["config"].max_output_tokens == settings.GEMINI_MAX_OUTPUT_TOKENS_CHAT
 
 
 def test_shared_variant_cache_isolated_from_custom_prompt(client, monkeypatch):
@@ -364,43 +340,37 @@ def test_guest_stricter_limits_apply_and_normal_user_unaffected(client, monkeypa
     monkeypatch.setattr(settings, "GEMINI_DAILY_CAP_PER_USER", 25)
     monkeypatch.setattr(settings, "GEMINI_DAILY_CAP_GLOBAL", 200)
 
-    def chat_handler(call_idx, kwargs):
-        return SimpleNamespace(
-            text=json.dumps({"reply_text": "Hello!", "onboarding_complete": False, "extracted_data": None})
-        )
-
-    fake_gemini = FakeGeminiClient(handler=chat_handler)
-    monkeypatch.setattr(ai_service, "client", fake_gemini)
-
     guest_1 = UserProfile(id=9101, email=None, name="Guest 1", is_anonymous=True)
     guest_2 = UserProfile(id=9102, email=None, name="Guest 2", is_anonymous=True)
     normal_user = UserProfile(id=9201, email="real@example.com", name="Real User", is_anonymous=False)
-    chat_payload = {"messages": [{"role": "user", "content": "Hi"}]}
 
     # Guests cannot force refresh; removed search returns 404
     app.dependency_overrides[get_optional_user] = lambda: guest_1
     assert client.get("/api/briefings", params={"refresh": "true"}).status_code == 403
     assert client.get("/api/briefings/search").status_code == 404
 
-    # Guest 1 hits per-guest daily/per-min cap at call #3 (cap=2)
-    app.dependency_overrides[get_current_user] = lambda: guest_1
-    assert client.post("/api/onboarding/chat", json=chat_payload).status_code == 200
-    assert client.post("/api/onboarding/chat", json=chat_payload).status_code == 200
-    resp_g1_blocked = client.post("/api/onboarding/chat", json=chat_payload)
-    assert resp_g1_blocked.status_code == 429
-    assert "Retry-After" in resp_g1_blocked.headers
+    # Guest 1 hits per-guest daily cap at call #3 (cap=2)
+    rate_limiter.check_gemini_quota(user_key=str(guest_1.id), is_guest=True)
+    rate_limiter.record_gemini_usage(user_key=str(guest_1.id), is_guest=True)
+    rate_limiter.check_gemini_quota(user_key=str(guest_1.id), is_guest=True)
+    rate_limiter.record_gemini_usage(user_key=str(guest_1.id), is_guest=True)
 
-    # Guest 2 gets 1 call (bringing all-guests total to 3 == GEMINI_DAILY_CAP_ALL_GUESTS), then blocked
-    app.dependency_overrides[get_current_user] = lambda: guest_2
-    assert client.post("/api/onboarding/chat", json=chat_payload).status_code == 200
-    resp_all_guests_blocked = client.post("/api/onboarding/chat", json=chat_payload)
-    assert resp_all_guests_blocked.status_code == 429
-    assert "guest" in resp_all_guests_blocked.json()["detail"].lower()
+    with pytest.raises(GeminiQuotaExceededError) as exc_info:
+        rate_limiter.check_gemini_quota(user_key=str(guest_1.id), is_guest=True)
+    assert "guest" in str(exc_info.value.detail).lower()
+
+    # Guest 2 gets 1 call (bringing all-guests total to 3 == GEMINI_DAILY_CAP_ALL_GUESTS), then blocked by pool cap
+    rate_limiter.check_gemini_quota(user_key=str(guest_2.id), is_guest=True)
+    rate_limiter.record_gemini_usage(user_key=str(guest_2.id), is_guest=True)
+
+    with pytest.raises(GeminiQuotaExceededError) as exc_info_all:
+        rate_limiter.check_gemini_quota(user_key=str(guest_2.id), is_guest=True)
+    assert "guest ai capacity" in str(exc_info_all.value.detail).lower()
 
     # Normal authenticated user is completely unaffected by guest pool exhaustion
-    app.dependency_overrides[get_current_user] = lambda: normal_user
     for _ in range(4):
-        assert client.post("/api/onboarding/chat", json=chat_payload).status_code == 200
+        rate_limiter.check_gemini_quota(user_key=str(normal_user.id), is_guest=False)
+        rate_limiter.record_gemini_usage(user_key=str(normal_user.id), is_guest=False)
 
 
 def test_ingest_stops_at_per_run_gemini_budget_and_defers_remaining_raw_items(client, monkeypatch):

@@ -182,84 +182,6 @@ class UserMeResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ChatMessage(BaseModel):
-    role: str = Field(
-        ...,
-        max_length=32,
-        description="Role of the message author: 'user', 'assistant', or 'system'",
-        examples=["user"],
-    )
-    content: str = Field(
-        ...,
-        max_length=1000,
-        description="Text content of the message (capped at 1000 characters)",
-        examples=["Hi, I am a Senior Full Stack Engineer interested in Python and Cloud Architecture."],
-    )
-
-
-class ChatRequest(BaseModel):
-    messages: List[ChatMessage] = Field(
-        ...,
-        max_length=20,
-        description="List of chronological chat messages for AI onboarding context (capped at 20 messages)",
-        examples=[
-            [
-                {
-                    "role": "user",
-                    "content": "Hi, I am a Senior Full Stack Engineer interested in Python and Cloud Architecture.",
-                }
-            ]
-        ],
-    )
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "messages": [
-                        {"role": "system", "content": "User has just registered. Start the onboarding."},
-                        {
-                            "role": "user",
-                            "content": "Hi! My name is Alex, I am a Senior Full Stack Engineer interested in Python, .NET Core, and Azure.",
-                        },
-                    ]
-                }
-            ]
-        }
-    }
-
-
-class ExtractedProfile(BaseModel):
-    name: str | None = Field(default=None, description="Extracted user name", examples=["Alex"])
-    role: str | None = Field(
-        default=None, description="Extracted professional role", examples=["Senior Full Stack Engineer"]
-    )
-    experience: str | None = Field(
-        default=None, description="Extracted experience level", examples=["Senior (5+ Years)"]
-    )
-    interests: str | None = Field(
-        default=None, description="Extracted technology and industry interests", examples=["Python, .NET Core, Azure"]
-    )
-
-
-class ChatResponse(BaseModel):
-    reply_text: str = Field(
-        ...,
-        description="AI conversational reply message",
-        examples=[
-            "Welcome aboard Alex! I've personalized your Daily Gazette for Senior Full Stack Engineering with a focus on Python, .NET Core, and Azure."
-        ],
-    )
-    onboarding_complete: bool = Field(
-        ...,
-        description="Indicates whether the AI has collected all required profile fields to complete onboarding",
-        examples=[True],
-    )
-    extracted_data: ExtractedProfile | None = Field(
-        default=None, description="Extracted profile attributes if onboarding concluded during this turn"
-    )
-
-
 class HealthResponse(BaseModel):
     status: str = Field(default="online", description="Health check status", examples=["online"])
     app: str = Field(
@@ -271,14 +193,6 @@ class HealthResponse(BaseModel):
         default="Becon AI Intelligence (Personalized & Structured)",
         description="Underlying intelligence engine",
         examples=["Becon AI Intelligence (Personalized & Structured)"],
-    )
-
-
-class MatchTopicsRequest(BaseModel):
-    description: str = Field(
-        default="",
-        max_length=500,
-        description="Free-form user description capped at 500 characters for topic recommendation",
     )
 
 

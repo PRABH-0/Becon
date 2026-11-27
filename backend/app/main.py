@@ -21,7 +21,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.ai_service import ai_match_topics
 from app.briefing_service import invalidate_daily_briefing_cache
 from app.config import settings
 from app.database import get_db
@@ -55,12 +54,9 @@ from app.schemas import (
     BriefingCard,
     CardFeedbackRequest,
     CardReportRequest,
-    ChatRequest,
-    ChatResponse,
     HealthResponse,
     IngestCounts,
     IngestResponse,
-    MatchTopicsRequest,
     MetricsEventCreate,
     MetricsEventResponse,
     ProfessionResponse,
@@ -130,19 +126,6 @@ def validate_interests_param(interests: str) -> str:
             )
     return ", ".join(topics)
 
-
-AVAILABLE_TOPICS = [
-    "AI & Generative Models",
-    "Cloud Architecture & AWS",
-    "Kubernetes & Containers",
-    "Full-Stack Development (React, Next.js, Node)",
-    "Systems Programming (Rust, Go)",
-    "Backend & Distributed Systems (.NET, Java, Python)",
-    "DevOps & Platform Engineering",
-    "Security & Vulnerabilities (CVE, OWASP)",
-    "Data Engineering & Databases",
-    "System Design & Scalability",
-]
 
 API_DESCRIPTION = """
 ### Becon AI Intelligence Briefing Engine (API v1.0)
@@ -630,39 +613,6 @@ def search_topics_autocomplete(
 
 
 @app.post(
-    "/api/ai/match-topics",
-    tags=["Onboarding"],
-    summary="Semantic topic recommendation from user description",
-    response_model=dict,
-    responses={
-        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
-        422: {"description": "Validation Error - Description exceeds max length (500 chars)"},
-        429: {"description": "Too Many Requests - Per-user rate limit or daily AI quota exceeded"},
-    },
-)
-def match_topics_endpoint(
-    payload: MatchTopicsRequest,
-    current_user: UserProfile = Depends(get_current_user),
-):
-    """
-    Extracts relevant developer topics from free-form natural language text using Gemini.
-    Requires authentication, rate-limits per user, and caps input length at 500 characters.
-    """
-    is_guest = bool(current_user.is_anonymous)
-    enforce_auth_ai_rate_limit(current_user.id, scope="match_topics", is_guest=is_guest)
-    description = payload.description.strip()
-    if not description:
-        return {"matched_topics": []}
-    matched = ai_match_topics(
-        description,
-        AVAILABLE_TOPICS,
-        user_key=str(current_user.id),
-        is_guest=is_guest,
-    )
-    return {"matched_topics": matched}
-
-
-@app.post(
     "/api/ingest",
     tags=["Ingestion"],
     summary="Trigger immediate feed fetch and database persistence pipeline",
@@ -902,51 +852,6 @@ def update_profile(
     invalidate_daily_briefing_cache(db, current_user.id)
     db.refresh(current_user)
     return current_user
-
-
-@app.post(
-    "/api/onboarding/chat",
-    tags=["Onboarding"],
-    summary="Onboarding conversational chat endpoint",
-    response_model=ChatResponse,
-    responses={
-        401: {"description": "Unauthorized - Missing or invalid Bearer JWT token"},
-        422: {"description": "Validation Error - Invalid chat history format"},
-    },
-)
-def onboarding_chat_endpoint(
-    chat_request: ChatRequest,
-    current_user: UserProfile = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Processes chat messages with the onboarding conversational agent.
-    When onboarding completes, automatically updates the user profile in the database.
-    """
-    from app.ai_service import ai_onboarding_chat
-
-    is_guest = bool(current_user.is_anonymous)
-    enforce_auth_ai_rate_limit(current_user.id, scope="onboarding_chat", is_guest=is_guest)
-    response = ai_onboarding_chat(
-        chat_request.messages,
-        AVAILABLE_TOPICS,
-        user_key=str(current_user.id),
-        is_guest=is_guest,
-    )
-
-    if response.onboarding_complete and response.extracted_data:
-        if response.extracted_data.name:
-            current_user.name = response.extracted_data.name
-        if response.extracted_data.role:
-            current_user.role = response.extracted_data.role
-        if response.extracted_data.experience:
-            current_user.experience = response.extracted_data.experience
-        if response.extracted_data.interests:
-            current_user.interests = response.extracted_data.interests
-        db.commit()
-        invalidate_daily_briefing_cache(db, current_user.id)
-
-    return response
 
 
 # ==========================================

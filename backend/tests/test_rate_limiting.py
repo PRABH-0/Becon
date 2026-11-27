@@ -1,13 +1,10 @@
 """Tests for in-process rate limiting, trusted-proxy X-Forwarded-For handling, and daily Gemini quotas."""
 
-from types import SimpleNamespace
-
 import pytest
 from fastapi.testclient import TestClient
 
-from app import ai_service
 from app.config import settings
-from app.deps import get_current_user
+from app.deps import get_optional_user
 from app.main import app
 from app.models import UserProfile
 from app.rate_limit import GeminiQuotaExceededError, rate_limiter
@@ -65,58 +62,43 @@ def test_authenticated_ai_endpoint_per_user_rate_limit(client, monkeypatch):
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
     monkeypatch.setattr(settings, "RATE_LIMIT_AUTH_AI_PER_MIN", 2)
 
-    fake_user = UserProfile(id=9991, email="rl@example.com", name="RL User")
-    app.dependency_overrides[get_current_user] = lambda: fake_user
+    fake_user = UserProfile(id=9991, email="rl@example.com", name="RL User", is_anonymous=False)
+    app.dependency_overrides[get_optional_user] = lambda: fake_user
     try:
-        payload = {"messages": [{"role": "user", "content": "Hello"}]}
-        assert client.post("/api/onboarding/chat", json=payload).status_code == 200
-        assert client.post("/api/onboarding/chat", json=payload).status_code == 200
-        blocked = client.post("/api/onboarding/chat", json=payload)
+        assert client.get("/api/briefings", params={"refresh": "true"}).status_code == 200
+        assert client.get("/api/briefings", params={"refresh": "true"}).status_code == 200
+        blocked = client.get("/api/briefings", params={"refresh": "true"})
         assert blocked.status_code == 429
         assert "Retry-After" in blocked.headers
         assert int(blocked.headers["Retry-After"]) >= 1
     finally:
-        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_optional_user, None)
 
 
-def test_gemini_daily_caps_per_user_and_global(client, monkeypatch):
+def test_gemini_daily_caps_per_user_and_global(monkeypatch):
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
-    monkeypatch.setattr(settings, "RATE_LIMIT_AUTH_AI_PER_MIN", 100)
     monkeypatch.setattr(settings, "GEMINI_DAILY_CAP_PER_USER", 2)
     monkeypatch.setattr(settings, "GEMINI_DAILY_CAP_GLOBAL", 3)
 
-    # Mock active Gemini client returning valid ChatResponse JSON
-    class _FakeModels:
-        def generate_content(self, **kwargs):
-            return SimpleNamespace(
-                text='{"reply_text": "Hi!", "onboarding_complete": false, "extracted_data": null}'
-            )
+    rate_limiter.reset()
 
-    monkeypatch.setattr(ai_service, "client", SimpleNamespace(models=_FakeModels()))
+    # User A hits per-user cap (2)
+    rate_limiter.check_gemini_quota(user_key="101")
+    rate_limiter.record_gemini_usage(user_key="101")
+    rate_limiter.check_gemini_quota(user_key="101")
+    rate_limiter.record_gemini_usage(user_key="101")
 
-    user_a = UserProfile(id=101, email="a@example.com", name="A")
-    user_b = UserProfile(id=102, email="b@example.com", name="B")
-    payload = {"messages": [{"role": "user", "content": "Hello"}]}
+    with pytest.raises(GeminiQuotaExceededError) as exc_info:
+        rate_limiter.check_gemini_quota(user_key="101")
+    assert "daily AI request quota" in str(exc_info.value)
 
-    try:
-        # User A hits per-user cap (2)
-        app.dependency_overrides[get_current_user] = lambda: user_a
-        assert client.post("/api/onboarding/chat", json=payload).status_code == 200
-        assert client.post("/api/onboarding/chat", json=payload).status_code == 200
-        resp_user_cap = client.post("/api/onboarding/chat", json=payload)
-        assert resp_user_cap.status_code == 429
-        assert "Retry-After" in resp_user_cap.headers
-        assert "daily AI request quota" in resp_user_cap.json()["detail"]
+    # User B gets 1 call (reaching global cap = 3), then hits global cap
+    rate_limiter.check_gemini_quota(user_key="102")
+    rate_limiter.record_gemini_usage(user_key="102")
 
-        # User B gets 1 call (reaching global cap = 3), then hits global cap
-        app.dependency_overrides[get_current_user] = lambda: user_b
-        assert client.post("/api/onboarding/chat", json=payload).status_code == 200
-        resp_global_cap = client.post("/api/onboarding/chat", json=payload)
-        assert resp_global_cap.status_code == 429
-        assert "Retry-After" in resp_global_cap.headers
-        assert "Global daily AI quota" in resp_global_cap.json()["detail"]
-    finally:
-        app.dependency_overrides.pop(get_current_user, None)
+    with pytest.raises(GeminiQuotaExceededError) as exc_info_global:
+        rate_limiter.check_gemini_quota(user_key="102")
+    assert "Global daily AI quota" in str(exc_info_global.value)
 
 
 def test_direct_consume_gemini_quota_raises():

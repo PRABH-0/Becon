@@ -81,8 +81,6 @@ class Settings(BaseSettings):
     INGEST_MAX_GEMINI_CALLS_PER_RUN: int = Field(default=25, ge=0)
     # Output token ceilings for every Gemini call
     GEMINI_MAX_OUTPUT_TOKENS_CARD: int = Field(default=650, ge=64, le=4096)
-    GEMINI_MAX_OUTPUT_TOKENS_CHAT: int = Field(default=400, ge=64, le=4096)
-    GEMINI_MAX_OUTPUT_TOKENS_MATCH_TOPICS: int = Field(default=200, ge=32, le=2048)
     # Comma-separated trusted reverse proxy IPs allowed to supply X-Forwarded-For (empty = ignore XFF)
     TRUSTED_PROXIES: str = Field(default="")
     # Optional Sentry DSN for production error monitoring (Task S5)
