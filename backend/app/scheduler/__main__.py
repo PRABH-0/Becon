@@ -115,6 +115,11 @@ async def main_async() -> int:
         print_status_table()
         return 0
 
+    if not getattr(settings, "SCHEDULER_ENABLED", True):
+        logger.info("Scheduler execution skipped: SCHEDULER_ENABLED is False")
+        print("Scheduler disabled: SCHEDULER_ENABLED is False.")
+        return 0
+
     engine = SchedulerEngine()
 
     if args.once:

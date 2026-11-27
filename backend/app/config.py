@@ -116,20 +116,49 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
-        raw_url = (self.SUPABASE_URL or "").strip()
-        if not raw_url:
-            if self.ENVIRONMENT.lower() == "production":
+        if self.ENVIRONMENT.lower() == "production":
+            # 1. SUPABASE_URL validation
+            raw_url = (self.SUPABASE_URL or "").strip()
+            if not raw_url:
                 raise ValueError("Production safety violation: SUPABASE_URL must be configured in production.")
-            return self
-
-        normalized, err = normalize_supabase_url(raw_url)
-        if err:
-            if self.ENVIRONMENT.lower() == "production":
+            normalized, err = normalize_supabase_url(raw_url)
+            if err:
                 raise ValueError(f"Production safety violation: {err}")
-            logger.error(err)
-            return self
+            self.SUPABASE_URL = normalized
 
-        self.SUPABASE_URL = normalized
+            # 2. INGEST_API_TOKEN validation
+            if not (self.INGEST_API_TOKEN or "").strip():
+                raise ValueError("Production safety violation: INGEST_API_TOKEN must be configured in production.")
+
+            # 3. UNSUBSCRIBE_SECRET validation
+            unsub = (self.UNSUBSCRIBE_SECRET or "").strip()
+            if not unsub or unsub == "dev-unsubscribe-secret-change-in-production":
+                raise ValueError(
+                    "Production safety violation: UNSUBSCRIBE_SECRET must be configured and cannot use the development default in production."
+                )
+
+            # 4. ALLOWED_ORIGINS validation
+            origins = self.allowed_origins_list
+            if not origins:
+                raise ValueError("Production safety violation: ALLOWED_ORIGINS must be configured in production.")
+            if any(o in ("*", "http://localhost:3000", "http://127.0.0.1:3000") or "localhost" in o.lower() for o in origins):
+                raise ValueError(
+                    "Production safety violation: ALLOWED_ORIGINS cannot contain localhost or wildcards in production."
+                )
+
+            # 5. ENABLE_DOCS defaults to off in production unless explicitly set
+            if "ENABLE_DOCS" not in self.model_fields_set and "ENABLE_DOCS" not in os.environ:
+                self.ENABLE_DOCS = False
+
+        else:
+            raw_url = (self.SUPABASE_URL or "").strip()
+            if raw_url:
+                normalized, err = normalize_supabase_url(raw_url)
+                if err:
+                    logger.error(err)
+                else:
+                    self.SUPABASE_URL = normalized
+
         return self
 
 

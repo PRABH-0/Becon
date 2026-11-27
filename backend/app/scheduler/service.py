@@ -170,6 +170,10 @@ class SchedulerEngine:
 
     async def run_due_cycle(self, limit: int | None = None) -> List[SourceFetchSummary]:
         """Query currently due sources and fetch them concurrently within limits."""
+        if not getattr(settings, "SCHEDULER_ENABLED", True):
+            logger.info("Scheduler cycle skipped: SCHEDULER_ENABLED is False")
+            return []
+
         now = self.clock()
         db = self.db_factory()
         try:
@@ -211,6 +215,10 @@ class SchedulerEngine:
         """Run continuous scheduler loop until stop_event is signaled."""
         if stop_event is None:
             stop_event = asyncio.Event()
+
+        if not getattr(settings, "SCHEDULER_ENABLED", True):
+            logger.info("Scheduler loop terminated: SCHEDULER_ENABLED is False")
+            return
 
         logger.info(
             "Starting scheduler worker (tick: %ds, concurrency: %d, timeout: %.1fs, max_backoff: %dm)",

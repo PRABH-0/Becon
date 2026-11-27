@@ -18,7 +18,7 @@ Provides standard development workflow tasks: install, dev-backend, dev-frontend
 
 param (
     [Parameter(Position=0, Mandatory=$true)]
-    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed", "fetch", "scheduler", "synthesize", "eval-quality")]
+    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed", "fetch", "scheduler", "synthesize", "eval-quality", "smoke-test")]
     [string]$Command,
 
     [Parameter(Position=1, Mandatory=$false)]
@@ -179,6 +179,21 @@ switch ($Command) {
                 & .venv\Scripts\python.exe -m app.eval_quality $evalArgs
             } else {
                 & .venv\Scripts\python.exe -m app.eval_quality
+            }
+        } finally {
+            Pop-Location
+        }
+    }
+
+    "smoke-test" {
+        Write-Host "==> Running Deployment Smoke Test..." -ForegroundColor Cyan
+        Push-Location "$RepoRoot"
+        try {
+            if ($Message -and $Message -ne "migration") {
+                $smokeArgs = $Message -split "\s+"
+                & .\scripts\smoke_test.ps1 $smokeArgs
+            } else {
+                Write-Host "Usage: .\scripts\dev.ps1 smoke-test -Message '-BaseUrl <url> -IngestToken <token>'" -ForegroundColor Yellow
             }
         } finally {
             Pop-Location

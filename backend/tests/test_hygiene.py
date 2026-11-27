@@ -25,6 +25,9 @@ def test_settings_production_fails_without_supabase_url():
     prod_settings = Settings(
         ENVIRONMENT="production",
         SUPABASE_URL="https://example.supabase.co",
+        INGEST_API_TOKEN="valid-test-token-12345",
+        UNSUBSCRIBE_SECRET="valid-test-secret-12345",
+        ALLOWED_ORIGINS="https://becon.dev",
     )
     assert prod_settings.ENVIRONMENT == "production"
     assert prod_settings.SUPABASE_URL == "https://example.supabase.co"

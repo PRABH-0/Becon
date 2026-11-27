@@ -40,21 +40,26 @@ def test_normalize_supabase_url_cases():
 
 
 def test_settings_production_fails_fast_on_bad_supabase_url():
+    valid_prod_creds = {
+        "INGEST_API_TOKEN": "valid-test-token-12345",
+        "UNSUBSCRIBE_SECRET": "valid-test-secret-12345",
+        "ALLOWED_ORIGINS": "https://becon.dev",
+    }
     # Trailing slash in production is normalized cleanly
-    ok = Settings(ENVIRONMENT="production", SUPABASE_URL="https://myproject.supabase.co/")
+    ok = Settings(ENVIRONMENT="production", SUPABASE_URL="https://myproject.supabase.co/", **valid_prod_creds)
     assert ok.SUPABASE_URL == "https://myproject.supabase.co"
 
     # /rest/v1 fails fast at startup in production
     with pytest.raises(ValidationError, match="remove the path"):
-        Settings(ENVIRONMENT="production", SUPABASE_URL="https://myproject.supabase.co/rest/v1")
+        Settings(ENVIRONMENT="production", SUPABASE_URL="https://myproject.supabase.co/rest/v1", **valid_prod_creds)
 
     # /auth/v1 fails fast at startup in production
     with pytest.raises(ValidationError, match="remove the path"):
-        Settings(ENVIRONMENT="production", SUPABASE_URL="https://myproject.supabase.co/auth/v1")
+        Settings(ENVIRONMENT="production", SUPABASE_URL="https://myproject.supabase.co/auth/v1", **valid_prod_creds)
 
     # Empty fails fast at startup in production
     with pytest.raises(ValidationError):
-        Settings(ENVIRONMENT="production", SUPABASE_URL="")
+        Settings(ENVIRONMENT="production", SUPABASE_URL="", **valid_prod_creds)
 
 
 def test_settings_development_logs_clear_error_and_jwk_client_rejects(monkeypatch):
