@@ -132,15 +132,18 @@ def test_stratified_evaluation_events_selection(db_session):
         )
         created_events.append(ev)
 
-    selected = get_stratified_evaluation_events(
+    selected, warnings = get_stratified_evaluation_events(
         db_session,
         limit=6,
         max_per_source=2,
-        min_sources=3,
+        min_sources=8,
     )
 
     assert len(selected) <= 6
     assert len(selected) > 0
+    assert isinstance(warnings, list)
+    # Since only 6 distinct sources were seeded, min_sources=8 warning must be reported
+    assert any("diversity target" in w for w in warnings)
 
     # Verify per-source quota is respected
     source_counts = {}
@@ -170,24 +173,30 @@ def test_eval_quality_dry_run_generates_csv(db_session, tmp_path, monkeypatch):
         topic_name="Rust",
     )
 
-    out_csv = tmp_path / "test_eval_output.csv"
+    out_dir = tmp_path / "eval_out"
     exit_code = run_eval_quality(
         limit=2,
         dry_run=True,
         persist=False,
-        out_dir=str(out_csv),
+        out_dir=str(out_dir),
         db=db_session,
     )
 
     assert exit_code == 0
-    assert os.path.exists(out_csv)
+    generated_files = list(out_dir.glob("*.csv"))
+    assert len(generated_files) == 1
+    out_csv = generated_files[0]
+    # Dry-run files must be prefixed with dryrun_
+    assert out_csv.name.startswith("dryrun_")
 
     with open(out_csv, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         headers = reader.fieldnames
         assert headers == EVAL_CSV_COLUMNS
 
-        # Check required columns including blank reviewer columns
+        # Check required columns including mode, model_name and blank reviewer columns
+        assert "mode" in headers
+        assert "model_name" in headers
         assert "claim_supported" in headers
         assert "invented_detail" in headers
         assert "action_sensible" in headers
@@ -197,11 +206,64 @@ def test_eval_quality_dry_run_generates_csv(db_session, tmp_path, monkeypatch):
         assert len(rows) >= 1
         for row in rows:
             assert row["event_id"] != ""
+            assert row["mode"] == "dry-run"
+            assert row["model_name"] == "dryrun-fake"
             assert row["source_name"] != ""
             assert row["validator_verdict"] in ("passed", "flagged", "unvalidated")
             assert row["claim_supported"] == ""
             assert row["invented_detail"] == ""
             assert row["action_sensible"] == ""
+
+
+def test_eval_quality_exclude_csv(db_session, tmp_path):
+    """Verifies that events present in --exclude-csv are skipped during evaluation."""
+    ev1 = create_test_source_and_event(db_session, "Exclude Source 1", "security", 99.0)
+    create_test_source_and_event(db_session, "Exclude Source 2", "release", 98.0)
+
+    prev_csv = tmp_path / "prev_run.csv"
+    with open(prev_csv, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=EVAL_CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerow({"event_id": str(ev1.id)})
+
+    out_csv = tmp_path / "resumed_run.csv"
+    exit_code = run_eval_quality(
+        limit=1,
+        dry_run=True,
+        out_dir=str(out_csv),
+        exclude_csv=str(prev_csv),
+        db=db_session,
+    )
+    assert exit_code == 0
+    with open(tmp_path / "dryrun_resumed_run.csv", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        assert len(rows) == 1
+        assert rows[0]["event_id"] != str(ev1.id)
+
+
+def test_eval_quality_max_calls_cap(db_session, tmp_path, monkeypatch):
+    """Verifies that --max-calls stops the evaluation loop cleanly."""
+    create_test_source_and_event(db_session, "Cap Source 1", "security", 95.0)
+    create_test_source_and_event(db_session, "Cap Source 2", "release", 94.0)
+    create_test_source_and_event(db_session, "Cap Source 3", "deprecation", 93.0)
+
+    fake_client = FakeEvalGeminiClient()
+    monkeypatch.setattr(ai_service, "client", fake_client)
+
+    out_csv = tmp_path / "max_calls_run.csv"
+    exit_code = run_eval_quality(
+        limit=3,
+        dry_run=False,
+        max_calls=1,
+        out_dir=str(out_csv),
+        db=db_session,
+    )
+    assert exit_code == 0
+    with open(out_csv, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        assert len(rows) == 1
 
 
 def test_eval_quality_read_only_by_default(db_session, monkeypatch):

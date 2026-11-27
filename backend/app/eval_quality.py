@@ -6,7 +6,7 @@ a detailed CSV evaluation report for human review.
 
 Does NOT write cards to database unless --persist is explicitly passed.
 Supports --dry-run for offline testing without spending Gemini API quota.
-Gracefully writes partial CSV and exits 0 on Gemini quota exhaustion.
+Gracefully writes partial CSV and exits 0 on Gemini quota exhaustion or max-calls cap.
 """
 
 from __future__ import annotations
@@ -42,6 +42,8 @@ logger = logging.getLogger("becon.eval_quality")
 
 EVAL_CSV_COLUMNS: list[str] = [
     "event_id",
+    "mode",
+    "model_name",
     "source_name",
     "source_url",
     "source_excerpt",
@@ -112,20 +114,43 @@ class FakeEvalGeminiClient:
         return SimpleNamespace(text=json.dumps(card_data))
 
 
+def read_excluded_event_ids(exclude_csv_path: str) -> set[uuid.UUID]:
+    """Read event_id column from a previous evaluation CSV to skip resumed events."""
+    excluded: set[uuid.UUID] = set()
+    if not os.path.exists(exclude_csv_path):
+        logger.warning("Exclude CSV file not found: %s", exclude_csv_path)
+        return excluded
+
+    with open(exclude_csv_path, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            raw_id = row.get("event_id", "").strip()
+            if raw_id:
+                try:
+                    excluded.add(uuid.UUID(raw_id))
+                except ValueError:
+                    continue
+    return excluded
+
+
 def get_stratified_evaluation_events(
     db: Session,
     limit: int = 30,
     max_per_source: int = 3,
     min_sources: int = 8,
-) -> list[Event]:
+    exclude_event_ids: set[uuid.UUID] | None = None,
+) -> tuple[list[Event], list[str]]:
     """Select eligible events stratified across categories and distinct sources.
 
     - Must have at least one topic tag (EventTopic).
     - Must have raw_items with sufficient source text (>= MIN_SOURCE_TEXT_LENGTH).
-    - Excludes commit-log-only items.
+    - Excludes commit-log-only items and events in exclude_event_ids.
     - Stratified across categories (security, release, deprecation, eol, industry).
     - Aim for at least min_sources distinct sources, capped at max_per_source each.
     - Ordered by severity_score DESC within each stratum.
+
+    Returns:
+        (selected_events, relaxation_warnings)
     """
     has_focus_tag = select(EventTopic.id).where(EventTopic.event_id == Event.id).exists()
 
@@ -140,8 +165,11 @@ def get_stratified_evaluation_events(
         .all()
     )
 
+    excluded = exclude_event_ids or set()
     eligible: list[Event] = []
     for ev in candidates:
+        if ev.id in excluded:
+            continue
         raw = next((r for r in ev.raw_items if (r.summary or r.content_text)), None)
         text = (raw.summary or raw.content_text or "") if raw else ""
         if len(text.strip()) >= MIN_SOURCE_TEXT_LENGTH and not is_commit_log_only(text):
@@ -156,6 +184,7 @@ def get_stratified_evaluation_events(
     selected: list[Event] = []
     source_counts: dict[uuid.UUID, int] = defaultdict(int)
     seen_event_ids: set[uuid.UUID] = set()
+    relaxed_per_source_count = 0
 
     # Determine ordered category list (preferred list + any other categories present in DB)
     available_cats = [c for c in PREFERRED_CATEGORIES if c in category_buckets]
@@ -214,10 +243,33 @@ def get_stratified_evaluation_events(
                 continue
             selected.append(ev)
             seen_event_ids.add(ev.id)
+            relaxed_per_source_count += 1
             if len(selected) >= limit:
                 break
 
-    return selected
+    # Compile warnings for any relaxed constraints
+    warnings: list[str] = []
+    distinct_source_count = len(source_counts)
+    if distinct_source_count < min_sources:
+        warnings.append(
+            f"Source diversity target (< {min_sources} sources) relaxed: only {distinct_source_count} "
+            f"distinct sources available in eligible events."
+        )
+
+    if relaxed_per_source_count > 0:
+        warnings.append(
+            f"Per-source cap (max {max_per_source}/source) relaxed for {relaxed_per_source_count} "
+            f"events to meet requested limit of {limit}."
+        )
+
+    selected_categories = { (ev.category or "general").strip().lower() for ev in selected }
+    missing_categories = [c for c in PREFERRED_CATEGORIES if c not in selected_categories and c != "general"]
+    if missing_categories:
+        warnings.append(
+            f"Category spread incomplete: categories {missing_categories} had 0 eligible events in selection."
+        )
+
+    return selected, warnings
 
 
 def format_source_excerpt(raw_text: str, max_chars: int = 300) -> str:
@@ -312,6 +364,10 @@ def evaluate_single_event(
     # Format what_happened bullets
     what_happened_str = "\n".join(f"- {b}" for b in card_content.what_happened)
 
+    # Model and mode attributes
+    mode_str = "dry-run" if dry_run else "live"
+    model_name_str = "dryrun-fake" if dry_run else settings.GEMINI_MODEL
+
     # Optional DB persistence
     if persist:
         content_hash = hashlib.sha256((raw_summary or event.canonical_title).encode("utf-8")).hexdigest()
@@ -324,7 +380,7 @@ def evaluate_single_event(
             card.action_type = card_content.what_to_do_next.action_type
             card.action_guidance = card_content.what_to_do_next.guidance
             card.source_text_hash = content_hash
-            card.model_name = settings.GEMINI_MODEL
+            card.model_name = model_name_str
             card.validation_status = val_result.status
             card.validation_notes = val_result.notes
             card.status = "published" if is_valid else "draft"
@@ -340,7 +396,7 @@ def evaluate_single_event(
                 action_guidance=card_content.what_to_do_next.guidance,
                 source_url=event.canonical_url,
                 source_text_hash=content_hash,
-                model_name=settings.GEMINI_MODEL,
+                model_name=model_name_str,
                 prompt_version=ai_service.PROMPT_VERSION,
                 validation_status=val_result.status,
                 validation_notes=val_result.notes,
@@ -352,6 +408,8 @@ def evaluate_single_event(
 
     return {
         "event_id": str(event.id),
+        "mode": mode_str,
+        "model_name": model_name_str,
         "source_name": source_name,
         "source_url": source_url,
         "source_excerpt": format_source_excerpt(raw_summary),
@@ -389,9 +447,15 @@ def run_eval_quality(
     out_dir: str = "eval_output",
     max_per_source: int = 3,
     min_sources: int = 8,
+    max_calls: int | None = None,
+    exclude_csv: str | None = None,
     db: Session | None = None,
 ) -> int:
-    """Run quality-gate evaluation against stratified events and write CSV."""
+    """Run quality-gate evaluation against stratified events and write CSV.
+
+    Note: eval_quality is NOT subject to INGEST_MAX_GEMINI_CALLS_PER_RUN.
+    Instead, it uses --max-calls (default = limit * 2) bounded by global/per-user daily caps.
+    """
     should_close_db = False
     if db is None:
         db = SessionLocal()
@@ -400,11 +464,19 @@ def run_eval_quality(
     original_client = ai_service.client
 
     try:
-        events = get_stratified_evaluation_events(
+        # Resolve excluded events if resume CSV provided
+        excluded_ids: set[uuid.UUID] = set()
+        if exclude_csv:
+            excluded_ids = read_excluded_event_ids(exclude_csv)
+            if excluded_ids:
+                print(f"Loaded {len(excluded_ids)} previously evaluated event IDs to exclude from {exclude_csv}.")
+
+        events, warnings = get_stratified_evaluation_events(
             db,
             limit=limit,
             max_per_source=max_per_source,
             min_sources=min_sources,
+            exclude_event_ids=excluded_ids,
         )
 
         if not events:
@@ -423,35 +495,60 @@ def run_eval_quality(
             source_counts[s_name] += 1
 
         print("=== QUALITY EVALUATION STRATIFIED MIX ===")
-        print(f"Total Events Selected: {len(events)} (Target: {limit})")
-        print(f"Distinct Sources: {len(source_counts)} (Target: >= {min_sources}, Max/source: {max_per_source})")
+        print(f"Total Events Selected: {len(events)} (Target Limit: {limit})")
+        print(f"Distinct Sources Count: {len(source_counts)} (Target: >= {min_sources}, Max/source: {max_per_source})")
         print("\nCategory Breakdown:")
         for cat, cnt in sorted(category_counts.items(), key=lambda x: -x[1]):
             print(f"  - {cat}: {cnt}")
         print("\nSource Breakdown:")
         for src, cnt in sorted(source_counts.items(), key=lambda x: -x[1]):
             print(f"  - {src}: {cnt}")
+
+        if warnings:
+            print("\nWARNING: Stratification constraints relaxed:")
+            for w in warnings:
+                print(f"  - {w}")
+        else:
+            print("\nAll stratification constraints fully satisfied.")
         print("=========================================\n")
 
-        # Prepare output path
+        # Prepare output path with dry-run safety prefix
+        prefix = "dryrun_" if dry_run else ""
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         if out_dir.endswith(".csv"):
-            out_path = out_dir
+            dir_part, file_part = os.path.split(out_dir)
+            if dry_run and not file_part.startswith("dryrun_"):
+                out_path = os.path.join(dir_part, f"dryrun_{file_part}")
+            else:
+                out_path = out_dir
         else:
-            out_path = os.path.join(out_dir, f"eval_quality_{timestamp}.csv")
+            out_path = os.path.join(out_dir, f"{prefix}eval_quality_{timestamp}.csv")
 
         # Set fake Gemini client for dry-run if live client is unset or requested
         if dry_run and not isinstance(ai_service.client, FakeEvalGeminiClient):
             ai_service.client = FakeEvalGeminiClient()
+
+        # Effective max calls (default: limit * 2)
+        effective_max_calls = max_calls if max_calls is not None else (limit * 2)
+        total_calls_made = 0
 
         rows: list[dict[str, Any]] = []
         passed_count = 0
         flagged_count = 0
         quota_stopped = False
 
-        print(f"Evaluating {len(events)} events (dry_run={dry_run}, persist={persist})...\n")
+        print(
+            f"Evaluating {len(events)} events (mode={'dry-run' if dry_run else 'live'}, "
+            f"persist={persist}, max_calls={effective_max_calls})...\n"
+        )
 
         for idx, event in enumerate(events, start=1):
+            if total_calls_made >= effective_max_calls:
+                remaining = len(events) - len(rows)
+                print(f"\n[CALLS CAP REACHED] Evaluation reached max-calls cap ({effective_max_calls}).")
+                print(f"{remaining} events deferred without penalty. Writing partial evaluation CSV...")
+                break
+
             try:
                 row = evaluate_single_event(
                     db,
@@ -460,6 +557,9 @@ def run_eval_quality(
                     persist=persist,
                 )
                 rows.append(row)
+                calls_for_event = 1 + int(row.get("retries_used", 0))
+                total_calls_made += calls_for_event
+
                 verdict = row["validator_verdict"]
                 if verdict == "passed":
                     passed_count += 1
@@ -487,7 +587,10 @@ def run_eval_quality(
         # Write CSV output
         write_eval_csv(rows, out_path)
         print(f"\nEvaluation output written successfully to: {out_path}")
-        print(f"Results summary: {len(rows)} evaluated | {passed_count} passed | {flagged_count} flagged")
+        print(
+            f"Results summary: {len(rows)} evaluated | {passed_count} passed | "
+            f"{flagged_count} flagged | {total_calls_made} Gemini calls used"
+        )
         if quota_stopped:
             print("Completed cleanly with partial results on quota backoff.")
 
@@ -509,6 +612,8 @@ def main() -> None:
     parser.add_argument("--out", type=str, default="eval_output", help="Output directory or CSV filepath (default: eval_output)")
     parser.add_argument("--max-per-source", type=int, default=3, help="Maximum events per distinct source (default: 3)")
     parser.add_argument("--min-sources", type=int, default=8, help="Target minimum distinct sources (default: 8)")
+    parser.add_argument("--max-calls", type=int, default=None, help="Maximum total Gemini calls including retries (default: limit * 2)")
+    parser.add_argument("--exclude-csv", type=str, default=None, help="Path to previous evaluation CSV whose event IDs should be excluded")
 
     args = parser.parse_args()
 
@@ -520,6 +625,8 @@ def main() -> None:
         out_dir=args.out,
         max_per_source=args.max_per_source,
         min_sources=args.min_sources,
+        max_calls=args.max_calls,
+        exclude_csv=args.exclude_csv,
     )
     sys.exit(exit_code)
 
