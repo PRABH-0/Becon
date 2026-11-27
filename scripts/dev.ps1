@@ -18,7 +18,7 @@ Provides standard development workflow tasks: install, dev-backend, dev-frontend
 
 param (
     [Parameter(Position=0, Mandatory=$true)]
-    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed", "fetch", "scheduler", "synthesize")]
+    [ValidateSet("install", "dev-backend", "dev-frontend", "test", "lint", "migrate", "makemigration", "seed", "fetch", "scheduler", "synthesize", "eval-quality")]
     [string]$Command,
 
     [Parameter(Position=1, Mandatory=$false)]
@@ -165,6 +165,21 @@ switch ($Command) {
         Push-Location "$RepoRoot\backend"
         try {
             & .venv\Scripts\python.exe -m app.synthesize
+        } finally {
+            Pop-Location
+        }
+    }
+
+    "eval-quality" {
+        Write-Host "==> Running Becon Quality Gate Evaluation..." -ForegroundColor Cyan
+        Push-Location "$RepoRoot\backend"
+        try {
+            if ($Message -and $Message -ne "migration") {
+                $evalArgs = $Message -split "\s+"
+                & .venv\Scripts\python.exe -m app.eval_quality $evalArgs
+            } else {
+                & .venv\Scripts\python.exe -m app.eval_quality
+            }
         } finally {
             Pop-Location
         }

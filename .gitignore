@@ -21,6 +21,7 @@ __pycache__/
 
 # Scratch & temporary workspace
 scratch/
+eval_output/
 
 # Node / Next.js
 node_modules/

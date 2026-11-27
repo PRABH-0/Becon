@@ -54,6 +54,7 @@ Run the test and migration commands below to check current test and table counts
 | **Seed** | N/A | `cd backend && .\.venv\Scripts\python -m app.seed` | `.\scripts\dev.ps1 seed` |
 | **Fetch** | N/A | `cd backend && .\.venv\Scripts\python -m app.fetchers` | `.\scripts\dev.ps1 fetch` |
 | **Scheduler** | N/A | `cd backend && .\.venv\Scripts\python -m app.scheduler` | `.\scripts\dev.ps1 scheduler` |
+| **Eval Quality** | N/A | `cd backend && .\.venv\Scripts\python -m app.eval_quality` | `.\scripts\dev.ps1 eval-quality` |
 | **Typecheck** | `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` |
 | **Build** | `cd frontend && npm run build` | N/A | N/A |
