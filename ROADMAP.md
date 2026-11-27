@@ -2,9 +2,9 @@
 
 Single source of truth for where the project stands. Lives in the repo root. Maintained by the project lead (Claude chat) and updated by Antigravity after each approved task.
 
-Last updated: 2026-11-26  
+Last updated: 2026-11-27  
 Current phase: Fast-track MVP  
-Current task: Launch Sprint (S1-S6)  
+Current task: Task 1.8b: Dead code cleanup + doc alignment  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -68,6 +68,7 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 - [x] 1.7b Close Gemini spend/abuse holes (pre-`GEMINI_API_KEY` hardening): unauthenticated `/api/briefings/search` & `/api/briefings` strictly DB-only (`422` caps on `interests`/`role`/`custom_prompt`/`ChatRequest`, `live=true` auth-gated), shared `CardVariant` isolated from `custom_prompt` & unauthenticated generation, configurable `max_output_tokens` on all Gemini calls, retries capped at 1 & counted once per logical request (unreached failures consume 0), stricter guest limits (`GUEST_AI_PER_MIN`, `GEMINI_DAILY_CAP_GUEST`, `GEMINI_DAILY_CAP_ALL_GUESTS`), per-run ingest budget (`INGEST_MAX_GEMINI_CALLS_PER_RUN`), docs & fake-Gemini test suite *(approved, merged `e4f8b2e`)*
 - [x] 1.8 Frontend ESLint cleanup: 0 errors/warnings on `npm run lint`, CI `continue-on-error: true` removed (`ci.yml` strictly enforces ESLint) *(completed in sprint-launch)*
 - [x] 1.8a Documentation consolidation: fold concise baseline into `ROADMAP.md`, remove superseded report files (`AUDIT_REPORT.md`, `docs/COMPLETION_REPORT.md`, `docs/MERGE_READINESS_REPORT.md`, `frontend/README.md`), move & refresh `UI_DESIGN.md` -> `docs/UI_DESIGN.md`, replace `file:///` links with relative links, deduplicate env vars/auth setup/hardcoded counts, add doc guardrails to `CLAUDE.md` *(approved, merged `0ec76d9`)*
+- [ ] 1.8b Dead code cleanup + doc alignment: Remove `POST /api/onboarding/chat`, `ai_onboarding_chat`, `ChatRequest` and related schemas, `GEMINI_MAX_OUTPUT_TOKENS_CHAT`, and any tests/frontend references; check `/api/ai/match-topics` and remove if unused; fix docs drift across `CLAUDE.md` (architecture, env vars, removed endpoints), `docs/AUTH.md`, `docs/DATA_MODEL.md`, `README.md`, and `BECON.md`
 - [x] 1.9 Show real user identity (prefill + avatar + name) from Supabase: backend backfills empty `name`/`email` without overwriting saved values and enforces `https://`-only `picture_url`; shared `UserAvatar`/`UserChip` + `resolveUserIdentity` replace hardcoded `"Reader"`/`"Professional"`/`"P"` headers on `/` and `/profile`; `/profile` prefills empty fields (non-guests only, no auto-save); `becon_user_name`/`becon_user_avatar` refresh & cross-reload purge on account switch; Google OAuth uses `prompt=select_account` *(merged in `a59f089`)*
 - [x] 1.10 Header cleanup: shared accessible `UserMenu` (`aria-haspopup`, `aria-expanded`, `role="menu"`/`menuitem`, Escape refocus, click-outside, arrow-key/Home/End/Tab nav, `max-w-[280px]` email truncation with `title`, guest `"Create account"` -> `/register?upgrade=1`, quiet rose `Sign out`) and shared `HeaderActions` right-side cluster (`[backLink] [ThemeToggle] [UserMenu]`, uniform `h-9` / `rounded-lg` / `gap-2`, zero overflow at 360px) adopted on `/` and `/profile` *(merged in `a59f089`)*
 - [x] 1.10b Remove duplicate `ThemeToggle` from `/` coverage ribbon; right-align Prev/Next scroll buttons and add `min-w-0` on horizontal pill track *(merged in `a59f089`)*
@@ -122,6 +123,17 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 
 ---
 
+## LAUNCH SPRINT (S1 – S6)
+
+- [x] **S1: UserProfile cascade delete & test stabilization** (migration 0010, scheduler timeout test flakiness fixed; commit `e673fda`)
+- [x] **S2: 14-day synthesis queue window** (restrict synthesis queue to tagged events within 14 days; commit `42cba4c`)
+- [x] **S3: Documentation sync** (ROADMAP, BECON, and UI_DESIGN documentation synchronized; commit `98c688f`)
+- [~] **S4: Production deployment configurations and bootstrap pipeline** (Render blueprint `render.yaml`, Dockerfile updates, `bootstrap.py`; commit `9fbe9b0`; done-pending-approval)
+- [~] **S5: Minimal launch gate & telemetry** (draft legal pages `/terms` & `/privacy`, Sentry integration hooks, `POST /api/metrics/event`, telemetry dispatches; commit `c93916b`; done-pending-approval)
+- [ ] **S6: Staging deploy + live smoke test (F8/8.1)** (Deploy Render web/worker, Vercel frontend, run Supabase migrations, execute 7-flow manual QA checklist)
+
+---
+
 ## PHASE 2: Source registry and ingestion
 - [x] 2.1 Source registry model and admin seed script (approved, merged `b98f9dd`)
 - [x] 2.2 Curate and seed 25-40 official developer sources (blogs, release notes, GitHub releases, advisories) (approved, merged `b98f9dd`)
@@ -148,6 +160,7 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [~] 4.2 Validation layer (schema, claim-in-source check, retry once, else flag and do not publish) *(partially covered by F3; pending live verification by lead)*
 - [~] 4.3 Rate-limit handling with backoff, caching, cost tracking *(partially covered by F3; pending live verification by lead)*
 - [ ] 4.4 Evaluation set of 30+ real updates and manual review report
+- [ ] 4.4a Quality-gate tooling: CLI `python -m app.eval_quality --limit 30` that selects top-severity eligible events, runs grounded synthesis + claim validator, and writes CSV to gitignored `eval_output/`; `--dry-run` fake client; strictly offline tests
 
 *Exit: quality gate passed (zero unsupported claims on the evaluation set).*
 
@@ -171,9 +184,9 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [x] 6.3 Remove ~1,300 lines of mock fallback generators from `page.tsx`; split `page.tsx` into components *(page.tsx is 241 lines, components under `frontend/src/components/briefing/`)*
 - [x] 6.4 Onboarding rebuilt around profession plus focus (not hardcoded roles) *(completed in F5)*
 - [x] 6.5a Save cards, useful/not-useful feedback, report error modal, and /saved cards view *(completed in F6)*
-- [ ] 6.5b Clickable topic filters, archive search over stored cards (DB-only, no Gemini), drop deprecated legacy `saved_briefings` table
-- [ ] 6.6 Typography (load editorial serif — *resolved in `1.12` via self-hosted Source Serif 4*), token cleanup, accessibility fixes (focus, Escape, contrast, aria; *note: Profile Menu dropdown Escape/`aria-expanded`/keyboard a11y resolved in `1.10`*)
-- [ ] 6.7 Anonymous user cleanup job (30-day stale retention) and guest-to-real account upgrade flow
+- [ ] 6.5b Archive search + topic filters: Clickable topic filter pills on briefing, DB-only archive search over stored cards (finite pagination, zero Gemini calls, rate limited, 422 caps), drop deprecated legacy `saved_briefings` table via new Alembic migration; preserve D12 (no infinite scroll)
+- [ ] 6.6 Accessibility pass: `ReportModal` and `CardDrawer` real focus trap (Tab/Shift+Tab loop), Escape to close, focus returns to trigger, `aria-modal`/`aria-labelledby`, scroll lock; contrast sweep of design tokens in light and dark against WCAG AA (4.5:1 body, 3:1 large/UI); visible focus rings on interactive elements, aria-labels on icon buttons, skip-to-content link, prefers-reduced-motion; Vitest focus trap tests and token contrast regression assertions
+- [ ] 6.7 Anonymous user cleanup: Scheduler job deleting anonymous users stale for 30+ days with cascade of their data; dry-run flag; logs counts only; verify guest-to-real upgrade keeps saved cards/feedback; cutoff boundary tests
 - [x] 6.8 UI polish pass (small fixes, NOT a redesign): compact cards 4-part rendering (6.1b), lead card dead space removal, equal-height card pinning, metadata/body text scaling & AA contrast, unified "Read source" & "Details" labels, remove full broadsheet density jargon, /profile placeholder & primary accent button & accessible tone radiogroup & live prompt counter & accurate privacy & account email copy *(approved, merged `4fdc08a`)*
 - [x] 6.9 Remove home-page topic search UI and backend route; plan DB-only archive search under 6.5 after Phase 2 (approved, merged `b98f9dd`)
 
@@ -185,6 +198,7 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [ ] 7.1 Resend with verified domain (SPF/DKIM/DMARC) (also configure custom SMTP in Supabase Auth dashboard to overcome default 30 emails/hr rate limit)
 - [ ] 7.2 Digest template, per-timezone scheduling, unsubscribe, bounces
 - [ ] 7.3 Event tracking and metrics view (open rate, useful ratio, cards read, retention)
+- [ ] 7.3a Metrics reporting (no dashboard UI): Read-only aggregation service + CLI (`python -m app.metrics_report`, `dev.ps1 metrics`) and `GET /api/metrics/summary` protected by `X-Ingest-Token`; date range aggregates (briefing_viewed, cards opened per viewer, useful ratio, saves, clicks, reports, D1/D7 retention); no PII in output; tests with seeded `metrics_events`
 
 *Exit: test user receives digest at chosen local time; metrics visible.*
 
@@ -194,9 +208,11 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [ ] 8.1 Deploy staging and production (Vercel, backend host, separate Supabase production project with Cloudflare Turnstile CAPTCHA for anonymous sign-ins), secrets, backups
 - [ ] 8.2 Monitoring (Sentry, uptime), security review, free-tier worker check
 - [ ] 8.3 Terms, privacy policy, attribution policy
+- [ ] 8.3a Attribution policy page: `/attribution` standalone page explaining source-grounded cards, original source links, how sources are chosen, and a takedown/contact route; linked from footer, `/about`, `/terms`, `/privacy`, and email digest footer; retain draft legal review banner
 - [ ] 8.4 Landing page and waitlist
 - [ ] 8.5 Onboard first 100 beta users; feedback loop
 - [ ] 8.6 Telegram alerts (only if severity scoring is proven)
+- [ ] S6-prep Deployment readiness (code/config only): Verify `render.yaml`, `Dockerfile`s, and `bootstrap.py` against `CLAUDE.md` env vars; confirm production refuses to boot with missing/invalid `SUPABASE_URL`, `INGEST_API_TOKEN`, `UNSUBSCRIBE_SECRET`, `ALLOWED_ORIGINS`; add `scripts/smoke_test.ps1`; print deploy checklist in chat
 
 *Exit: MVP definition of done met.*
 
@@ -270,3 +286,6 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-23 | F3.1 | Done (`4220110`) | Production synthesis queue: background queue selecting eligible events ordered by severity/recency/topics, respects daily global and per-run caps, retry-once on invalid claims, clean quota backoff without flagging cards, CLI `python -m app.synthesize`, `dev.ps1 synthesize`, scheduler integration, GET /api/synthesis/status endpoint, and limited-today production briefing fallback banner |
 | 2026-11-23 | F7 | Done (`29d8361`) | Daily email digest via Resend: responsive 4-part HTML table layout + ASCII broadsheet plain-text fallback, strict HTML escaping, HMAC-SHA256 token signer/verifier, GET & POST /api/unsubscribe (RFC 8058 one-click), POST /api/webhooks/resend bounce/complaint handling, POST /api/digest/preview endpoint, delivery scheduler batch with timezone support, frontend /unsubscribe page & profile digest settings, 0 ESLint errors |
 | 2026-11-26 | S1, S2, S3 | Done (`e673fda`, `42cba4c`) | Launch Sprint S1-S3: UserProfile.daily_briefings cascade delete on delete_account (migration 0010), scheduler timeout test flakiness fixed, synthesis queue restricted to last 14 days and tagged events (backlog 55), ROADMAP / BECON / UI_DESIGN doc sync |
+| 2026-11-26 | S4 | Done (pending approval) (`9fbe9b0`) | S4: Production deployment configurations and bootstrap pipeline (render.yaml, bootstrap.py, Dockerfile updates) |
+| 2026-11-26 | S5 | Done (pending approval) (`c93916b`) | S5: Minimal launch gate: landing page, legal drafts (/terms, /privacy), Sentry integration, and product telemetry (/api/metrics/event) |
+| 2026-11-27 | R0 | Done (`task-r0-roadmap-sync`) | Roadmap sync: added S4-S5 done-pending-approval, defined S6 (staging deploy + live smoke test), added tasks 1.8b, 4.4a, 6.6, 7.3a, 8.3a, 6.5b, 6.7, S6-prep to respective phases |
