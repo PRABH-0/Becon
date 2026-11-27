@@ -24,8 +24,9 @@ In two separate terminal windows:
 # Terminal 2: Frontend (Next.js on http://localhost:3000)
 .\scripts\dev.ps1 dev-frontend
 
-# Optional Terminal 3: Source Scheduler Worker (runs due fetches in background)
-.\scripts\dev.ps1 scheduler
+# Optional Background Workers:
+.\scripts\dev.ps1 scheduler     # Periodic source fetching & email digest delivery worker
+.\scripts\dev.ps1 synthesize    # Prioritized Gemini synthesis queue runner
 ```
 
 ## Testing & Code Quality
@@ -36,6 +37,9 @@ In two separate terminal windows:
 
 # Run linter and type checks (Ruff & TypeScript)
 .\scripts\dev.ps1 lint
+
+# Run quality evaluation gate (dry-run)
+.\scripts\dev.ps1 eval-quality --dry-run
 ```
 For the full command matrix (Alembic migrations, seeding, frontend builds), see [CLAUDE.md](CLAUDE.md#4-verified-commands).
 

@@ -15,9 +15,23 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
 - **V1 Scope Boundary:** **NON-GOAL: No payments or paywalls in V1**. Quality > low cost > speed.
 
 ## 3. Architecture Overview
-- **Backend ([backend/app](backend/app)):** FastAPI service exposing REST endpoints for briefings, topic autocomplete, user profiles, authentication, and ingestion triggers.
-  - `main.py`: App routing, explicit CORS middleware, request ID tracking, `/health`, `/api/me`, `/api/account`, `/api/briefings`, `/api/topics/search`, `/api/ingest`.
-  - `config.py`: Centralized Pydantic settings and Supabase URL root validation.
+- **Backend ([backend/app](backend/app)):** FastAPI service exposing REST endpoints for briefings, topic autocomplete, user profiles, authentication, ingestion triggers, email digests, and metrics telemetry.
+  - `main.py`: App routing, explicit CORS middleware, request ID tracking, and endpoints:
+    - Public/Base: `/health`, `/`
+    - System/Ingestion: `/api/sources/health`, `/api/synthesis/status`, `POST /api/ingest`
+    - Briefings & Topics: `GET /api/briefings`, `GET /api/topics/search`
+    - Auth & Profile: `GET /api/me`, `DELETE /api/account`, `GET /api/profile`, `POST /api/profile`, `GET /api/professions`
+    - Card Actions: `POST /api/cards/{card_id}/save`, `DELETE /api/cards/{card_id}/save`, `GET /api/saved`, `POST /api/cards/{card_id}/feedback`, `POST /api/cards/{card_id}/report`
+    - Telemetry & Metrics: `POST /api/metrics/event`
+    - Email Digest & Unsubscribe: `GET /api/unsubscribe`, `POST /api/unsubscribe`, `POST /api/webhooks/resend`, `POST /api/digest/preview`
+  - `config.py`: Centralized Pydantic settings, Supabase URL root validation, and production boot-safety validation (`validate_production_security`).
+  - `briefing_service.py`: Personalized card scoring, lead story designation, source diversity capping, reading time calculation, cold-start fallback, and daily briefing caching in `daily_briefings`.
+  - `synthesize.py`: Production synthesis queue runner and CLI (`python -m app.synthesize`), selecting eligible events (last 14 days, tagged), quota enforcement, retry-once.
+  - `validation.py`: Strict grounding and claim-in-source verification (`validate_card_content`, entity extraction, commit-log and filler detection, flag-on-failure).
+  - `email/`: Daily email digest orchestration (`service.py`), responsive HTML/plain-text rendering (`renderer.py`), RFC 8058 HMAC-SHA256 signer (`signer.py`), Resend API client (`client.py`), and delivery idempotency via `deliveries`.
+  - `eval_quality.py`: Stratified evaluation runner and CLI (`python -m app.eval_quality`) for the 30-example quality gate.
+  - `scheduler/`: Background scheduler worker engine (`python -m app.scheduler`), distributed DB leasing, health tracking, and due source/digest dispatching.
+  - `classification/`: Title normalization, noise stripping, category assignment, alias-based focus topic tagging, and severity scoring ($0$–$100$).
   - `rate_limit.py`: In-process sliding-window rate limiter, `TRUSTED_PROXIES` IP resolution, and UTC-day Gemini quotas.
   - `supabase_auth.py`: Token verification via PyJWT using Supabase JWKS (ES256/RS256) or legacy HS256 secret.
   - `deps.py`: User mapping (`get_current_user`, `get_optional_user`, `map_token_to_user`, `https://`-only avatar hygiene).
@@ -29,16 +43,20 @@ Becon is a career update companion, NOT a news app. It keeps professionals up to
   - `fetchers/`: Modular source fetchers (RSS/Atom, GitHub Releases, security advisories GHSA/CISA KEV/NVD) with SSRF guards, size caps, conditional GET, plain-text sanitization, deduplication, and manual CLI runner.
   - `seed/`: Idempotent data seeder loading professions, focus topics, and official content sources from JSON files in `seed/data/`.
   - `schemas.py`: Pydantic v2 validation DTOs (`BriefingCard`, `TopicSearchResponse`, `UserProfileBase`, `UserMeResponse`, `HealthResponse`, `SourceSeedItem`, `SourceResponse`).
+  - `bootstrap.py`: Production bootstrap runner executing Alembic migrations and idempotent seeding.
 - **Frontend ([frontend/src](frontend/src)):** Next.js App Router broadsheet web app using Tailwind CSS v4, Lucide icons, and self-hosted local fonts (full design spec in [docs/UI_DESIGN.md](docs/UI_DESIGN.md)).
   - `app/page.tsx`: Broadsheet layout containing Top Showcase (Lead + Quick Wire), Bento Grid deck, and finite briefing end state.
   - `app/profile/page.tsx`: Profile form (identity prefill, role, focus topics autocomplete, custom prompt, tone, Danger Zone deletion).
   - `app/onboarding/page.tsx`: 4-step DB-driven onboarding wizard for profession, topics, experience, and delivery preferences.
+  - `app/saved/page.tsx`: Finite paginated saved Action Cards bookmarks view.
   - `app/about/page.tsx`: Manifesto and interactive 4-part Action Card role demonstration.
+  - `app/terms/page.tsx` & `app/privacy/page.tsx`: Terms of Service and Privacy Policy draft pages with legal review banner.
+  - `app/unsubscribe/page.tsx`: RFC 8058 one-click and web email digest unsubscribe handler.
   - `app/login/page.tsx`, `app/register/page.tsx`, `app/forgot-password/page.tsx`, `app/auth/callback/page.tsx`, `app/auth/reset-password/page.tsx`: Auth flows inside `AuthShell` / `AuthForm`.
   - `app/fonts/`: Self-hosted Latin `.woff2` fonts + SIL OFL 1.1 licenses (`Space Grotesk`, `Plus Jakarta Sans`, `Source Serif 4`).
-  - `components/`: `HeaderActions`, `UserMenu`, `UserAvatar`/`UserChip`, `ThemeToggle`, `AuthShell`, `AuthForm`, `RequireAuth`, `GuestBanner`, `CardDrawer`, and `cards/` (`LeadCard`, `RectangleCard`, `SquareCard`, `BriefCard`, `ActionBadge`, `ActionCardBody`).
+  - `components/`: `HeaderActions`, `UserMenu`, `UserAvatar`/`UserChip`, `ThemeToggle`, `AuthShell`, `AuthForm`, `RequireAuth`, `GuestBanner`, `CardDrawer`, `ReportModal`, `SaveButton`, `briefing/` (`TopShowcase`, `BentoDeck`, `CoverageRibbon`, `BriefingHeader`, `BriefingEndState`), and `cards/` (`LeadCard`, `RectangleCard`, `SquareCard`, `BriefCard`, `ActionBadge`, `ActionCardBody`).
   - `context/`: `ThemeContext`, `LoadingContext`, and `AuthContext`.
-  - `lib/`: `api.ts` (`apiFetch` with Bearer injection & single 401 refresh retry), `supabaseClient.ts`, `identity.ts`, `cache.ts`, `redirect.ts`, `constants.ts`.
+  - `lib/`: `api.ts` (`apiFetch` with Bearer injection & single 401 refresh retry), `supabaseClient.ts`, `identity.ts`, `cache.ts`, `redirect.ts`, `constants.ts`, `sentry.ts`.
 - **Data Pipeline:**
   `Sources` -> `raw_items` -> `events` (deduplicated) -> `cards` (1 per event) -> `card_variants` (personalized) -> `deliveries / user feed`.
 
@@ -55,7 +73,7 @@ Run the test and migration commands below to check current test and table counts
 | **Fetch** | N/A | `cd backend && .\.venv\Scripts\python -m app.fetchers` | `.\scripts\dev.ps1 fetch` |
 | **Scheduler** | N/A | `cd backend && .\.venv\Scripts\python -m app.scheduler` | `.\scripts\dev.ps1 scheduler` |
 | **Eval Quality** | N/A | `cd backend && .\.venv\Scripts\python -m app.eval_quality` | `.\scripts\dev.ps1 eval-quality` |
-| **Smoke Test** | N/A | `.\scripts\smoke_test.ps1 -BaseUrl <url> -IngestToken <token>` | `.\scripts\dev.ps1 smoke-test -Message "..."` |
+| **Smoke Test** | N/A | `.\scripts\smoke_test.ps1 -BaseUrl <url> -IngestToken <token>` | `.\scripts\dev.ps1 smoke-test -BaseUrl <url> -IngestToken <token>` |
 | **Typecheck** | `cd frontend && npx tsc --noEmit` | `cd backend && .\.venv\Scripts\python -c "import app.main; print('OK')"` | N/A |
 | **Lint** | `cd frontend && npm run lint` | `cd backend && .\.venv\Scripts\ruff check app/ tests/` | `.\scripts\dev.ps1 lint` |
 | **Build** | `cd frontend && npm run build` | N/A | N/A |
@@ -71,6 +89,7 @@ Run the test and migration commands below to check current test and table counts
   - `GEMINI_MODEL`: Google Gemini model name for card synthesis (default: `gemini-2.5-flash`).
   - `DATABASE_URL`: SQLAlchemy connection string (`sqlite:///./becon.db` or PostgreSQL URL).
   - `DIRECT_URL`: Optional direct unpooled connection URL for Alembic migrations (critical for Supabase / PgBouncer transaction mode).
+  - `TEST_DATABASE_URL`: Optional direct unpooled connection URL for live PostgreSQL schema and RLS verification tests.
   - `SUPABASE_URL`: Bare Supabase project root URL (e.g. `https://<ref>.supabase.co`, no trailing path; required in production).
   - `SUPABASE_JWT_AUDIENCE`: Expected token audience (default: `authenticated`).
   - `SUPABASE_JWT_SECRET`: Optional legacy secret for HS256 token verification.
@@ -100,16 +119,17 @@ Run the test and migration commands below to check current test and table counts
   - `TRUSTED_PROXIES`: Comma-separated reverse proxy IPs allowed to supply `X-Forwarded-For` (default: empty = ignore `X-Forwarded-For`).
   - `SENTRY_DSN`: Optional Sentry DSN for production error monitoring.
   - `RESEND_API_KEY`: API key for Resend email delivery (if unset or empty, operates in log-only dry-run mode).
-  - `EMAIL_FROM`: Sender email address with display name for email digests (default: `Becon Daily <briefing@becon.dev>`).
+  - `EMAIL_FROM`: Sender email address with display name for email digests (default: `Becon <digest@becon.dev>`).
   - `APP_BASE_URL`: Base application URL for unsubscribe and email action links (default: `http://localhost:3000`).
   - `UNSUBSCRIBE_SECRET`: Secret key used for signing and verifying RFC 8058 HMAC-SHA256 unsubscribe tokens.
   - `RESEND_WEBHOOK_SECRET`: Secret key for validating incoming Resend bounce and complaint webhooks.
-  - `DIGEST_MAX_PER_RUN`: Maximum email digests sent per scheduler run batch (default: `50`).
+  - `DIGEST_MAX_PER_RUN`: Maximum email digests sent per scheduler run batch (default: `10`).
   - `DIGEST_SCHEDULER_ENABLED`: Enable/disable background email digest delivery scheduler (default: `true`).
 - **Frontend (`frontend/.env.local`, template [`frontend/.env.example`](frontend/.env.example)):**
   - `NEXT_PUBLIC_API_URL`: Base URL of the backend FastAPI service (e.g. `http://127.0.0.1:8000`).
   - `NEXT_PUBLIC_SUPABASE_URL`: Bare Supabase project root URL (e.g. `https://<ref>.supabase.co`, no trailing path).
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase client anon public key.
+  - `NEXT_PUBLIC_SENTRY_DSN`: Optional client-side Sentry DSN for frontend error monitoring.
 
 ## 6. Code Conventions
 - **Backend:** Python 3.12 type hints (`X | None` union syntax); Pydantic v2 schemas; async route handlers where feasible; snake_case functions; PascalCase schemas/models.
@@ -133,7 +153,7 @@ Run the test and migration commands below to check current test and table counts
 9. **Adhere to Report Format:** Always complete turns with the exact progress report template shown in Section 10 (in chat output).
 
 ## 9. Open Architectural Debt
-Active tasks, status, and known gaps are tracked exclusively in [ROADMAP.md](ROADMAP.md) (see Phases 2–8, plus `1.8`, `6.1`, `6.3`, `6.5`, and `6.6`).
+Active tasks, status, and known gaps are tracked exclusively in [ROADMAP.md](ROADMAP.md) (see active tasks e.g. `6.6`, `8.3a`, `7.3a`, `6.7`, `6.5b`, `S6`, `4.4`, `8.1`).
 
 ## 10. Required Progress Report Format (Chat Output Only)
 Print this exact template directly in your chat response — **do not write it to a file in `docs/` or elsewhere in the repo**:

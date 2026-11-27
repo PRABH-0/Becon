@@ -22,7 +22,10 @@ param (
     [string]$Command,
 
     [Parameter(Position=1, Mandatory=$false)]
-    [string]$Message = "migration"
+    [string]$Message = "migration",
+
+    [Parameter(ValueFromRemainingArguments=$true)]
+    [string[]]$ExtraArgs
 )
 
 $ErrorActionPreference = "Stop"
@@ -174,9 +177,15 @@ switch ($Command) {
         Write-Host "==> Running Becon Quality Gate Evaluation..." -ForegroundColor Cyan
         Push-Location "$RepoRoot\backend"
         try {
+            $evalArgs = @()
             if ($Message -and $Message -ne "migration") {
-                $evalArgs = $Message -split "\s+"
-                & .venv\Scripts\python.exe -m app.eval_quality $evalArgs
+                $evalArgs += ($Message -split "\s+")
+            }
+            if ($ExtraArgs) {
+                $evalArgs += $ExtraArgs
+            }
+            if ($evalArgs.Count -gt 0) {
+                & .venv\Scripts\python.exe -m app.eval_quality @evalArgs
             } else {
                 & .venv\Scripts\python.exe -m app.eval_quality
             }
@@ -189,11 +198,17 @@ switch ($Command) {
         Write-Host "==> Running Deployment Smoke Test..." -ForegroundColor Cyan
         Push-Location "$RepoRoot"
         try {
+            $smokeArgs = @()
             if ($Message -and $Message -ne "migration") {
-                $smokeArgs = $Message -split "\s+"
-                & .\scripts\smoke_test.ps1 $smokeArgs
+                $smokeArgs += ($Message -split "\s+")
+            }
+            if ($ExtraArgs) {
+                $smokeArgs += $ExtraArgs
+            }
+            if ($smokeArgs.Count -gt 0) {
+                & .\scripts\smoke_test.ps1 @smokeArgs
             } else {
-                Write-Host "Usage: .\scripts\dev.ps1 smoke-test -Message '-BaseUrl <url> -IngestToken <token>'" -ForegroundColor Yellow
+                Write-Host "Usage: .\scripts\dev.ps1 smoke-test -BaseUrl <url> -IngestToken <token>" -ForegroundColor Yellow
             }
         } finally {
             Pop-Location

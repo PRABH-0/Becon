@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Lives in the repo root. Mai
 
 Last updated: 2026-11-27  
 Current phase: Fast-track MVP  
-Current task: Task 1.8b: Dead code cleanup + doc alignment  
+Current task: Task 6.6: Accessibility pass  
 
 Legend: `[ ]` not started, `[~]` in progress, `[x]` done and approved, `[!]` blocked
 
@@ -68,7 +68,7 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 - [x] 1.7b Close Gemini spend/abuse holes (pre-`GEMINI_API_KEY` hardening): unauthenticated `/api/briefings/search` & `/api/briefings` strictly DB-only (`422` caps on `interests`/`role`/`custom_prompt`/`ChatRequest`, `live=true` auth-gated), shared `CardVariant` isolated from `custom_prompt` & unauthenticated generation, configurable `max_output_tokens` on all Gemini calls, retries capped at 1 & counted once per logical request (unreached failures consume 0), stricter guest limits (`GUEST_AI_PER_MIN`, `GEMINI_DAILY_CAP_GUEST`, `GEMINI_DAILY_CAP_ALL_GUESTS`), per-run ingest budget (`INGEST_MAX_GEMINI_CALLS_PER_RUN`), docs & fake-Gemini test suite *(approved, merged `e4f8b2e`)*
 - [x] 1.8 Frontend ESLint cleanup: 0 errors/warnings on `npm run lint`, CI `continue-on-error: true` removed (`ci.yml` strictly enforces ESLint) *(completed in sprint-launch)*
 - [x] 1.8a Documentation consolidation: fold concise baseline into `ROADMAP.md`, remove superseded report files (`AUDIT_REPORT.md`, `docs/COMPLETION_REPORT.md`, `docs/MERGE_READINESS_REPORT.md`, `frontend/README.md`), move & refresh `UI_DESIGN.md` -> `docs/UI_DESIGN.md`, replace `file:///` links with relative links, deduplicate env vars/auth setup/hardcoded counts, add doc guardrails to `CLAUDE.md` *(approved, merged `0ec76d9`)*
-- [ ] 1.8b Dead code cleanup + doc alignment: Remove `POST /api/onboarding/chat`, `ai_onboarding_chat`, `ChatRequest` and related schemas, `GEMINI_MAX_OUTPUT_TOKENS_CHAT`, and any tests/frontend references; check `/api/ai/match-topics` and remove if unused; fix docs drift across `CLAUDE.md` (architecture, env vars, removed endpoints), `docs/AUTH.md`, `docs/DATA_MODEL.md`, `README.md`, and `BECON.md`
+- [x] 1.8b Dead code cleanup + doc alignment: Remove `POST /api/onboarding/chat`, `ai_onboarding_chat`, `ChatRequest` and related schemas, `GEMINI_MAX_OUTPUT_TOKENS_CHAT`, and any tests/frontend references; check `/api/ai/match-topics` and remove if unused; fix docs drift across `CLAUDE.md` (architecture, env vars, removed endpoints), `docs/AUTH.md`, `docs/DATA_MODEL.md`, `README.md`, and `BECON.md` *(approved, commit `ee05ad7`)*
 - [x] 1.9 Show real user identity (prefill + avatar + name) from Supabase: backend backfills empty `name`/`email` without overwriting saved values and enforces `https://`-only `picture_url`; shared `UserAvatar`/`UserChip` + `resolveUserIdentity` replace hardcoded `"Reader"`/`"Professional"`/`"P"` headers on `/` and `/profile`; `/profile` prefills empty fields (non-guests only, no auto-save); `becon_user_name`/`becon_user_avatar` refresh & cross-reload purge on account switch; Google OAuth uses `prompt=select_account` *(merged in `a59f089`)*
 - [x] 1.10 Header cleanup: shared accessible `UserMenu` (`aria-haspopup`, `aria-expanded`, `role="menu"`/`menuitem`, Escape refocus, click-outside, arrow-key/Home/End/Tab nav, `max-w-[280px]` email truncation with `title`, guest `"Create account"` -> `/register?upgrade=1`, quiet rose `Sign out`) and shared `HeaderActions` right-side cluster (`[backLink] [ThemeToggle] [UserMenu]`, uniform `h-9` / `rounded-lg` / `gap-2`, zero overflow at 360px) adopted on `/` and `/profile` *(merged in `a59f089`)*
 - [x] 1.10b Remove duplicate `ThemeToggle` from `/` coverage ribbon; right-align Prev/Next scroll buttons and add `min-w-0` on horizontal pill track *(merged in `a59f089`)*
@@ -85,7 +85,7 @@ Pre-Phase-1 baseline folded from the retired `AUDIT_REPORT.md` snapshot:
 
 Approved code-first fast-track sequence delivering an end-to-end working briefing product:  
 **F1 -> F3 -> F2 -> F4 -> F5 -> F6 -> F7 -> F8**.  
-*Deferred (do not touch until MVP complete):* CI polish, Docker polish, ESLint 1.8 cleanup, history scrub (1.1b), docs drift (1.4c), monitoring (8.2), legal pages (8.3), landing page & waitlist (8.4), metrics dashboards (7.3), Telegram alerts (8.6), Phase 9 creator follows.
+*Deferred (do not touch until MVP complete):* CI polish, Docker polish, history scrub (1.1b), docs drift (1.4c), monitoring (8.2), legal pages (8.3), landing page & waitlist (8.4), metrics dashboards (7.3), Telegram alerts (8.6), Phase 9 creator follows.
 
 - [x] **F1: Pipeline bridge + real data + remove mocks**  
   *Goal:* Dev DB migrated & seeded (38 official feeds), remove Google News/dev.to, bridge `fetch_and_store_source` raw_items to events/cards, delete frontend mock generators & show clean empty state.  
@@ -128,8 +128,8 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [x] **S1: UserProfile cascade delete & test stabilization** (migration 0010, scheduler timeout test flakiness fixed; commit `e673fda`)
 - [x] **S2: 14-day synthesis queue window** (restrict synthesis queue to tagged events within 14 days; commit `42cba4c`)
 - [x] **S3: Documentation sync** (ROADMAP, BECON, and UI_DESIGN documentation synchronized; commit `98c688f`)
-- [~] **S4: Production deployment configurations and bootstrap pipeline** (Render blueprint `render.yaml`, Dockerfile updates, `bootstrap.py`; commit `9fbe9b0`; done-pending-approval)
-- [~] **S5: Minimal launch gate & telemetry** (draft legal pages `/terms` & `/privacy`, Sentry integration hooks, `POST /api/metrics/event`, telemetry dispatches; commit `c93916b`; done-pending-approval)
+- [x] **S4: Production deployment configurations and bootstrap pipeline** (Render blueprint `render.yaml`, Dockerfile updates, `bootstrap.py`; commit `9fbe9b0`; approved)
+- [x] **S5: Minimal launch gate & telemetry** (draft legal pages `/terms` & `/privacy`, Sentry integration hooks, `POST /api/metrics/event`, telemetry dispatches; commit `c93916b`; approved)
 - [ ] **S6: Staging deploy + live smoke test (F8/8.1)** (Deploy Render web/worker, Vercel frontend, run Supabase migrations, execute 7-flow manual QA checklist)
 
 ---
@@ -160,7 +160,7 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [~] 4.2 Validation layer (schema, claim-in-source check, retry once, else flag and do not publish) *(partially covered by F3; pending live verification by lead)*
 - [~] 4.3 Rate-limit handling with backoff, caching, cost tracking *(partially covered by F3; pending live verification by lead)*
 - [ ] 4.4 Evaluation set of 30+ real updates and manual review report
-- [ ] 4.4a Quality-gate tooling: CLI `python -m app.eval_quality --limit 30` that selects top-severity eligible events, runs grounded synthesis + claim validator, and writes CSV to gitignored `eval_output/`; `--dry-run` fake client; strictly offline tests
+- [x] 4.4a Quality-gate tooling: CLI `python -m app.eval_quality --limit 30` that selects top-severity eligible events, runs grounded synthesis + claim validator, and writes CSV to gitignored `eval_output/`; `--dry-run` fake client; strictly offline tests *(tooling approved, commits `509ac19`, `b052327`; 4.4 manual evaluation set remains open)*
 
 *Exit: quality gate passed (zero unsupported claims on the evaluation set).*
 
@@ -212,7 +212,7 @@ Approved code-first fast-track sequence delivering an end-to-end working briefin
 - [ ] 8.4 Landing page and waitlist
 - [ ] 8.5 Onboard first 100 beta users; feedback loop
 - [ ] 8.6 Telegram alerts (only if severity scoring is proven)
-- [ ] S6-prep Deployment readiness (code/config only): Verify `render.yaml`, `Dockerfile`s, and `bootstrap.py` against `CLAUDE.md` env vars; confirm production refuses to boot with missing/invalid `SUPABASE_URL`, `INGEST_API_TOKEN`, `UNSUBSCRIBE_SECRET`, `ALLOWED_ORIGINS`; add `scripts/smoke_test.ps1`; print deploy checklist in chat
+- [x] S6-prep Deployment readiness (code/config only): Verify `render.yaml`, `Dockerfile`s, and `bootstrap.py` against `CLAUDE.md` env vars; confirm production refuses to boot with missing/invalid `SUPABASE_URL`, `INGEST_API_TOKEN`, `UNSUBSCRIBE_SECRET`, `ALLOWED_ORIGINS`; add `scripts/smoke_test.ps1`; print deploy checklist in chat *(approved, commit `b4c40fa`)*
 
 *Exit: MVP definition of done met.*
 
@@ -286,6 +286,9 @@ Second profession vertical (for example accounting), adaptive ranking, career/hi
 | 2026-11-23 | F3.1 | Done (`4220110`) | Production synthesis queue: background queue selecting eligible events ordered by severity/recency/topics, respects daily global and per-run caps, retry-once on invalid claims, clean quota backoff without flagging cards, CLI `python -m app.synthesize`, `dev.ps1 synthesize`, scheduler integration, GET /api/synthesis/status endpoint, and limited-today production briefing fallback banner |
 | 2026-11-23 | F7 | Done (`29d8361`) | Daily email digest via Resend: responsive 4-part HTML table layout + ASCII broadsheet plain-text fallback, strict HTML escaping, HMAC-SHA256 token signer/verifier, GET & POST /api/unsubscribe (RFC 8058 one-click), POST /api/webhooks/resend bounce/complaint handling, POST /api/digest/preview endpoint, delivery scheduler batch with timezone support, frontend /unsubscribe page & profile digest settings, 0 ESLint errors |
 | 2026-11-26 | S1, S2, S3 | Done (`e673fda`, `42cba4c`) | Launch Sprint S1-S3: UserProfile.daily_briefings cascade delete on delete_account (migration 0010), scheduler timeout test flakiness fixed, synthesis queue restricted to last 14 days and tagged events (backlog 55), ROADMAP / BECON / UI_DESIGN doc sync |
-| 2026-11-26 | S4 | Done (pending approval) (`9fbe9b0`) | S4: Production deployment configurations and bootstrap pipeline (render.yaml, bootstrap.py, Dockerfile updates) |
-| 2026-11-26 | S5 | Done (pending approval) (`c93916b`) | S5: Minimal launch gate: landing page, legal drafts (/terms, /privacy), Sentry integration, and product telemetry (/api/metrics/event) |
-| 2026-11-27 | R0 | Done (`task-r0-roadmap-sync`) | Roadmap sync: added S4-S5 done-pending-approval, defined S6 (staging deploy + live smoke test), added tasks 1.8b, 4.4a, 6.6, 7.3a, 8.3a, 6.5b, 6.7, S6-prep to respective phases |
+| 2026-11-26 | S4 | Done (`9fbe9b0`) | S4: Production deployment configurations and bootstrap pipeline (render.yaml, bootstrap.py, Dockerfile updates; approved) |
+| 2026-11-26 | S5 | Done (`c93916b`) | S5: Minimal launch gate: landing page, legal drafts (/terms, /privacy), Sentry integration, and product telemetry (/api/metrics/event; approved) |
+| 2026-11-27 | 1.8b | Done (`ee05ad7`) | Task 1.8b: Dead code cleanup (removed /api/onboarding/chat, ai_onboarding_chat, ChatRequest, /api/ai/match-topics, GEMINI_MAX_OUTPUT_TOKENS_CHAT) and doc alignment |
+| 2026-11-27 | 4.4a | Done (`509ac19`, `b052327`) | Task 4.4a: Quality-gate evaluation CLI (app.eval_quality), dryrun mode, stratified sampling, and CSV generation (tooling approved; 4.4 evaluation report remains open) |
+| 2026-11-27 | S6-prep | Done (`b4c40fa`) | Task S6-prep: Deployment readiness guards in config.py, render.yaml synchronization, test_deploy_readiness.py, and scripts/smoke_test.ps1 |
+| 2026-11-27 | R1 | Done (`task-r1-roadmap-sync-docs`) | Task R1: Roadmap synchronization, duplicate ValidateSet removal in dev.ps1, direct parameter passing in smoke-test/eval-quality, doc drift fixes across CLAUDE.md, DATA_MODEL.md, README.md, and BECON.md |

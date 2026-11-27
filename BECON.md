@@ -137,13 +137,13 @@ A severity score decides what qualifies. To avoid noise, alerts have a daily cap
 
 11. TECHNOLOGY
 
-Frontend: Next.js (React, TypeScript, App Router), Tailwind CSS, responsive card layouts, stack filter pills, and a newspaper-style editorial interface.
+Frontend: Next.js (React, TypeScript, App Router), Tailwind CSS, responsive card layouts, and a newspaper-style editorial interface.
 
-Backend: FastAPI (Python), Pydantic v2 schemas (BriefingCard, BriefingCardContent, ActionGuidance), Uvicorn, and CORS-secured communication with the client.
+Backend: FastAPI (Python), Pydantic v2 schemas (BriefingCard, TopicSearchResponse, UserProfileBase), Uvicorn, and CORS-secured communication with the client.
 
-AI and data pipeline: Google Gemini for structured summarization with schema-enforced JSON output, feedparser for RSS and Atom ingestion, httpx for async fetching, with YouTube Data API / RSS syndication, X/Twitter developer & syndication APIs, and embedding-based deduplication planned post-MVP.
+AI and data pipeline: Google Gemini for structured summarization with schema-enforced JSON output, feedparser for RSS and Atom ingestion, httpx for async fetching, with YouTube Data API / RSS syndication, X/Twitter developer & syndication APIs, and embedding-based deduplication (Task 3.2) planned post-MVP.
 
-Planned infrastructure: PostgreSQL for users, sources, events and cards, a scheduler for recurring ingestion, caching to control AI costs, containerized deployment, and automated tests with CI.
+Infrastructure: SQLite for local development and PostgreSQL with Row Level Security for production, a background scheduler worker for recurring ingestion and daily email digests, caching and daily quotas to control AI costs, containerized deployment (Docker & Docker Compose), and automated tests with CI.
 
 
 12. WHY IT MATTERS

@@ -214,6 +214,9 @@ Alembic manages all schema lifecycle events across SQLite (local development) an
 9. `0009_profession_default`:
    - Adds `is_default` (`BOOLEAN DEFAULT FALSE`) to `professions` table to designate the DB-driven cold start fallback profession.
    - Updates seed data and database so `software-development` is default (`is_default = TRUE`).
+10. `0010_cascade_daily_briefings`:
+    - Ensures foreign key constraint on `daily_briefings.user_id` has `ON DELETE CASCADE`.
+    - Guarantees complete cascade deletion of cached daily briefings upon user account deletion (`DELETE /api/account`).
 
 ### Adoption of Existing Local Database (`becon.db`)
 Existing local databases containing the initial unversioned schema must be stamped with baseline `0001` before upgrading:
